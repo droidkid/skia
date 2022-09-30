@@ -23,6 +23,13 @@
     #define SK_DEBUGFAILF(fmt, ...) SkASSERT((SkDebugf(fmt"\n", __VA_ARGS__), false))
 #endif
 
+#ifdef SK_MALLOC_LOGGING
+// chesetti: I'm sure there's a better way to do this than declare a global static.
+// Using this until we actually need something better.
+// Obviously this is not thread safe, and users are expected to reset this as needed. 
+    uint64_t malloc_byte_accumlator;
+#endif
+
 static inline void sk_out_of_memory(size_t size) {
     SK_DEBUGFAILF("sk_out_of_memory (asked for %zu bytes)",
                   size);
@@ -77,6 +84,9 @@ void sk_free(void* p) {
 void* sk_malloc_flags(size_t size, unsigned flags) {
     void* p;
     if (flags & SK_MALLOC_ZERO_INITIALIZE) {
+    #ifdef SK_MALLOC_LOGGING
+        malloc_byte_accumlator += size;
+    #endif
         p = calloc(size, 1);
     } else {
 #if defined(SK_BUILD_FOR_ANDROID_FRAMEWORK) && defined(__BIONIC__)

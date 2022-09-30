@@ -166,6 +166,12 @@ config("default") {
     libs += [ malloc ]
   }
 
+  if (skia_enable_malloc_logging) {
+    defines += [
+      "SK_MALLOC_LOGGING"
+    ]
+  }
+
   if (is_android) {
     cflags += [ "--sysroot=$ndk/toolchains/llvm/prebuilt/$ndk_host/sysroot" ]
     ldflags += [ "-static-libstdc++" ]

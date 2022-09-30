@@ -76,6 +76,7 @@ declare_args() {
   skia_use_xps = true
   skia_enable_graphite = false
   skia_use_zlib = true
+  skia_enable_malloc_logging = false
 
   if (is_ios) {
     skia_ios_identity = ".*Google.*"
