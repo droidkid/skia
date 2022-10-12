@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8"/>
+        <title>{{title}}</title>
+    </head>
+    <body>
+        <table>
+            <tr>
+                <td>Skp Name</td>
+            {% for opt in skp_membench_opts %}
+                    <td> {{ opt }} </td>
+            {% endfor %}
+            </tr>
+            {% for skp in skp_membench_results %}
+            <tr>
+                <td> {{ skp['name'] }} </td>
+                {% for opt in skp_membench_opts %}
+                    <td> 
+                        <a href = "{{skp[opt]['link']}}">
+                        {{skp[opt]['value']}} 
+                        </a>
+                    </td>
+                {% endfor %}
+
+            </tr>
+            {% endfor %}
+            
+        </table>
+    </body>
+</html>
+
