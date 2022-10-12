@@ -1,6 +1,6 @@
 BUILD_DIR :=./out/Nightly
 NIGHTLY_OUT_DIR:=./skia_opt_research/out/$(shell date +'%Y-%m-%d_%H-%M-%S')
-SKPS := $(shell ls -d $(PWD)/skia_opt_research/skps/*)
+SKPS := $(shell ls -d ./skia_opt_research/skps/*)
 
 clean:
 	$(RM) -r $(BUILD_DIR)
