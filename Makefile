@@ -6,6 +6,7 @@ clean:
 	$(RM) -r $(BUILD_DIR)
 
 gen-nightly:
+	python3 ./tools/git-sync-deps
 	./bin/gn gen $(BUILD_DIR) --args='is_official_build=false skia_enable_malloc_logging=true'
 
 build-nightly: gen-nightly
