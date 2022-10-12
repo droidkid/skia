@@ -15,9 +15,12 @@ build-nightly: gen-nightly
 nightly-dry:
 	@@echo mkdir -p $(NIGHTLY_OUT_DIR)
 	@@echo $(BUILD_DIR)/skp_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_OUT_DIR)
-	@echo scp -r -C $(NIGHTLY_OUT_DIR) uwplse.org:/var/www/skia
+	@@echo scp -r -C $(NIGHTLY_OUT_DIR) uwplse.org:/var/www/skia
 
-nightly: clean build-nightly
+list-skps:
+	@@echo "List of SKPS: " $(SKPS)
+
+nightly: list-skps clean build-nightly
 	mkdir -p $(NIGHTLY_OUT_DIR)
 	$(BUILD_DIR)/skp_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_OUT_DIR)
 	scp -r -C $(NIGHTLY_OUT_DIR) uwplse.org:/var/www/skia/
