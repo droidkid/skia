@@ -13,11 +13,11 @@ build-nightly: gen-nightly
 	ninja -C $(BUILD_DIR) skp_opt_membench
 
 nightly-dry:
-	@@echo mkdir $(NIGHTLY_OUT_DIR)
+	@@echo mkdir -p $(NIGHTLY_OUT_DIR)
 	@@echo $(BUILD_DIR)/skp_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_OUT_DIR)
 	@echo scp -r -C $(NIGHTLY_OUT_DIR) uwplse.org:/var/www/skia
 
 nightly: clean build-nightly
-	mkdir $(NIGHTLY_OUT_DIR)
+	mkdir -p $(NIGHTLY_OUT_DIR)
 	$(BUILD_DIR)/skp_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_OUT_DIR)
 	scp -r -C $(NIGHTLY_OUT_DIR) uwplse.org:/var/www/skia/
