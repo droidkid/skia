@@ -198,7 +198,7 @@ void dump_skp(const char* skpName, sk_sp<SkPicture> src, SkOptimizerType optType
     // There must be a better way to do this.
     std::string outFilePath(FLAGS_out_dir[0]);
     outFilePath += "/" + getFileName(skpName);
-    outFilePath += "_" + skOptimizerTypeToString(optType) + "_log";
+    outFilePath += "_" + skOptimizerTypeToString(optType) + "_log.txt";
     fprintf(stdout, "Wrting %s\n", outFilePath.c_str());
 
     FILE *fp = fopen(outFilePath.c_str(), "w");
@@ -220,7 +220,7 @@ int main(int argc, char** argv) {
     CommandLineFlags::Parse(argc, argv);
 
     std::string outFilePath(FLAGS_out_dir[0]);
-    outFilePath += "/" + getFileName("000_summary_csv");
+    outFilePath += "/" + getFileName("000_summary_csv.txt");
     printf("Writing summary to %s\n", outFilePath.c_str());
 
     FILE *csvSummary = fopen(outFilePath.c_str(), "w");
