@@ -35,6 +35,7 @@ with open(membench_summary_filepath) as csvfile:
     for result_csv_row in results_csv:
         skp_membench_result = {}
         skp_membench_result['name'] = os.path.basename(result_csv_row[skp_name_field])
+        skp_membench_result['ref_img_url'] = ("%s.png" % os.path.basename(result_csv_row[skp_name_field]))
         for opt in opts:
             skp_membench_result[opt] = {}
             skp_membench_result[opt]['value'] = result_csv_row[opt]

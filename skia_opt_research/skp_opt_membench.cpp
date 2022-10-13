@@ -1,5 +1,6 @@
 
 #include "include/core/SkBitmap.h"
+#include "include/core/SkImageEncoder.h"
 #include "include/core/SkPicture.h"
 #include "include/core/SkPictureRecorder.h"
 #include "include/core/SkStream.h"
@@ -161,7 +162,7 @@ private:
     }
 
     static const char* NameOf(const SkRecords::SaveLayer&) {
-        return "\x1b[31;1mSaveLayer\x1b[0m";  // Bold red.
+        return "SaveLayer\x1b[0m";  // Bold red.
     }
 
     int fDigits;
@@ -207,6 +208,16 @@ void dump_skp(const char* skpName, sk_sp<SkPicture> src, SkOptimizerType optType
         record.visit(i, dumper);
     }
     *bytesPerSkp = dumper.getTotalMallocBytes();
+
+    if (optType == NO_OPT) {
+        printf("Hello, World");
+        std::string path(FLAGS_out_dir[0]);
+        path += "/" + getFileName(skpName) + ".png";
+        printf("%s\n", path.c_str());
+        SkFILEWStream file(path.c_str());
+        SkEncodeImage(&file, bitmap, SkEncodedImageFormat::kPNG, 100);
+    }
+
     fclose(fp);
 }
 

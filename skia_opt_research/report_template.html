@@ -3,18 +3,25 @@
     <head>
         <meta charset="UTF-8"/>
         <title>{{title}}</title>
+        <style>
+            table, td, th {
+                border: 1px solid
+            }
+        </style>
     </head>
     <body>
         <table>
             <tr>
-                <td>Skp Name</td>
+                <th>Skp Name</th>
+                <th>Image (From skp_no_opt)</th>
             {% for opt in skp_membench_opts %}
-                    <td> {{ opt }} </td>
+                    <th> {{ opt }} </th>
             {% endfor %}
             </tr>
             {% for skp in skp_membench_results %}
             <tr>
                 <td> {{ skp['name'] }} </td>
+                <td> <img src="{{ skp['ref_img_url'] }}"/> </td>
                 {% for opt in skp_membench_opts %}
                     <td> 
                         <a href = "{{skp[opt]['link']}}">
