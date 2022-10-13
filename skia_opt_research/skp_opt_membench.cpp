@@ -161,10 +161,6 @@ private:
         return "Unknown T";
     }
 
-    static const char* NameOf(const SkRecords::SaveLayer&) {
-        return "SaveLayer\x1b[0m";  // Bold red.
-    }
-
     int fDigits;
     int fIndent;
     int fIndex;
