@@ -3374,3 +3374,13 @@ test_app("skp_opt_membench") {
     ":skia",
   ]
 }
+
+test_app("skp_opt_gen_skps") {
+  sources = ["skia_opt_research/gen_skp.cpp"]
+  deps = [
+    ":skia",
+    ":flags",
+    ":trace",
+    ":tool_utils"
+  ]
+}
