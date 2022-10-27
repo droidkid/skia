@@ -1,0 +1,12 @@
+[package]
+name = "ski_opt"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+skia-safe = "0"
+serde_json = "*"
+serde = {version="1.0", features=["derive"]}
+egg = "0.9.1"
