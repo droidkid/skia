@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::env;
 use ski_opt::ski_lang::{parse_skp};
-use ski_opt::skpicture::{SkPicture, print_skp};
+use ski_opt::skpicture::{SkPicture, print_skp, generate_skpicture};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -15,6 +15,9 @@ fn main() {
     };
     print_skp(&u);
 
-    let expr = parse_skp(&mut u.drawCommands.iter());
-    println!("{}", expr.pretty(50));
+    let parse_result = parse_skp(&mut u.drawCommands.iter());
+    println!("{}", parse_result.expr.pretty(50));
+
+    let skp = generate_skpicture(&parse_result.expr, parse_result.id);
+    println!("{:#?}", skp);
 }

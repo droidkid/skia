@@ -15,15 +15,23 @@ define_language! {
     }
 }
 
+pub struct ParseSkpResult {
+    pub expr: RecExpr<SkiLang>,
+    pub id: Id
+}
+
 pub fn parse_skp<'a, I> (
     drawCommands: &mut I
-) -> RecExpr<SkiLang> 
+) ->  ParseSkpResult
 where
     I: Iterator<Item = &'a SkDrawCommand> + 'a {
     let mut expr = RecExpr::default();
     let blankSurface = expr.add(SkiLang::Blank);
-    build_exp(drawCommands, blankSurface, &mut expr);
-    expr
+    let id = build_exp(drawCommands, blankSurface, &mut expr);
+    ParseSkpResult {
+        expr,
+        id
+    }
 }
 
 fn build_exp<'a, I> (
