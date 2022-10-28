@@ -1,6 +1,10 @@
 use serde::Deserialize;
-use crate::ski_lang::{SkiLang};
 use egg::*;
+use skia_safe::{Color, Paint, Surface, Rect, PictureRecorder, canvas::SaveLayerRec};
+use std::fs::File;
+use std::io::Write;
+
+use crate::ski_lang::{SkiLang};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct SkPaint {
@@ -70,7 +74,7 @@ fn get_color(expr: &RecExpr<SkiLang>, id: Id) -> Vec<u8> {
             vec![a, r, g, b]
         }
         _ => {
-            panic!("This is not a point!")
+            panic!("This is not a color!")
         }
     }
 }
@@ -83,9 +87,39 @@ fn get_paint(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
             }
         }
         _ => {
-            panic!("This is not a point!")
+            panic!("This is not a paint!")
         }
     }
+}
+
+pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) {
+    let mut recorder = PictureRecorder::new();
+    let canvas = recorder.begin_recording(Rect::new(0.0, 0.0, 512.0, 512.0), None);
+
+    let skp = generate_skpicture(expr, id);
+    for drawCommand in skp.drawCommands {
+        match drawCommand {
+            SkDrawCommand::DrawRect{coords, paint, visible:_} => {
+                let r = Rect::new(coords[0] as f32, coords[1] as f32, coords[2] as f32, coords[3] as f32);
+                let mut p = Paint::default();
+                p.set_argb(paint.color[0], paint.color[1], paint.color[2], paint.color[3]);
+                canvas.draw_rect(&r, &p);
+            },
+            SkDrawCommand::SaveLayer { paint:_, visible :_} => {
+                canvas.save_layer(&SaveLayerRec::default());
+            }
+            SkDrawCommand::Restore { visible :_} => {
+                canvas.restore();
+            }
+        }
+    }
+
+    let picture = recorder.finish_recording_as_picture(None).unwrap();
+    let d = picture.serialize();
+    let mut file = File::create(file_path).unwrap();
+    let bytes = d.as_bytes();
+    file.write_all(bytes).unwrap();
+
 }
 
 pub fn generate_skpicture(expr: &RecExpr<SkiLang>, id: Id) -> SkPicture {
