@@ -206,7 +206,6 @@ void dump_skp(const char* skpName, sk_sp<SkPicture> src, SkOptimizerType optType
     *bytesPerSkp = dumper.getTotalMallocBytes();
 
     if (optType == NO_OPT) {
-        printf("Hello, World");
         std::string path(FLAGS_out_dir[0]);
         path += "/" + getFileName(skpName) + ".png";
         printf("%s\n", path.c_str());

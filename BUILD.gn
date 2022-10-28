@@ -3367,15 +3367,15 @@ if (is_ios && skia_enable_skottie && !skia_enable_flutter_defines) {
   }
 }
 
-test_app("skp_opt_membench") {
-  sources = ["skia_opt_research/skp_opt_membench.cpp"]
+test_app("skia_opt_membench") {
+  sources = ["skia_opt_research/skia_opt_membench.cpp"]
   deps = [
     ":flags",
     ":skia",
   ]
 }
 
-test_app("skp_opt_gen_skps") {
+test_app("skia_opt_gen_skps") {
   sources = ["skia_opt_research/gen_skp.cpp"]
   deps = [
     ":skia",
