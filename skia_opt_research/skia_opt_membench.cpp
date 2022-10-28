@@ -22,7 +22,8 @@ static DEFINE_string(out_dir, "", "directory to output .");
 enum SkOptimizerType {
     NO_OPT,
     SK_RECORD_OPTS,
-    SK_RECORD_OPTS2
+    SK_RECORD_OPTS2,
+    SKI_OPT
 };
 
 std::string skOptimizerTypeToString(SkOptimizerType optType) {
@@ -35,6 +36,9 @@ std::string skOptimizerTypeToString(SkOptimizerType optType) {
             break;
         case SK_RECORD_OPTS2:
             return std::string("skRecordOpts2");
+            break;
+        case SKI_OPT:
+            return std::string("skiOpt");
             break;
         default:
             abort();
@@ -169,7 +173,26 @@ private:
     FILE *fp;
 };
 
-void dump_skp(const char* skpName, sk_sp<SkPicture> src, SkOptimizerType optType, long long *bytesPerSkp) {
+void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerSkp) {
+    std::unique_ptr<SkStream> stream;
+    if (optType == SKI_OPT) {
+        std::string skpOptName(skpName);
+        skpOptName += "_opt";
+        stream = SkStream::MakeFromFile(skpOptName.c_str());
+    } else {
+        stream = SkStream::MakeFromFile(skpName);
+    }
+
+    if (!stream) {
+        fprintf(stderr, "Could not read %s. Skipping this file\n", skpName);
+        // panic!
+    }
+    sk_sp<SkPicture> src(SkPicture::MakeFromStream(stream.get()));
+    if (!src) {
+        fprintf(stderr, "Could not parse %s into an Skp. Skipping.\n", skpName);
+        // panic!
+    }
+
     const int w = SkScalarCeilToInt(src->cullRect().width());
     const int h = SkScalarCeilToInt(src->cullRect().height());
 
@@ -185,6 +208,8 @@ void dump_skp(const char* skpName, sk_sp<SkPicture> src, SkOptimizerType optType
             break;
         case SK_RECORD_OPTS2:
             SkRecordOptimize2(&record);
+            break;
+        case SKI_OPT:
             break;
     }
 
@@ -230,36 +255,26 @@ int main(int argc, char** argv) {
     printf("Writing summary to %s\n", outFilePath.c_str());
 
     FILE *csvSummary = fopen(outFilePath.c_str(), "w");
-        fprintf(csvSummary, "skp,%s,%s,%s\n", 
+        fprintf(csvSummary, "skp,%s,%s,%s,%s\n", 
             skOptimizerTypeToString(NO_OPT).c_str(),
             skOptimizerTypeToString(SK_RECORD_OPTS).c_str(),
-            skOptimizerTypeToString(SK_RECORD_OPTS2).c_str()
+            skOptimizerTypeToString(SK_RECORD_OPTS2).c_str(),
+            skOptimizerTypeToString(SKI_OPT).c_str()
         );
 
 
     for (int i=0; i < FLAGS_skps.count(); i++) {
-        std::unique_ptr<SkStream> stream = SkStream::MakeFromFile(FLAGS_skps[i]);
-        if (!stream) {
-            fprintf(stderr, "Could not read %s. Skipping this file\n", FLAGS_skps[i]);
-            continue;
-        }
-        sk_sp<SkPicture> src(SkPicture::MakeFromStream(stream.get()));
-        if (!src) {
-            fprintf(stderr, "Could not parse %s into an Skp. Skipping.\n", FLAGS_skps[i]);
-            continue;
-        }
-
-
         fprintf(csvSummary, "%s,", FLAGS_skps[i]);
         long long bytes_per_skp;
 
-        dump_skp(FLAGS_skps[i], src, NO_OPT, &bytes_per_skp);
+        dump_skp(FLAGS_skps[i], NO_OPT, &bytes_per_skp);
         fprintf(csvSummary, "%lld,", bytes_per_skp);
-        dump_skp(FLAGS_skps[i], src, SK_RECORD_OPTS, &bytes_per_skp);
+        dump_skp(FLAGS_skps[i], SK_RECORD_OPTS, &bytes_per_skp);
         fprintf(csvSummary, "%lld,", bytes_per_skp);
-        dump_skp(FLAGS_skps[i], src, SK_RECORD_OPTS2,&bytes_per_skp);
-        // DON'T PUT A COMMA FOR THE LAST VALUE.
-        fprintf(csvSummary, "%lld\n", bytes_per_skp);
+        dump_skp(FLAGS_skps[i], SK_RECORD_OPTS2,&bytes_per_skp);
+        fprintf(csvSummary, "%lld,", bytes_per_skp);
+        dump_skp(FLAGS_skps[i], SKI_OPT, &bytes_per_skp);
+        fprintf(csvSummary, "%lld\n", bytes_per_skp); // Don't put a comma here.
 
     }
     fclose(csvSummary);
