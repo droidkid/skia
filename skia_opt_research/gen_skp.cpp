@@ -12,7 +12,7 @@
 
 using namespace std;
 
-static DEFINE_string(dir, "skia_opt_research/skps", "directory where to output skps");
+static DEFINE_string(dir, "./skia_opt_research/skps", "directory where to output skps");
 
 void raster(int width, int height, void (*draw)(SkCanvas*), const char* dir, const char *testcase_name) {
     SkPictureRecorder recorder;
@@ -31,9 +31,7 @@ void raster(int width, int height, void (*draw)(SkCanvas*), const char* dir, con
 void draw_000_simpleDraw(SkCanvas *canvas) {
     SkPaint paint;
     paint.setColor(SK_ColorRED);
-    paint.setStrokeWidth(10);
-
-    canvas->drawLine(20, 20, 100, 100, paint);
+    canvas->drawRect(SkRect::MakeLTRB(20, 20, 100, 100), paint);
 }
 
 void draw_001_saveLayerRect(SkCanvas *canvas) {
