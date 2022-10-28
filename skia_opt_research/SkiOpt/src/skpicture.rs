@@ -10,7 +10,7 @@ pub struct SkPaint {
 #[serde(tag = "command")]
 pub enum SkDrawCommand {
     DrawRect {coords: Vec<i32>, paint: SkPaint, visible: bool},
-    SaveLayer {paint : SkPaint, visible: bool},
+    SaveLayer {paint : Option<SkPaint>, visible: bool},
     Restore {visible: bool}
 }
 
