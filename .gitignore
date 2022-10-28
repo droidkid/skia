@@ -60,3 +60,4 @@ bazel-*
 bazel/user/buildrc
 
 skia_opt_research/out/*
+skia_opt_research/skps/*
