@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::env;
-use ski_opt::ski_lang::{parse_skp};
+use ski_opt::ski_lang::{parse_skp, optimize};
 use ski_opt::skpicture::{SkPicture, print_skp, generate_skpicture, write_skp};
 
 fn main() {
@@ -17,6 +17,7 @@ fn main() {
     };
 
     // Run optimizer and write back as a SKP. 
-    let parse_result = parse_skp/* eventually this becomes optimize_skp */(&mut u.drawCommands.iter());
-    write_skp(&parse_result.expr, parse_result.id, skp_out_path);
+    let parse_result = parse_skp(&mut u.drawCommands.iter());
+    let optimized = optimize(&parse_result.expr);
+    write_skp(&optimized.expr, optimized.id, skp_out_path);
 }

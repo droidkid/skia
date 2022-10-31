@@ -15,6 +15,31 @@ define_language! {
     }
 }
 
+fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
+    vec![
+        rewrite!("remove-blank-savelayers"; "(srcOver ?a blank)" => "?a"),
+    ]
+}
+
+pub fn optimize(expr: &RecExpr<SkiLang>) -> ParseSkpResult {
+    let mut runner = Runner::default().with_expr(expr).run(&make_rules());
+    let root = runner.roots[0];
+
+    // Eventually we'll want our own cost function.
+    let extractor = Extractor::new(&runner.egraph, AstSize);
+    let (cost, mut optimized) = extractor.find_best(root);
+
+    // Figure out how to walk a RecExpr without the ID.
+    // Until then, use this roundabout way to get the optimized recexpr id.
+    let id = runner.egraph.add_expr(&mut optimized);
+    ParseSkpResult {
+        expr: optimized,
+        id
+
+    }
+}
+
+
 pub struct ParseSkpResult {
     pub expr: RecExpr<SkiLang>,
     pub id: Id
