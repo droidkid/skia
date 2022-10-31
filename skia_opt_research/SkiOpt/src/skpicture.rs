@@ -106,7 +106,8 @@ pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) {
                 canvas.draw_rect(&r, &p);
             },
             SkDrawCommand::SaveLayer { paint:_, visible :_} => {
-                canvas.save_layer(&SaveLayerRec::default());
+                // SaveLayerRec seems to do some optimization.
+                canvas.save_layer_alpha(None, (255 as u8).into() );
             }
             SkDrawCommand::Restore { visible :_} => {
                 canvas.restore();
