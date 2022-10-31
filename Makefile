@@ -42,8 +42,11 @@ nightly-dry:
 	@@echo scp -r -C $(NIGHTLY_REPORT_DIR) uwplse.org:/var/www/skia
 
 
-nightly: clean build-nightly gen-skiopt-skps
+local-nightly: build-nightly gen-skiopt-skps
 	mkdir -p $(NIGHTLY_REPORT_DIR)
 	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR)
 	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE)
+	cp $(SKP_DIR)/* $(NIGHTLY_REPORT_DIR)
+
+nightly: clean local-nightly
 	scp -r -C $(NIGHTLY_REPORT_DIR) uwplse.org:/var/www/skia/
