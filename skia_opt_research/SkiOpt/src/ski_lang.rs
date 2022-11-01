@@ -17,7 +17,8 @@ define_language! {
 
 fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     vec![
-        rewrite!("remove-blank-savelayers"; "(srcOver ?a blank)" => "?a"),
+        rewrite!("remove-blank-dst-savelayers"; "(srcOver ?a blank)" => "?a"),
+        rewrite!("remove-blank-src-savelayers"; "(srcOver blank ?a)" => "?a"),
     ]
 }
 
@@ -31,14 +32,14 @@ pub fn optimize(expr: &RecExpr<SkiLang>) -> ParseSkpResult {
 
     // Figure out how to walk a RecExpr without the ID.
     // Until then, use this roundabout way to get the optimized recexpr id.
-    let id = runner.egraph.add_expr(&mut optimized);
+    let mut egraph = EGraph::<SkiLang, ()>::default();
+    let id = egraph.add_expr(&optimized);
+
     ParseSkpResult {
         expr: optimized,
         id
-
     }
 }
-
 
 pub struct ParseSkpResult {
     pub expr: RecExpr<SkiLang>,

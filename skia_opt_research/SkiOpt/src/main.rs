@@ -18,6 +18,10 @@ fn main() {
 
     // Run optimizer and write back as a SKP. 
     let parse_result = parse_skp(&mut u.drawCommands.iter());
+    println!("SKP Parse Result");
+    println!("{}", parse_result.expr.pretty(50));
     let optimized = optimize(&parse_result.expr);
+    println!("Optimized SKP");
+    println!("{} {}", optimized.expr.pretty(50), optimized.id);
     write_skp(&optimized.expr, optimized.id, skp_out_path);
 }

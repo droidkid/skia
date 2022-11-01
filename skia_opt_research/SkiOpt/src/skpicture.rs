@@ -95,8 +95,8 @@ fn get_paint(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
 pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) {
     let mut recorder = PictureRecorder::new();
     let canvas = recorder.begin_recording(Rect::new(0.0, 0.0, 512.0, 512.0), None);
-
     let skp = generate_skpicture(expr, id);
+
     for drawCommand in skp.drawCommands {
         match drawCommand {
             SkDrawCommand::DrawRect{coords, paint, visible:_} => {
