@@ -1,4 +1,7 @@
+use std::fs::File;
+use std::io::BufReader;
 use egg::*;
+use std::error::Error;
 
 use crate::skpicture::{SkPicture, SkDrawCommand};
 
@@ -22,7 +25,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     ]
 }
 
-pub fn optimize(expr: &RecExpr<SkiLang>) -> ParseSkpResult {
+pub fn optimize(expr: &RecExpr<SkiLang>) -> SkiLangExpr {
     let mut runner = Runner::default().with_expr(expr).run(&make_rules());
     let root = runner.roots[0];
 
@@ -35,32 +38,37 @@ pub fn optimize(expr: &RecExpr<SkiLang>) -> ParseSkpResult {
     let mut egraph = EGraph::<SkiLang, ()>::default();
     let id = egraph.add_expr(&optimized);
 
-    ParseSkpResult {
+    SkiLangExpr {
         expr: optimized,
-        id
+        id,
     }
 }
 
-pub struct ParseSkpResult {
+pub struct SkiLangExpr {
     pub expr: RecExpr<SkiLang>,
-    pub id: Id
+    pub id: Id,
 }
 
-pub fn parse_skp<'a, I> (
-    drawCommands: &mut I
-) ->  ParseSkpResult
-where
-    I: Iterator<Item = &'a SkDrawCommand> + 'a {
+pub fn parse_skp_json_file (
+    skp_json_path: &str
+) ->  Result<SkiLangExpr, Box<dyn Error> > {
+
+    let r= BufReader::new(File::open(skp_json_path).unwrap());
+    let u: Value = serde_json::from_reader(r)?;
+
     let mut expr = RecExpr::default();
     let blankSurface = expr.add(SkiLang::Blank);
-    let id = build_exp(drawCommands, blankSurface, &mut expr);
-    ParseSkpResult {
+    let id = build_expr(&mut u.drawCommands.iter(), blankSurface, &mut expr);
+
+    Ok(SkiLangExpr {
         expr,
-        id
-    }
+        id,
+    })
+
 }
 
-fn build_exp<'a, I> (
+
+fn build_expr<'a, I> (
     drawCommands: &mut I,
     dst: Id,
     expr: &mut RecExpr<SkiLang>
@@ -93,14 +101,14 @@ where
                 },
                 SkDrawCommand::SaveLayer {paint, visible} => {
                     let newLayerDst = expr.add(SkiLang::Blank);
-                    let newLayerId = build_exp(drawCommands, newLayerDst, expr);
+                    let newLayerId = build_expr(drawCommands, newLayerDst, expr);
                     expr.add(SkiLang::SrcOver([dst, newLayerId]))
                 },
                 Restore => {
                     dst
                 }
             };
-            build_exp(drawCommands, nxtDst, expr)
+            build_expr(drawCommands, nxtDst, expr)
         },
         None => {
             dst

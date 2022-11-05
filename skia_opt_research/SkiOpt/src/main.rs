@@ -1,26 +1,23 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::env;
-use ski_opt::ski_lang::{parse_skp, optimize};
-use ski_opt::skpicture::{SkPicture, print_skp, generate_skpicture, write_skp};
+use ski_opt::ski_lang::{SkiLangExpr, parse_skp_json_file, optimize};
+use ski_opt::skpicture::{SkPicture, print_skp, generate_skpicture, write_skp, check_skp_json};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let skp_json_path = &args[1];
     let skp_out_path = &args[2];
 
-    // Deserialize JSON
-    let r= BufReader::new(File::open(skp_json_path).unwrap());
-    let u: SkPicture = match serde_json::from_reader(r) {
-        Ok(skp) => skp,
-        Err(e) => panic!("Error {:?}", &e)
-    };
 
     // Run optimizer and write back as a SKP. 
-    let parse_result = parse_skp(&mut u.drawCommands.iter());
+    let skilang_expr = match parse_skp_json_file(skp_json_path) {
+        Ok(expr) => expr,
+        Err(e) => panic!("Error parsing skp {}", e)
+    };
     println!("SKP Parse Result");
-    println!("{}", parse_result.expr.pretty(50));
-    let optimized = optimize(&parse_result.expr);
+    println!("{}", skilang_expr.expr.pretty(50));
+    let optimized = optimize(&skilang_expr.expr);
     println!("Optimized SKP");
     println!("{} {}", optimized.expr.pretty(50), optimized.id);
     write_skp(&optimized.expr, optimized.id, skp_out_path);
