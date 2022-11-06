@@ -40,6 +40,20 @@ with open(membench_summary_filepath) as csvfile:
             skp_membench_result[opt] = {}
             skp_membench_result[opt]['value'] = result_csv_row[opt]
             skp_membench_result[opt]['link'] = ('./%s_%s_log.txt' % (skp_membench_result['name'], opt)) 
+
+            # Error Handling - Negative numbers indicate an error.
+            # TODO(chesetti): Add some documentation in skia_opt_membench.cpp about error types.
+            # Also see if there's a better way to have these error codes synced across the bench and report generator.
+            # Consider using string values instead of negative numbers.
+            if skp_membench_result[opt]['value'][0] == '-1':
+                skp_membench_result[opt]['value'] = 'SkiOpt had trouble parsing this.'
+                skp_membench_result[opt]['link'] = ('./%s.json.error_log' % (skp_membench_result['name'])) 
+
+            if skp_membench_result[opt]['value'][0] == '-2':
+                skp_membench_result[opt]['value'] = 'SkiOpt optimization resulted in image diffs.'
+                # TODO(chesetti): Make the link point to the image diff.
+
+
         skp_membench_results.append(skp_membench_result)
 
     template_loader = jinja2.FileSystemLoader(searchpath = "/")

@@ -3,6 +3,7 @@ use egg::*;
 use skia_safe::{Color, Paint, Surface, Rect, PictureRecorder, canvas::SaveLayerRec};
 use std::fs::File;
 use std::io::Write;
+use strum_macros::{EnumString, EnumVariantNames};
 
 use crate::ski_lang::{SkiLang};
 
@@ -12,7 +13,7 @@ pub struct SkPaint {
     pub color: Vec<u8>
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, EnumVariantNames)]
 #[serde(tag = "command")]
 pub enum SkDrawCommand {
     DrawRect {coords: Vec<i32>, paint: SkPaint, visible: bool},

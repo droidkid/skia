@@ -185,12 +185,14 @@ void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerS
 
     if (!stream) {
         fprintf(stderr, "Could not read %s. Skipping this file\n", skpName);
-        // panic!
+        *bytesPerSkp = -1;
+        return;
     }
     sk_sp<SkPicture> src(SkPicture::MakeFromStream(stream.get()));
     if (!src) {
         fprintf(stderr, "Could not parse %s into an Skp. Skipping.\n", skpName);
-        // panic!
+        *bytesPerSkp = -1;
+        return;
     }
 
     const int w = SkScalarCeilToInt(src->cullRect().width());

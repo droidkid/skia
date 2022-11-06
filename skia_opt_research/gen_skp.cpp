@@ -86,6 +86,13 @@ void draw_003_nestedSaveLayer(SkCanvas *canvas) {
     canvas->restore();
 }
 
+void draw_004_drawOval(SkCanvas *canvas) {
+    SkPaint pSolidBlue;
+    pSolidBlue.setColor(SK_ColorBLUE);
+    canvas->drawOval(SkRect::MakeLTRB(10, 70, 60, 120), pSolidBlue);
+    canvas->restore();
+}
+
 
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
@@ -95,4 +102,5 @@ int main(int argc, char **argv) {
     raster(512, 512, draw_001_saveLayerRect, FLAGS_dir[0], "001_saveLayerRect.skp");
     raster(512, 512, draw_002_blankSaveLayer, FLAGS_dir[0], "002_blankSaveLayer.skp");
     raster(512, 512, draw_003_nestedSaveLayer, FLAGS_dir[0], "003_nestedSaveLayer.skp");
+    raster(512, 512, draw_004_drawOval, FLAGS_dir[0], "004_drawOval.skp");
 }

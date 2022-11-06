@@ -2,6 +2,9 @@ use std::fs::File;
 use std::io::BufReader;
 use egg::*;
 use std::error::Error;
+use serde_json::{Value};
+use strum::VariantNames;
+use std::fmt;
 
 use crate::skpicture::{SkPicture, SkDrawCommand};
 
@@ -49,6 +52,24 @@ pub struct SkiLangExpr {
     pub id: Id,
 }
 
+#[derive(Debug)]
+pub struct SkpJsonParseError {
+    pub unsupported_commands: Vec<String>
+}
+
+impl fmt::Display for SkpJsonParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Unsupported commands: {:?}", self.unsupported_commands)
+    }
+}
+
+impl Error for SkpJsonParseError {
+    fn description(&self) -> &str {
+        "Error resulting from parsing Skp Json"
+    }
+}
+
+
 pub fn parse_skp_json_file (
     skp_json_path: &str
 ) ->  Result<SkiLangExpr, Box<dyn Error> > {
@@ -56,13 +77,32 @@ pub fn parse_skp_json_file (
     let r= BufReader::new(File::open(skp_json_path).unwrap());
     let u: Value = serde_json::from_reader(r)?;
 
+    let mut drawCommands: Vec<SkDrawCommand> = vec![];
+    let commandJsonArray = u["commands"].as_array().unwrap();
+    let mut unsupported : Vec<String> = vec![];
+    for commandJson in commandJsonArray {
+        let commandName = commandJson["command"].as_str().unwrap();
+        if SkDrawCommand::VARIANTS.contains(&commandName) {
+            let drawCommand: SkDrawCommand = serde_json::from_str(&commandJson.to_string())?;
+            drawCommands.push(drawCommand);
+        } else {
+            unsupported.push(commandName.to_string());
+        }
+    }
+
+    if (!unsupported.is_empty()) {
+        return Err(Box::new(SkpJsonParseError{
+            unsupported_commands: unsupported
+        }));
+    }
+
     let mut expr = RecExpr::default();
     let blankSurface = expr.add(SkiLang::Blank);
     let id = build_expr(&mut u.drawCommands.iter(), blankSurface, &mut expr);
 
     Ok(SkiLangExpr {
         expr,
-        id,
+        id
     })
 
 }
