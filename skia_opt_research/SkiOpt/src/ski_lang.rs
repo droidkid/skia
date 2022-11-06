@@ -98,7 +98,7 @@ pub fn parse_skp_json_file (
 
     let mut expr = RecExpr::default();
     let blankSurface = expr.add(SkiLang::Blank);
-    let id = build_expr(&mut u.drawCommands.iter(), blankSurface, &mut expr);
+    let id = build_expr(&mut drawCommands.iter(), blankSurface, &mut expr);
 
     Ok(SkiLangExpr {
         expr,
