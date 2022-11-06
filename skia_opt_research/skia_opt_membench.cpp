@@ -234,7 +234,15 @@ void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerS
 
     if (optType == NO_OPT) {
         std::string path(FLAGS_out_dir[0]);
-        path += "/" + getFileName(skpName) + ".png";
+        path += "/renders/" + getFileName(skpName) + ".png";
+        printf("%s\n", path.c_str());
+        SkFILEWStream file(path.c_str());
+        SkEncodeImage(&file, bitmap, SkEncodedImageFormat::kPNG, 100);
+    }
+
+    if (optType == SKI_OPT) {
+        std::string path(FLAGS_out_dir[0]);
+        path += "/skiopt_renders/" + getFileName(skpName) + ".png";
         printf("%s\n", path.c_str());
         SkFILEWStream file(path.c_str());
         SkEncodeImage(&file, bitmap, SkEncodedImageFormat::kPNG, 100);

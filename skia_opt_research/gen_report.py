@@ -45,11 +45,11 @@ with open(membench_summary_filepath) as csvfile:
             # TODO(chesetti): Add some documentation in skia_opt_membench.cpp about error types.
             # Also see if there's a better way to have these error codes synced across the bench and report generator.
             # Consider using string values instead of negative numbers.
-            if skp_membench_result[opt]['value'][0] == '-1':
+            if skp_membench_result[opt]['value'] == '-1':
                 skp_membench_result[opt]['value'] = 'SkiOpt had trouble parsing this.'
                 skp_membench_result[opt]['link'] = ('./%s.json.error_log' % (skp_membench_result['name'])) 
 
-            if skp_membench_result[opt]['value'][0] == '-2':
+            if skp_membench_result[opt]['value'] == '-2':
                 skp_membench_result[opt]['value'] = 'SkiOpt optimization resulted in image diffs.'
                 # TODO(chesetti): Make the link point to the image diff.
 

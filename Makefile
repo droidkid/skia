@@ -6,6 +6,9 @@ SKP_DIR=./skia_opt_research/skps
 SKPS = $(wildcard ./skia_opt_research/skps/*.skp)
 SKI_OPT_DIR=./skia_opt_research/SkiOpt
 SKI_OPT_BIN=./skia_opt_research/SkiOpt/target/release/ski_opt
+SKP_RENDERS = $(NIGHTLY_REPORT_DIR)/renders
+SKIOPT_SKP_RENDERS = $(NIGHTLY_REPORT_DIR)/skiopt_renders
+DIFF_REPORT_DIR = $(NIGHTLY_REPORT_DIR)/diff
 
 
 clean:
@@ -23,6 +26,7 @@ build-nightly: gen-nightly
 	ninja -C $(BUILD_DIR) skia_opt_membench
 	ninja -C $(BUILD_DIR) skia_opt_gen_skps
 	ninja -C $(BUILD_DIR) skp_parser
+	ninja -C $(BUILD_DIR) skdiff
 
 gen-skps: build-nightly
 	mkdir -p $(SKP_DIR)
@@ -43,8 +47,12 @@ nightly-dry:
 
 
 local-nightly: build-nightly gen-skiopt-skps
+	mkdir -p $(SKP_RENDERS)
+	mkdir -p $(SKIOPT_SKP_RENDERS)
+	mkdir -p $(DIFF_REPORT_DIR)
 	mkdir -p $(NIGHTLY_REPORT_DIR)
 	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR)
+	$(BUILD_DIR)/skdiff $(SKP_RENDERS) $(SKIOPT_SKP_RENDERS) $(DIFF_REPORT_DIR)
 	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE)
 	cp $(SKP_DIR)/* $(NIGHTLY_REPORT_DIR)
 
