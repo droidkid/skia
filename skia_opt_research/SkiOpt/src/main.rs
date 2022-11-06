@@ -15,7 +15,7 @@ fn main() {
     let skilang_expr = match parse_skp_json_file(skp_json_path) {
         Ok(expr) => expr,
         Err(e) => {
-            let error_log = [skp_json_path, ".error_log"].join("");
+            let error_log = [skp_json_path, ".error_log.txt"].join("");
             fs::write(error_log, e.to_string());
             println!("Error parsing SKP {} ", e);
             return;

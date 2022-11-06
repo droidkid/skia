@@ -47,7 +47,7 @@ with open(membench_summary_filepath) as csvfile:
             # Consider using string values instead of negative numbers.
             if skp_membench_result[opt]['value'] == '-1':
                 skp_membench_result[opt]['value'] = 'SkiOpt had trouble parsing this.'
-                skp_membench_result[opt]['link'] = ('./%s.json.error_log' % (skp_membench_result['name'])) 
+                skp_membench_result[opt]['link'] = ('./%s.json.error_log.txt' % (skp_membench_result['name'])) 
 
             if skp_membench_result[opt]['value'] == '-2':
                 skp_membench_result[opt]['value'] = 'SkiOpt optimization resulted in image diffs.'
