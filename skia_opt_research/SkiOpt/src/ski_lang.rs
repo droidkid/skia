@@ -120,6 +120,26 @@ where
     match drawCommands.next() {
         Some(drawCommand) => {
             let nxtDst = match drawCommand {
+                SkDrawCommand::DrawOval { coords, paint, visible } => {
+                    let l = expr.add(SkiLang::Num(coords[0]));
+                    let t = expr.add(SkiLang::Num(coords[1]));
+                    let r = expr.add(SkiLang::Num(coords[2]));
+                    let b = expr.add(SkiLang::Num(coords[3]));
+
+                    let ca = expr.add(SkiLang::Num(paint.color[0] as i32));
+                    let cr = expr.add(SkiLang::Num(paint.color[1] as i32));
+                    let cg = expr.add(SkiLang::Num(paint.color[2] as i32));
+                    let cb = expr.add(SkiLang::Num(paint.color[3] as i32));
+
+                    let topPoint = expr.add(SkiLang::Point([l, t]));
+                    let botPoint = expr.add(SkiLang::Point([r, b]));
+                    let color = expr.add(SkiLang::Color([ca, cr, cg, cb]));
+
+                    let paint = expr.add(SkiLang::Paint([color]));
+                    let drawOval = expr.add(SkiLang::DrawOval([topPoint, botPoint, paint]));
+
+                    expr.add(SkiLang::SrcOver(([dst, drawOval])))
+                },
                 SkDrawCommand::DrawRect { coords, paint, visible } => {
                     let l = expr.add(SkiLang::Num(coords[0]));
                     let t = expr.add(SkiLang::Num(coords[1]));

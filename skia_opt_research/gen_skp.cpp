@@ -94,17 +94,10 @@ void draw_004_drawOval(SkCanvas *canvas) {
 }
 
 void draw_005_clipRect(SkCanvas *canvas) {
-    SkPaint pSolidBlue;
-    pSolidBlue.setColor(SK_ColorBLUE);
-    SkPaint pSolidRed;
-    pSolidRed.setColor(SK_ColorRED);
-
-    canvas->clipRect(SkRect::MakeLTRB(0, 0, 100, 100));
-    canvas->drawOval(SkRect::MakeLTRB(10, 70, 60, 120), pSolidBlue);
-    canvas->drawOval(SkRect::MakeLTRB(100, 100, 200, 200), pSolidBlue);
-    canvas->resetMatrix();
-
-    canvas->drawOval(SkRect::MakeLTRB(100, 100, 200, 200), pSolidRed);
+    SkPaint paint;
+  	canvas->save();
+    canvas->clipRect(SkRect::MakeWH(90, 80));
+    canvas->drawOval(SkRect::MakeLTRB(40, 0, 160, 120), paint);
     canvas->restore();
 }
 
@@ -118,5 +111,5 @@ int main(int argc, char **argv) {
     raster(512, 512, draw_002_blankSaveLayer, FLAGS_dir[0], "002_blankSaveLayer.skp");
     raster(512, 512, draw_003_nestedSaveLayer, FLAGS_dir[0], "003_nestedSaveLayer.skp");
     raster(512, 512, draw_004_drawOval, FLAGS_dir[0], "004_drawOval.skp");
-    // raster(512, 512, draw_005_clipRect, FLAGS_dir[0], "005_clipRect.skp");
+     raster(512, 512, draw_005_clipRect, FLAGS_dir[0], "005_clipRect.skp");
 }
