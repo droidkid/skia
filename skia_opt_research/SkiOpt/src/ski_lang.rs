@@ -18,6 +18,7 @@ define_language! {
         "blank" = Blank, // dimensions
         "srcOver" = SrcOver([Id; 2]), // dst, src
         "drawRect" = DrawRect([Id; 3]), // top_point, bot_point, paint
+        "drawOval" = DrawOval([Id; 3]), // top_point, bot_point, paint
     }
 }
 

@@ -17,6 +17,7 @@ pub struct SkPaint {
 #[serde(tag = "command")]
 pub enum SkDrawCommand {
     DrawRect {coords: Vec<i32>, paint: SkPaint, visible: bool},
+    DrawOval {coords: Vec<i32>, paint: SkPaint, visible: bool},
     SaveLayer {paint : Option<SkPaint>, visible: bool},
     Restore {visible: bool}
 }
@@ -100,6 +101,12 @@ pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) {
 
     for drawCommand in skp.drawCommands {
         match drawCommand {
+            SkDrawCommand::DrawOval{coords, paint, visible:_} => {
+                let r = Rect::new(coords[0] as f32, coords[1] as f32, coords[2] as f32, coords[3] as f32);
+                let mut p = Paint::default();
+                p.set_argb(paint.color[0], paint.color[1], paint.color[2], paint.color[3]);
+                canvas.draw_oval(&r, &p);
+            },
             SkDrawCommand::DrawRect{coords, paint, visible:_} => {
                 let r = Rect::new(coords[0] as f32, coords[1] as f32, coords[2] as f32, coords[3] as f32);
                 let mut p = Paint::default();
@@ -127,6 +134,21 @@ pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) {
 pub fn generate_skpicture(expr: &RecExpr<SkiLang>, id: Id) -> SkPicture {
     let node = &expr[id];
     match node {
+        SkiLang::DrawOval(ids) => {
+            let top_left = get_point(expr, ids[0]);
+            let bot_rght = get_point(expr, ids[1]);
+            let paint = get_paint(expr, ids[2]);
+            SkPicture {
+                drawCommands: vec![
+                    SkDrawCommand::DrawOval {
+                        coords: vec![top_left.x, top_left.y, bot_rght.x, bot_rght.y],
+                        paint,
+                        visible: true
+                    }
+                ],
+                surfaceType: Some(SurfaceType::Abstract)
+            }
+        },
         SkiLang::DrawRect(ids) => {
             let top_left = get_point(expr, ids[0]);
             let bot_rght = get_point(expr, ids[1]);
