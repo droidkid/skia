@@ -61,3 +61,6 @@ bazel/user/buildrc
 
 skia_opt_research/out/*
 skia_opt_research/skps/*
+skia_opt_research/*.pb.cc
+skia_opt_research/*.pb.h
+
