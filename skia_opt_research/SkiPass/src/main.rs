@@ -2,8 +2,8 @@ use std::fs::File;
 use std::fs;
 use std::io::BufReader;
 use std::env;
-use ski_opt::ski_lang::{SkiLangExpr, parse_skp_json_file, optimize};
-use ski_opt::skpicture::{SkPicture, print_skp, generate_skpicture, write_skp};
+use ski_pass::ski_lang::{SkiLangExpr, parse_skp_json_file, optimize};
+use ski_pass::skpicture::{SkPicture, print_skp, generate_skpicture, write_skp};
 
 fn main() {
     let args: Vec<String> = env::args().collect();

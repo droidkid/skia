@@ -1,14 +1,18 @@
-# SkiOpt
+# SkiPass
 
-Converts a JSON representation of Skp into a AST (let's call it SkiLang for now).
+SkiPass is a Skia SKP optimizer.  
+
+TODO(chesetti): Add more details.
 
 Exmample run:
 
 ```bash
-$ cargo run ./res/skp3.json
+$ cargo run ./res/skp3.json out.skp
 ```
 
 ### SkiLang
+
+TODO(chesetti): This is out of date.
 
 ```rust
 // SkiLang 
