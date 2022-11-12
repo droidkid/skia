@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <fstream>
 
 static DEFINE_string2(skps, r, "", ".skp files to run the mem bench on.");
 static DEFINE_string(out_dir, "", "directory to output .");
@@ -276,6 +277,17 @@ int main(int argc, char** argv) {
 
 
     for (int i=0; i < FLAGS_skps.count(); i++) {
+        std::string skiPassRunInfoProtoFilePath = std::string(FLAGS_skps[i]);
+        skiPassRunInfoProtoFilePath += "_opt.skipass_run.pb";
+        std::cout<<"Reading proto from "<<skiPassRunInfoProtoFilePath<<std::endl;
+        std::ifstream skiPassRunInfoIfs(skiPassRunInfoProtoFilePath);
+        ski_pass::protos::SkiPassRunInfo run_info;
+        run_info.ParseFromIstream(&skiPassRunInfoIfs);
+        std::cout<<"Reading proto"<<std::endl;
+        std::string SkiPassRunInfoDump;
+        std::cout<<run_info.input_skp_name()<<std::endl;
+        std::cout<<"End proto"<<std::endl;
+
         fprintf(csvSummary, "%s,", FLAGS_skps[i]);
         long long bytes_per_skp;
 
@@ -290,4 +302,5 @@ int main(int argc, char** argv) {
 
     }
     fclose(csvSummary);
+
 }
