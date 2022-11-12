@@ -178,19 +178,34 @@ private:
 
 void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerSkp) {
     std::unique_ptr<SkStream> stream;
+
     if (optType == SKI_OPT) {
         std::string skpOptName(skpName);
         skpOptName += "_opt";
         stream = SkStream::MakeFromFile(skpOptName.c_str());
+
+        std::string skiPassRunInfoProtoFilePath = std::string(skpName);
+        skiPassRunInfoProtoFilePath += "_opt.skipass_run.pb";
+        std::ifstream skiPassRunInfoIfs(skiPassRunInfoProtoFilePath);
+        ski_pass::protos::SkiPassRunInfo run_info;
+        run_info.ParseFromIstream(&skiPassRunInfoIfs);
+
+        if (run_info.status() == ski_pass::protos::SkiPassRunStatus::FAILED) {
+            fprintf(stderr, "Could not read %s. Skipping this file\n", skpName);
+            if (run_info.unsupported_draw_commands().draw_commands().size()) {
+                for (auto v : run_info.unsupported_draw_commands().draw_commands()) {
+                    fprintf(stderr, "Unsupported Draw Command: %s.", v.c_str());
+                }
+
+            }
+            *bytesPerSkp = -1;
+            return;
+        }
+
     } else {
         stream = SkStream::MakeFromFile(skpName);
     }
 
-    if (!stream) {
-        fprintf(stderr, "Could not read %s. Skipping this file\n", skpName);
-        *bytesPerSkp = -1;
-        return;
-    }
     sk_sp<SkPicture> src(SkPicture::MakeFromStream(stream.get()));
     if (!src) {
         fprintf(stderr, "Could not parse %s into an Skp. Skipping.\n", skpName);
@@ -277,16 +292,6 @@ int main(int argc, char** argv) {
 
 
     for (int i=0; i < FLAGS_skps.count(); i++) {
-        std::string skiPassRunInfoProtoFilePath = std::string(FLAGS_skps[i]);
-        skiPassRunInfoProtoFilePath += "_opt.skipass_run.pb";
-        std::cout<<"Reading proto from "<<skiPassRunInfoProtoFilePath<<std::endl;
-        std::ifstream skiPassRunInfoIfs(skiPassRunInfoProtoFilePath);
-        ski_pass::protos::SkiPassRunInfo run_info;
-        run_info.ParseFromIstream(&skiPassRunInfoIfs);
-        std::cout<<"Reading proto"<<std::endl;
-        std::string SkiPassRunInfoDump;
-        std::cout<<run_info.DebugString()<<std::endl;
-        std::cout<<"End proto"<<std::endl;
 
         fprintf(csvSummary, "%s,", FLAGS_skps[i]);
         long long bytes_per_skp;

@@ -63,19 +63,17 @@ pub struct SkiLangExpr {
 }
 
 #[derive(Debug)]
-pub struct SkpJsonParseError {
-    pub unsupported_commands: Vec<String>,
-}
+pub struct UnsupportedDrawCommandsError {}
 
-impl fmt::Display for SkpJsonParseError {
+impl fmt::Display for UnsupportedDrawCommandsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Unsupported commands: {:?}", self.unsupported_commands)
+        write!(f, "Unsupported commands. Check the run_info proto")
     }
 }
 
-impl Error for SkpJsonParseError {
+impl Error for UnsupportedDrawCommandsError {
     fn description(&self) -> &str {
-        "Error resulting from parsing Skp Json"
+        "Error resulting from having unsupported draw commands."
     }
 }
 
@@ -86,23 +84,22 @@ pub fn parse_skp_json_file(
     let r = BufReader::new(File::open(skp_json_path).unwrap());
     let u: Value = serde_json::from_reader(r)?;
 
+    let mut unsupported_draw_commands = protos::UnsupportedDrawCommands::default();
+
     let mut drawCommands: Vec<SkDrawCommand> = vec![];
     let commandJsonArray = u["commands"].as_array().unwrap();
-    let mut unsupported: Vec<String> = vec![];
     for commandJson in commandJsonArray {
         let commandName = commandJson["command"].as_str().unwrap();
         if SkDrawCommand::VARIANTS.contains(&commandName) {
             let drawCommand: SkDrawCommand = serde_json::from_str(&commandJson.to_string())?;
             drawCommands.push(drawCommand);
         } else {
-            unsupported.push(commandName.to_string());
+            unsupported_draw_commands.draw_commands.push(commandName.to_string());
         }
     }
 
-    if (!unsupported.is_empty()) {
-        return Err(Box::new(SkpJsonParseError {
-            unsupported_commands: unsupported,
-        }));
+    if !unsupported_draw_commands.draw_commands.is_empty() {
+        return Err(Box::new(UnsupportedDrawCommandsError {}));
     }
 
     let mut expr = RecExpr::default();

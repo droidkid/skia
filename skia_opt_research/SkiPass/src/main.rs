@@ -2,7 +2,7 @@ use std::fs::File;
 use std::fs;
 use std::io::BufReader;
 use std::env;
-use ski_pass::ski_lang::{SkiLangExpr, parse_skp_json_file, optimize, SkpJsonParseError};
+use ski_pass::ski_lang::{SkiLangExpr, parse_skp_json_file, optimize};
 use ski_pass::skpicture::{SkPicture, print_skp, generate_skpicture, write_skp};
 
 use ski_pass::protos;
