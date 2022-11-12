@@ -109,7 +109,7 @@ void draw_006_clipRect2(SkCanvas *canvas) {
 
     canvas->saveLayer(nullptr, nullptr);
     canvas->clipRect(SkRect::MakeWH(90, 80));
-    canvas->drawOval(SkRect::MakeLTRB(40, 0, 160, 120), paint);
+    canvas->drawCircle(100, 100, 60, paint);
     canvas->restore();
 
     canvas->drawRect(SkRect::MakeLTRB(90, 90, 110, 130), pSolidBlue);

@@ -3368,7 +3368,12 @@ if (is_ios && skia_enable_skottie && !skia_enable_flutter_defines) {
 }
 
 test_app("skia_opt_membench") {
-  sources = ["skia_opt_research/skia_opt_membench.cpp"]
+  sources = [
+    "skia_opt_research/skia_opt_membench.cpp",
+    # Run 'make gen-proto' to generate these files.
+    "skia_opt_research/ski_pass.pb.cc",
+    "skia_opt_research/ski_pass.pb.h",
+  ]
   deps = [
     ":flags",
     ":skia",

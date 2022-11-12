@@ -21,3 +21,9 @@ From the skia root directory, assuming the build directory is `out/Debug`
 $ ninja -C ./out/Debug skp_opt_gen_skps
 $ ./out/Debug skp_opt_gen_skps
 ```
+
+## Generating proto source files
+
+```
+$ make gen-proto
+```

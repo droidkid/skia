@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package ski_pass.protos;
+
+enum SkiPassRunStatus {
+    SUCCESS = 0;
+    FAILED = 1;
+}
+
+message SkiPassRunInfo {
+    string input_skp_name = 1;
+    string debug_log = 2;
+    SkiPassRunStatus run_status = 3;
+    // Add output skp, error_info.
+}

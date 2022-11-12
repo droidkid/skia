@@ -13,6 +13,8 @@
 #include "tools/flags/CommandLineFlags.h"
 #include "include/private/SkMalloc.h"
 
+#include "skia_opt_research/ski_pass.pb.h"
+
 #include <stdio.h>
 #include <string.h>
 
