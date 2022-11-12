@@ -1,12 +1,15 @@
+use egg::*;
+use serde_json::Value;
+use std::error::Error;
+use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
-use egg::*;
-use std::error::Error;
-use serde_json::{Value};
 use strum::VariantNames;
-use std::fmt;
 
-use crate::skpicture::{SkPicture, SkDrawCommand};
+use crate::protos;
+use prost::Message;
+
+use crate::skpicture::{SkDrawCommand, SkPicture};
 
 define_language! {
     pub enum SkiLang {
@@ -31,7 +34,10 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     ]
 }
 
-pub fn optimize(expr: &RecExpr<SkiLang>) -> SkiLangExpr {
+pub fn optimize(
+    expr: &RecExpr<SkiLang>,
+    run_info: &mut protos::SkiPassRunInfo,
+) -> Result<SkiLangExpr, Box<dyn Error>> {
     let mut runner = Runner::default().with_expr(expr).run(&make_rules());
     let root = runner.roots[0];
 
@@ -43,11 +49,12 @@ pub fn optimize(expr: &RecExpr<SkiLang>) -> SkiLangExpr {
     // Until then, use this roundabout way to get the optimized recexpr id.
     let mut egraph = EGraph::<SkiLang, ()>::default();
     let id = egraph.add_expr(&optimized);
+    run_info.ski_pass_parse_expr = optimized.pretty(50);
 
-    SkiLangExpr {
+    Ok(SkiLangExpr {
         expr: optimized,
         id,
-    }
+    })
 }
 
 pub struct SkiLangExpr {
@@ -57,7 +64,7 @@ pub struct SkiLangExpr {
 
 #[derive(Debug)]
 pub struct SkpJsonParseError {
-    pub unsupported_commands: Vec<String>
+    pub unsupported_commands: Vec<String>,
 }
 
 impl fmt::Display for SkpJsonParseError {
@@ -72,17 +79,16 @@ impl Error for SkpJsonParseError {
     }
 }
 
-
-pub fn parse_skp_json_file (
-    skp_json_path: &str
-) ->  Result<SkiLangExpr, Box<dyn Error> > {
-
-    let r= BufReader::new(File::open(skp_json_path).unwrap());
+pub fn parse_skp_json_file(
+    skp_json_path: &str,
+    run_info: &mut protos::SkiPassRunInfo,
+) -> Result<SkiLangExpr, Box<dyn Error>> {
+    let r = BufReader::new(File::open(skp_json_path).unwrap());
     let u: Value = serde_json::from_reader(r)?;
 
     let mut drawCommands: Vec<SkDrawCommand> = vec![];
     let commandJsonArray = u["commands"].as_array().unwrap();
-    let mut unsupported : Vec<String> = vec![];
+    let mut unsupported: Vec<String> = vec![];
     for commandJson in commandJsonArray {
         let commandName = commandJson["command"].as_str().unwrap();
         if SkDrawCommand::VARIANTS.contains(&commandName) {
@@ -94,8 +100,8 @@ pub fn parse_skp_json_file (
     }
 
     if (!unsupported.is_empty()) {
-        return Err(Box::new(SkpJsonParseError{
-            unsupported_commands: unsupported
+        return Err(Box::new(SkpJsonParseError {
+            unsupported_commands: unsupported,
         }));
     }
 
@@ -103,26 +109,23 @@ pub fn parse_skp_json_file (
     let blankSurface = expr.add(SkiLang::Blank);
     let id = build_expr(&mut drawCommands.iter(), blankSurface, &mut expr);
 
-    Ok(SkiLangExpr {
-        expr,
-        id
-    })
+    run_info.skp_json_parse_expr = expr.pretty(50);
 
+    Ok(SkiLangExpr { expr, id })
 }
 
-
-fn build_expr<'a, I> (
-    drawCommands: &mut I,
-    dst: Id,
-    expr: &mut RecExpr<SkiLang>
-) -> Id 
+fn build_expr<'a, I>(drawCommands: &mut I, dst: Id, expr: &mut RecExpr<SkiLang>) -> Id
 where
-    I: Iterator<Item = &'a SkDrawCommand> + 'a
+    I: Iterator<Item = &'a SkDrawCommand> + 'a,
 {
     match drawCommands.next() {
         Some(drawCommand) => {
             match drawCommand {
-                SkDrawCommand::DrawOval { coords, paint, visible } => {
+                SkDrawCommand::DrawOval {
+                    coords,
+                    paint,
+                    visible,
+                } => {
                     let l = expr.add(SkiLang::Num(coords[0]));
                     let t = expr.add(SkiLang::Num(coords[1]));
                     let r = expr.add(SkiLang::Num(coords[2]));
@@ -142,8 +145,12 @@ where
                     let nextDst = expr.add(SkiLang::SrcOver([dst, drawOval]));
 
                     build_expr(drawCommands, nextDst, expr)
-                },
-                SkDrawCommand::DrawRect { coords, paint, visible } => {
+                }
+                SkDrawCommand::DrawRect {
+                    coords,
+                    paint,
+                    visible,
+                } => {
                     let l = expr.add(SkiLang::Num(coords[0]));
                     let t = expr.add(SkiLang::Num(coords[1]));
                     let r = expr.add(SkiLang::Num(coords[2]));
@@ -163,22 +170,22 @@ where
                     let nextDst = expr.add(SkiLang::SrcOver([dst, drawRect]));
 
                     build_expr(drawCommands, nextDst, expr)
-                },
-                SkDrawCommand::Save {visible} => {
+                }
+                SkDrawCommand::Save { visible } => {
                     let newLayerDst = expr.add(SkiLang::Blank);
                     let newLayerId = build_expr(drawCommands, newLayerDst, expr);
 
                     let nextDst = expr.add(SkiLang::SrcOver([dst, newLayerId]));
                     build_expr(drawCommands, nextDst, expr)
                 }
-                SkDrawCommand::SaveLayer {paint, visible} => {
+                SkDrawCommand::SaveLayer { paint, visible } => {
                     let newLayerDst = expr.add(SkiLang::Blank);
                     let newLayerId = build_expr(drawCommands, newLayerDst, expr);
                     let nextDst = expr.add(SkiLang::SrcOver([dst, newLayerId]));
 
                     build_expr(drawCommands, nextDst, expr)
-                },
-                SkDrawCommand::ClipRect {coords, visible} => {
+                }
+                SkDrawCommand::ClipRect { coords, visible } => {
                     let l = expr.add(SkiLang::Num(coords[0]));
                     let t = expr.add(SkiLang::Num(coords[1]));
                     let r = expr.add(SkiLang::Num(coords[2]));
@@ -198,13 +205,9 @@ where
                     // Or we reached the end of program
                     // TODO: check if we hit a error here...
                 }
-                Restore => {
-                    dst
-                }
+                Restore => dst,
             }
-        },
-        None => {
-            dst
         }
+        None => dst,
     }
 }

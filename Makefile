@@ -63,7 +63,7 @@ local-nightly: build-nightly gen-skiopt-skps
 	mkdir -p $(DIFF_REPORT_DIR)
 	mkdir -p $(NIGHTLY_REPORT_DIR)
 	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR)
-	$(BUILD_DIR)/skdiff $(SKP_RENDERS) $(SKIOPT_SKP_RENDERS) $(DIFF_REPORT_DIR)
+	$(BUILD_DIR)/skdiff $(SKP_RENDERS) $(SKI_PASS_SKP_RENDERS) $(DIFF_REPORT_DIR)
 	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE)
 	cp $(SKP_DIR)/* $(NIGHTLY_REPORT_DIR)
 

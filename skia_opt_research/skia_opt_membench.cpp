@@ -245,7 +245,7 @@ void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerS
 
     if (optType == SKI_OPT) {
         std::string path(FLAGS_out_dir[0]);
-        path += "/skiopt_renders/" + getFileName(skpName) + ".png";
+        path += "/skipass_renders/" + getFileName(skpName) + ".png";
         printf("%s\n", path.c_str());
         SkFILEWStream file(path.c_str());
         SkEncodeImage(&file, bitmap, SkEncodedImageFormat::kPNG, 100);
@@ -285,7 +285,7 @@ int main(int argc, char** argv) {
         run_info.ParseFromIstream(&skiPassRunInfoIfs);
         std::cout<<"Reading proto"<<std::endl;
         std::string SkiPassRunInfoDump;
-        std::cout<<run_info.input_skp_name()<<std::endl;
+        std::cout<<run_info.DebugString()<<std::endl;
         std::cout<<"End proto"<<std::endl;
 
         fprintf(csvSummary, "%s,", FLAGS_skps[i]);

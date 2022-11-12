@@ -3,13 +3,28 @@ syntax = "proto3";
 package ski_pass.protos;
 
 enum SkiPassRunStatus {
-    SUCCESS = 0;
+    OK = 0;
     FAILED = 1;
 }
 
+message RustError {
+    string error_message = 1;
+}
+
+message UnsupportedDrawCommands {
+    repeated string draw_commands = 1;
+}
+
 message SkiPassRunInfo {
-    string input_skp_name = 1;
-    string debug_log = 2;
-    SkiPassRunStatus run_status = 3;
-    // Add output skp, error_info.
+    SkiPassRunStatus status = 1;
+    
+    // Debug info
+    string input_skp_json_name = 2;
+    string optimized_skp_path = 3;
+    string skp_json_parse_expr = 4;
+    string ski_pass_parse_expr = 5;
+
+    // Filled in case status is not OK.
+    UnsupportedDrawCommands unsupported_draw_commands = 6;
+    RustError rust_error = 7;
 }
