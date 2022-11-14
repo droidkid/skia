@@ -101,6 +101,7 @@ pub fn parse_skp_json_file(
     }
 
     if !unsupported_draw_commands.draw_commands.is_empty() {
+        run_info.unsupported_draw_commands = Some(unsupported_draw_commands);
         return Err(Box::new(UnsupportedDrawCommandsError {}));
     }
 

@@ -61,8 +61,8 @@ with open(membench_summary_filepath) as csvfile:
             # Also see if there's a better way to have these error codes synced across the bench and report generator.
             # Consider using string values instead of negative numbers.
             if skp_membench_result[opt]['value'] == '-1':
-                skp_membench_result[opt]['value'] = 'SkiOpt had trouble parsing this.'
-                skp_membench_result[opt]['link'] = ('./%s.json.error_log.txt' % (skp_membench_result['name'])) 
+                skp_membench_result[opt]['value'] = 'SkiOpt had trouble parsing this. (TODO: Link to debug log)'
+                skp_membench_result[opt]['link'] = ('#') 
 
             if skp_membench_result[opt]['value'] == '-2':
                 skp_membench_result[opt]['value'] = 'SkiOpt optimization resulted in image diffs.'
@@ -78,7 +78,8 @@ with open(membench_summary_filepath) as csvfile:
     template_vars = {
         "title": os.path.basename(args.report_dir),
         "skp_membench_opts": opts,
-        "skp_membench_results": skp_membench_results
+        "skp_membench_results": skp_membench_results,
+        "ski_pass_summary": "{}".format(proto.ski_pass_summary) 
     }
 
     with open(os.path.join(args.report_dir, "index.html"), "w") as f:

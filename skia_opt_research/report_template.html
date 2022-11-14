@@ -10,7 +10,8 @@
         </style>
     </head>
     <body>
-        <a href="./diff/index.html"> Diff Report </a>
+        <h2><a href="./diff/index.html"> Diff Report </a></h2>
+        <h2> SkiOpt BenchMark </h2>
         <table>
             <tr>
                 <th>Skp Name</th>
@@ -22,7 +23,7 @@
             {% for skp in skp_membench_results %}
             <tr>
                 <td> {{ skp['name'] }} </td>
-                <td> <img src="{{ skp['ref_img_url'] }}"/> </td>
+                <td> <img src="{{ skp['ref_img_url'] }}" width="300" height="300"/> </td>
                 {% for opt in skp_membench_opts %}
                     <td> 
                         <a href = "{{skp[opt]['link']}}">
@@ -35,6 +36,9 @@
             {% endfor %}
             
         </table>
+
+<h2> Membench Stats </h2>
+<pre>{{ski_pass_summary}}</pre>
     </body>
 </html>
 

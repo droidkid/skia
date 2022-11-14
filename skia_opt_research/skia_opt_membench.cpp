@@ -277,7 +277,7 @@ int main(int argc, char** argv) {
     fprintf(csvSummary, "skp");
 
     const google::protobuf::EnumDescriptor *desc = skia_opt_metrics::Optimization_descriptor();
-    for (int i=0; i < desc->value_count(); i++) {
+    for (int i=1 /* Skip UNKNOWN */; i < desc->value_count(); i++) {
         fprintf(csvSummary, ",%s", desc->FindValueByNumber(i)->name().c_str());
     }
     fprintf(csvSummary, "\n");
