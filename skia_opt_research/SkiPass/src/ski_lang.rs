@@ -10,10 +10,12 @@ use crate::protos;
 use prost::Message;
 
 use crate::skpicture::{SkDrawCommand, SkPicture};
+use crate::num::Num;
 
 define_language! {
     pub enum SkiLang {
-        Num(i32),
+        ColorChannel(u16), // We only need u8, but u8 doesn't implement Hash
+        Num(Num),
         "point" = Point([Id; 2]), // X, Y
         "dimensions" = Dim([Id; 2]), // W, H
         // TODO: Create a RECT type.
@@ -123,15 +125,15 @@ where
                     paint,
                     visible,
                 } => {
-                    let l = expr.add(SkiLang::Num(coords[0]));
-                    let t = expr.add(SkiLang::Num(coords[1]));
-                    let r = expr.add(SkiLang::Num(coords[2]));
-                    let b = expr.add(SkiLang::Num(coords[3]));
+                    let l = expr.add(SkiLang::Num(Num::from(coords[0])));
+                    let t = expr.add(SkiLang::Num(Num::from(coords[1])));
+                    let r = expr.add(SkiLang::Num(Num::from(coords[2])));
+                    let b = expr.add(SkiLang::Num(Num::from(coords[3])));
 
-                    let ca = expr.add(SkiLang::Num(paint.color[0] as i32));
-                    let cr = expr.add(SkiLang::Num(paint.color[1] as i32));
-                    let cg = expr.add(SkiLang::Num(paint.color[2] as i32));
-                    let cb = expr.add(SkiLang::Num(paint.color[3] as i32));
+                    let ca = expr.add(SkiLang::ColorChannel(paint.color[0] as u16));
+                    let cr = expr.add(SkiLang::ColorChannel(paint.color[1] as u16));
+                    let cg = expr.add(SkiLang::ColorChannel(paint.color[2] as u16));
+                    let cb = expr.add(SkiLang::ColorChannel(paint.color[3] as u16));
 
                     let topPoint = expr.add(SkiLang::Point([l, t]));
                     let botPoint = expr.add(SkiLang::Point([r, b]));
@@ -148,15 +150,15 @@ where
                     paint,
                     visible,
                 } => {
-                    let l = expr.add(SkiLang::Num(coords[0]));
-                    let t = expr.add(SkiLang::Num(coords[1]));
-                    let r = expr.add(SkiLang::Num(coords[2]));
-                    let b = expr.add(SkiLang::Num(coords[3]));
+                    let l = expr.add(SkiLang::Num(Num::from(coords[0])));
+                    let t = expr.add(SkiLang::Num(Num::from(coords[1])));
+                    let r = expr.add(SkiLang::Num(Num::from(coords[2])));
+                    let b = expr.add(SkiLang::Num(Num::from(coords[3])));
 
-                    let ca = expr.add(SkiLang::Num(paint.color[0] as i32));
-                    let cr = expr.add(SkiLang::Num(paint.color[1] as i32));
-                    let cg = expr.add(SkiLang::Num(paint.color[2] as i32));
-                    let cb = expr.add(SkiLang::Num(paint.color[3] as i32));
+                    let ca = expr.add(SkiLang::ColorChannel(paint.color[0] as u16));
+                    let cr = expr.add(SkiLang::ColorChannel(paint.color[1] as u16));
+                    let cg = expr.add(SkiLang::ColorChannel(paint.color[2] as u16));
+                    let cb = expr.add(SkiLang::ColorChannel(paint.color[3] as u16));
 
                     let topPoint = expr.add(SkiLang::Point([l, t]));
                     let botPoint = expr.add(SkiLang::Point([r, b]));
@@ -183,10 +185,10 @@ where
                     build_expr(drawCommands, nextDst, expr)
                 }
                 SkDrawCommand::ClipRect { coords, visible } => {
-                    let l = expr.add(SkiLang::Num(coords[0]));
-                    let t = expr.add(SkiLang::Num(coords[1]));
-                    let r = expr.add(SkiLang::Num(coords[2]));
-                    let b = expr.add(SkiLang::Num(coords[3]));
+                    let l = expr.add(SkiLang::Num(Num::from(coords[0])));
+                    let t = expr.add(SkiLang::Num(Num::from(coords[1])));
+                    let r = expr.add(SkiLang::Num(Num::from(coords[2])));
+                    let b = expr.add(SkiLang::Num(Num::from(coords[3])));
 
                     let topPoint = expr.add(SkiLang::Point([l, t]));
                     let botPoint = expr.add(SkiLang::Point([r, b]));

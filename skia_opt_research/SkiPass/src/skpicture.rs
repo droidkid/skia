@@ -7,6 +7,7 @@ use std::io::Write;
 use strum_macros::{EnumString, EnumVariantNames};
 
 use crate::ski_lang::SkiLang;
+use crate::num::Num;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct SkPaint {
@@ -23,17 +24,17 @@ fn default_color() -> Vec<u8> {
 #[serde(tag = "command")]
 pub enum SkDrawCommand {
     DrawRect {
-        coords: Vec<i32>,
+        coords: Vec<f64>,
         paint: SkPaint,
         visible: bool,
     },
     DrawOval {
-        coords: Vec<i32>,
+        coords: Vec<f64>,
         paint: SkPaint,
         visible: bool,
     },
     ClipRect {
-        coords: Vec<i32>,
+        coords: Vec<f64>,
         visible: bool,
     }, // TODO: Support op, antiAlias
     Save {
@@ -64,11 +65,20 @@ pub struct SkPicture {
 }
 
 struct Point {
-    x: i32,
-    y: i32,
+    x: f64,
+    y: f64,
 }
 
-fn get_num(skilang_expr: &RecExpr<SkiLang>, id: Id) -> i32 {
+fn get_color_channel(skilang_expr: &RecExpr<SkiLang>, id: Id) -> u8 {
+    match &skilang_expr[id] {
+        SkiLang::ColorChannel(val) => (*val).try_into().unwrap(),
+        _ => {
+            panic!("This is not a num!")
+        }
+    }
+}
+
+fn get_num(skilang_expr: &RecExpr<SkiLang>, id: Id) -> Num {
     match &skilang_expr[id] {
         SkiLang::Num(val) => *val,
         _ => {
@@ -84,8 +94,8 @@ fn get_point(expr: &RecExpr<SkiLang>, id: Id) -> Point {
             let y_id = ids[1];
 
             Point {
-                x: get_num(expr, x_id),
-                y: get_num(expr, y_id),
+                x: get_num(expr, x_id).to_f64(),
+                y: get_num(expr, y_id).to_f64(),
             }
         }
         _ => {
@@ -97,10 +107,10 @@ fn get_point(expr: &RecExpr<SkiLang>, id: Id) -> Point {
 fn get_color(expr: &RecExpr<SkiLang>, id: Id) -> Vec<u8> {
     match &expr[id] {
         SkiLang::Color(ids) => {
-            let a = get_num(expr, ids[0]) as u8;
-            let r = get_num(expr, ids[1]) as u8;
-            let g = get_num(expr, ids[2]) as u8;
-            let b = get_num(expr, ids[3]) as u8;
+            let a = get_color_channel(expr, ids[0]) as u8;
+            let r = get_color_channel(expr, ids[1]) as u8;
+            let g = get_color_channel(expr, ids[2]) as u8;
+            let b = get_color_channel(expr, ids[3]) as u8;
             vec![a, r, g, b]
         }
         _ => {
