@@ -3,6 +3,7 @@ import csv
 import os
 import jinja2
 import argparse
+import skia_opt_metrics_pb2 as SkiaOptMetrics
 
 '''
 This script assumes that skp_opt_membench will dump the following files in a directory
@@ -20,11 +21,25 @@ parser.add_argument('-d', '--report_dir', help='directory containing results of 
 parser.add_argument('-t', '--report_template', default='report_template.html', help='path to the html template')
 
 CSV_SUMMARY_FILE_NAME = "000_summary_csv.txt"
+PROTO_SUMMARY_FILE = "000_summary_csv.txt.pb"
 
 args = parser.parse_args()
 
 membench_summary_filepath = os.path.join(args.report_dir, CSV_SUMMARY_FILE_NAME);
+proto_summary_filepath = os.path.join(args.report_dir, PROTO_SUMMARY_FILE);
+
 report_template_filepath = os.path.abspath(args.report_template)
+
+proto_file = open(proto_summary_filepath, "rb")
+proto_data = proto_file.read()
+proto_file.close()
+proto = SkiaOptMetrics.SkiaOptBenchmark()
+proto.ParseFromString(proto_data)
+print(proto)
+
+# TODO(): Remove CSV File.
+# TODO(): Write out proto.UnsupportedDrawCommands
+# TODO(): Collect some web pages.
 
 with open(membench_summary_filepath) as csvfile:
     results_csv = csv.DictReader(csvfile)
