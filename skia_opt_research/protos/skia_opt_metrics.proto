@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package skia_opt_metrics;
+
+enum OptimizationStatus {
+    UNKNOWN_STATUS = 0;
+    SUCCESS = 1;
+    FAILED = 2;
+}
+
+enum Optimization {
+    UNKNOWN_OPTIMIZATION = 0;
+    NO_OPT = 1;
+    SKIA_RECORD_OPTS = 2;
+    SKIA_RECORD_OPTS_2 = 3;
+    SKI_PASS = 4;
+}
+
+message OptimizationBenchmark {
+    Optimization optimization_type = 1;
+    OptimizationStatus optimization_status = 2;
+    uint64 malloc_allocated_bytes = 3; // Valid only if optimization_status == SUCCESS
+}
+
+message SkpBenchmark {
+    string skp_name = 1;
+    repeated OptimizationBenchmark optimization_benchmark_runs = 2;
+}
+
+
+message SkiPassSummary {
+    message UnsupportedDrawCommandStats {
+        string draw_command = 1;
+        int32 count = 2;
+    };
+    repeated UnsupportedDrawCommandStats unsupported_draw_commands = 1;
+}
+
+message SkiaOptBenchmark {
+    repeated SkpBenchmark skp_benchmark_runs = 1;
+    SkiPassSummary ski_pass_summary = 2;
+}
