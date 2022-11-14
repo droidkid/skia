@@ -14,39 +14,18 @@
 #include "include/private/SkMalloc.h"
 
 #include "skia_opt_research/ski_pass.pb.h"
+#include "skia_opt_research/skia_opt_metrics.pb.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <fstream>
 
+#include <google/protobuf/descriptor.h>
+
 static DEFINE_string2(skps, r, "", ".skp files to run the mem bench on.");
 static DEFINE_string(out_dir, "", "directory to output .");
 
-enum SkOptimizerType {
-    NO_OPT,
-    SK_RECORD_OPTS,
-    SK_RECORD_OPTS2,
-    SKI_OPT
-};
-
-std::string skOptimizerTypeToString(SkOptimizerType optType) {
-    switch(optType) {
-        case NO_OPT:
-            return std::string("no_opt");
-            break;
-        case SK_RECORD_OPTS:
-            return std::string("skRecordOpts");
-            break;
-        case SK_RECORD_OPTS2:
-            return std::string("skRecordOpts2");
-            break;
-        case SKI_OPT:
-            return std::string("skiOpt");
-            break;
-        default:
-            abort();
-    }
-}
+static std::map<std::string, int> unsupported_draw_commands_count;
 
 std::string getFileName(const char *filePath) {
     const char *c = strrchr(filePath, '/');
@@ -176,10 +155,18 @@ private:
     FILE *fp;
 };
 
-void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerSkp) {
+void dump_skp(
+    const char* skpName, 
+    skia_opt_metrics::Optimization optType, 
+    skia_opt_metrics::SkpBenchmark *benchmark, 
+    long long *bytesPerSkp) {
+
+    skia_opt_metrics::OptimizationBenchmark* opt_benchmark = benchmark->add_optimization_benchmark_runs();
+    opt_benchmark->set_optimization_type(optType);
+
     std::unique_ptr<SkStream> stream;
 
-    if (optType == SKI_OPT) {
+    if (optType == skia_opt_metrics::SKI_PASS) {
         std::string skpOptName(skpName);
         skpOptName += "_opt";
         stream = SkStream::MakeFromFile(skpOptName.c_str());
@@ -187,21 +174,22 @@ void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerS
         std::string skiPassRunInfoProtoFilePath = std::string(skpName);
         skiPassRunInfoProtoFilePath += "_opt.skipass_run.pb";
         std::ifstream skiPassRunInfoIfs(skiPassRunInfoProtoFilePath);
-        ski_pass::protos::SkiPassRunInfo run_info;
+        ski_pass::SkiPassRunInfo run_info;
         run_info.ParseFromIstream(&skiPassRunInfoIfs);
 
-        if (run_info.status() == ski_pass::protos::SkiPassRunStatus::FAILED) {
+        if (run_info.status() == ski_pass::SkiPassRunStatus::FAILED) {
             fprintf(stderr, "Could not read %s. Skipping this file\n", skpName);
             if (run_info.unsupported_draw_commands().draw_commands().size()) {
                 for (auto v : run_info.unsupported_draw_commands().draw_commands()) {
                     fprintf(stderr, "Unsupported Draw Command: %s.", v.c_str());
+                    unsupported_draw_commands_count[v]++;
                 }
 
             }
+            opt_benchmark->set_optimization_status(skia_opt_metrics::OptimizationStatus::FAILED);
             *bytesPerSkp = -1;
             return;
         }
-
     } else {
         stream = SkStream::MakeFromFile(skpName);
     }
@@ -221,15 +209,15 @@ void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerS
     src->playback(&recorder);
 
     switch (optType) {
-        case NO_OPT:
+        case skia_opt_metrics::NO_OPT:
             break;
-        case SK_RECORD_OPTS:
+        case skia_opt_metrics::SKIA_RECORD_OPTS:
             SkRecordOptimize(&record);
             break;
-        case SK_RECORD_OPTS2:
+        case skia_opt_metrics::SKIA_RECORD_OPTS_2:
             SkRecordOptimize2(&record);
             break;
-        case SKI_OPT:
+        case skia_opt_metrics::SKI_PASS:
             break;
     }
 
@@ -240,7 +228,7 @@ void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerS
     // There must be a better way to do this.
     std::string outFilePath(FLAGS_out_dir[0]);
     outFilePath += "/" + getFileName(skpName);
-    outFilePath += "_" + skOptimizerTypeToString(optType) + "_log.txt";
+    outFilePath += "_" + skia_opt_metrics::Optimization_Name(optType) + "_log.txt";
     fprintf(stdout, "Wrting %s\n", outFilePath.c_str());
 
     FILE *fp = fopen(outFilePath.c_str(), "w");
@@ -250,7 +238,10 @@ void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerS
     }
     *bytesPerSkp = dumper.getTotalMallocBytes();
 
-    if (optType == NO_OPT) {
+    opt_benchmark->set_optimization_status(skia_opt_metrics::OptimizationStatus::SUCCESS);
+    opt_benchmark->set_malloc_allocated_bytes(*bytesPerSkp);
+
+    if (optType == skia_opt_metrics::NO_OPT) {
         std::string path(FLAGS_out_dir[0]);
         path += "/renders/" + getFileName(skpName) + ".png";
         printf("%s\n", path.c_str());
@@ -258,7 +249,7 @@ void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerS
         SkEncodeImage(&file, bitmap, SkEncodedImageFormat::kPNG, 100);
     }
 
-    if (optType == SKI_OPT) {
+    if (optType == skia_opt_metrics::SKI_PASS) {
         std::string path(FLAGS_out_dir[0]);
         path += "/skipass_renders/" + getFileName(skpName) + ".png";
         printf("%s\n", path.c_str());
@@ -270,7 +261,7 @@ void dump_skp(const char* skpName, SkOptimizerType optType, long long *bytesPerS
 }
 
 int main(int argc, char** argv) {
-
+    GOOGLE_PROTOBUF_VERIFY_VERSION;
     #ifndef SK_MALLOC_LOGGING
         fprintf(stderr, "Compile this program with enable_skia_malloc_logging=true in gn.\n");
         abort();
@@ -283,29 +274,53 @@ int main(int argc, char** argv) {
     printf("Writing summary to %s\n", outFilePath.c_str());
 
     FILE *csvSummary = fopen(outFilePath.c_str(), "w");
-        fprintf(csvSummary, "skp,%s,%s,%s,%s\n", 
-            skOptimizerTypeToString(NO_OPT).c_str(),
-            skOptimizerTypeToString(SK_RECORD_OPTS).c_str(),
-            skOptimizerTypeToString(SK_RECORD_OPTS2).c_str(),
-            skOptimizerTypeToString(SKI_OPT).c_str()
-        );
+    fprintf(csvSummary, "skp");
 
+    const google::protobuf::EnumDescriptor *desc = skia_opt_metrics::Optimization_descriptor();
+    for (int i=0; i < desc->value_count(); i++) {
+        fprintf(csvSummary, ",%s", desc->FindValueByNumber(i)->name().c_str());
+    }
+    fprintf(csvSummary, "\n");
+
+
+    skia_opt_metrics::SkiaOptBenchmark benchmark = skia_opt_metrics::SkiaOptBenchmark::default_instance();
 
     for (int i=0; i < FLAGS_skps.count(); i++) {
+        skia_opt_metrics::SkpBenchmark *skp_benchmark = benchmark.add_skp_benchmark_runs();
+        skp_benchmark->set_skp_name(FLAGS_skps[i]);
 
         fprintf(csvSummary, "%s,", FLAGS_skps[i]);
         long long bytes_per_skp;
 
-        dump_skp(FLAGS_skps[i], NO_OPT, &bytes_per_skp);
+        dump_skp(FLAGS_skps[i], skia_opt_metrics::NO_OPT, skp_benchmark, &bytes_per_skp);
         fprintf(csvSummary, "%lld,", bytes_per_skp);
-        dump_skp(FLAGS_skps[i], SK_RECORD_OPTS, &bytes_per_skp);
+        dump_skp(FLAGS_skps[i], skia_opt_metrics::SKIA_RECORD_OPTS, skp_benchmark, &bytes_per_skp);
         fprintf(csvSummary, "%lld,", bytes_per_skp);
-        dump_skp(FLAGS_skps[i], SK_RECORD_OPTS2,&bytes_per_skp);
+        dump_skp(FLAGS_skps[i], skia_opt_metrics::SKIA_RECORD_OPTS_2, skp_benchmark, &bytes_per_skp);
         fprintf(csvSummary, "%lld,", bytes_per_skp);
-        dump_skp(FLAGS_skps[i], SKI_OPT, &bytes_per_skp);
+        dump_skp(FLAGS_skps[i], skia_opt_metrics::SKI_PASS, skp_benchmark, &bytes_per_skp);
         fprintf(csvSummary, "%lld\n", bytes_per_skp); // Don't put a comma here.
-
     }
     fclose(csvSummary);
 
+    std::vector< std::pair<int, std::string> > unsupported_draw_commands_sorted;
+    for (auto p : unsupported_draw_commands_count) {
+        unsupported_draw_commands_sorted.push_back( std::pair<int, std::string>(p.second, p.first));
+    }
+    sort(unsupported_draw_commands_sorted.begin(), unsupported_draw_commands_sorted.end());
+    reverse(unsupported_draw_commands_sorted.begin(), unsupported_draw_commands_sorted.end());
+
+    skia_opt_metrics::SkiPassSummary ski_pass_summary = skia_opt_metrics::SkiPassSummary::default_instance();
+    for (auto p : unsupported_draw_commands_sorted) {
+        skia_opt_metrics::SkiPassSummary_UnsupportedDrawCommandStats *stats = 
+            benchmark.mutable_ski_pass_summary()->add_unsupported_draw_commands();
+        stats->set_draw_command(p.second);
+        stats->set_count(p.first);
+    }
+
+    std::string protoOutFilePath(outFilePath + ".pb");
+    std::ofstream protoOut(protoOutFilePath, std::ofstream::out);
+    benchmark.SerializePartialToOstream(&protoOut);
+
+    google::protobuf::ShutdownProtobufLibrary();
 }

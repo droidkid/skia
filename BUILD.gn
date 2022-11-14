@@ -3373,6 +3373,8 @@ test_app("skia_opt_membench") {
     # Run 'make gen-proto' to generate these files.
     "skia_opt_research/ski_pass.pb.cc",
     "skia_opt_research/ski_pass.pb.h",
+    "skia_opt_research/skia_opt_metrics.pb.h",
+    "skia_opt_research/skia_opt_metrics.pb.cc",
   ]
   deps = [
     ":flags",

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package ski_pass.protos;
+package ski_pass;
 
 enum SkiPassRunStatus {
     OK = 0;

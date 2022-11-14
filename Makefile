@@ -9,9 +9,9 @@ SKPS = $(wildcard ./skia_opt_research/skps/*.skp)
 
 SKI_PASS_DIR=./skia_opt_research/SkiPass
 SKI_PASS_BIN=./skia_opt_research/SkiPass/target/release/ski_pass
-SKI_PASS_PROTO_SRC_DIR=./skia_opt_research/SkiPass/src/protos
-SKI_PASS_PROTO_CPP_GEN_DIR=./skia_opt_research/
-SKI_PASS_PROTO=${SKI_PASS_PROTO_SRC_DIR}/ski_pass.proto
+PROTO_SRC_DIR=./skia_opt_research/protos
+PROTO_CPP_GEN_DIR=./skia_opt_research/
+PROTOS = $(wildcard ./skia_opt_research/protos/*.proto)
 
 SKP_RENDERS = $(NIGHTLY_REPORT_DIR)/renders
 SKI_PASS_SKP_RENDERS = $(NIGHTLY_REPORT_DIR)/skipass_renders
@@ -19,7 +19,7 @@ DIFF_REPORT_DIR = $(NIGHTLY_REPORT_DIR)/diff
 
 
 gen-proto:
-	${PROTOC} -I=${SKI_PASS_PROTO_SRC_DIR} --cpp_out=${SKI_PASS_PROTO_CPP_GEN_DIR} ${SKI_PASS_PROTO}
+	${PROTOC} -I=${PROTO_SRC_DIR} --cpp_out=${PROTO_CPP_GEN_DIR} ${PROTOS}
 
 clean:
 	$(RM) -r $(BUILD_DIR)
