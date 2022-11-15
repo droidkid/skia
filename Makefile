@@ -4,8 +4,11 @@ BUILD_DIR :=./out/Nightly
 NIGHTLY_REPORT_DIR:=./skia_opt_research/out/$(shell date +'%Y-%m-%d_%H-%M-%S')
 REPORT_GENERATOR=python3 ./skia_opt_research/gen_report.py
 REPORT_TEMPLATE=./skia_opt_research/report_template.html
-SKP_DIR=./skia_opt_research/skps
+
+# All skps will generated or copied over to ${SKPS}
+WEBPAGE_SKPS_DIR = ./skia_opt_research/webpage_skps
 SKPS = $(wildcard ./skia_opt_research/skps/*.skp)
+SKP_DIR=./skia_opt_research/skps
 
 SKI_PASS_DIR=./skia_opt_research/SkiPass
 SKI_PASS_BIN=./skia_opt_research/SkiPass/target/release/ski_pass
@@ -19,7 +22,6 @@ SKI_PASS_SKP_RENDERS = $(NIGHTLY_REPORT_DIR)/skipass_renders
 DIFF_REPORT_DIR = $(NIGHTLY_REPORT_DIR)/diff
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = python
-
 
 gen-proto:
 	${PROTOC} -I=${PROTO_SRC_DIR} --cpp_out=${PROTO_CPP_GEN_DIR} --python_out=${PROTO_PY_GEN_DIR} ${PROTOS}
@@ -45,7 +47,7 @@ build-nightly: gen-nightly gen-proto
 gen-skps: build-nightly
 	mkdir -p $(SKP_DIR)
 	$(BUILD_DIR)/skia_opt_gen_skps
-	cp ${SKP_DIR}/webpages/* ${SKP_DIR}/
+	cp ${WEBPAGE_SKPS_DIR}/* ${SKP_DIR}/
 
 gen-skp-json: gen-skps
 	for SKP in $(SKPS); do $(BUILD_DIR)/skp_parser $${SKP} > $${SKP}.json; done
