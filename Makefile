@@ -45,6 +45,7 @@ build-nightly: gen-nightly gen-proto
 gen-skps: build-nightly
 	mkdir -p $(SKP_DIR)
 	$(BUILD_DIR)/skia_opt_gen_skps
+	cp ${SKP_DIR}/webpages/* ${SKP_DIR}/
 
 gen-skp-json: gen-skps
 	for SKP in $(SKPS); do $(BUILD_DIR)/skp_parser $${SKP} > $${SKP}.json; done
