@@ -34,5 +34,5 @@ pub mod skpicture;
 pub mod num;
 
 pub mod protos {
-    include!(concat!(env!("OUT_DIR"), "/ski_pass.protos.rs"));
+    include!(concat!(env!("OUT_DIR"), "/ski_pass.rs"));
 }
