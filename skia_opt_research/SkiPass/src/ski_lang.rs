@@ -5,27 +5,23 @@ use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use strum::VariantNames;
+use prost::Message;
+use ordered_float::OrderedFloat;
 
 use crate::protos;
-use prost::Message;
+use crate::skpicture::{SkDrawCommand, SkPicture, SkPaint, SkBBox};
 
-use crate::skpicture::{SkDrawCommand, SkPicture};
-use crate::num::Num;
 
+// TODO: Find out why clipRect(Id, SkBBox) does not work.
+// The compiler egg::LanguageChildren, FromStr not implemented for Id, SkBBox.
+// But why does BBox(SkBBox work then?)
 define_language! {
     pub enum SkiLang {
-        ColorChannel(u16), // We only need u8, but u8 doesn't implement Hash
-        Num(Num),
-        "point" = Point([Id; 2]), // X, Y
-        "dimensions" = Dim([Id; 2]), // W, H
-        // TODO: Create a RECT type.
-        "color" = Color([Id; 4]), // argb, 0-255
-        "paint" = Paint([Id; 1]), // color
-        "blank" = Blank, // dimensions
+        BBox(SkBBox),
+        DrawCommand(SkDrawCommand),
+        "clipRect" = ClipRect([Id; 2]), // layer, bbox
+        "blank" = Blank,
         "srcOver" = SrcOver([Id; 2]), // dst, src
-        "drawRect" = DrawRect([Id; 3]), // top_point, bot_point, paint
-        "drawOval" = DrawOval([Id; 3]), // top_point, bot_point, paint
-        "clipRect" = ClipRect([Id; 3]), // top_point, bot_point, surface
     }
 }
 
@@ -121,53 +117,10 @@ where
     match drawCommands.next() {
         Some(drawCommand) => {
             match drawCommand {
-                SkDrawCommand::DrawOval {
-                    coords,
-                    paint,
-                    visible,
-                } => {
-                    let l = expr.add(SkiLang::Num(Num::from(coords[0])));
-                    let t = expr.add(SkiLang::Num(Num::from(coords[1])));
-                    let r = expr.add(SkiLang::Num(Num::from(coords[2])));
-                    let b = expr.add(SkiLang::Num(Num::from(coords[3])));
-
-                    let ca = expr.add(SkiLang::ColorChannel(paint.color[0] as u16));
-                    let cr = expr.add(SkiLang::ColorChannel(paint.color[1] as u16));
-                    let cg = expr.add(SkiLang::ColorChannel(paint.color[2] as u16));
-                    let cb = expr.add(SkiLang::ColorChannel(paint.color[3] as u16));
-
-                    let topPoint = expr.add(SkiLang::Point([l, t]));
-                    let botPoint = expr.add(SkiLang::Point([r, b]));
-                    let color = expr.add(SkiLang::Color([ca, cr, cg, cb]));
-
-                    let paint = expr.add(SkiLang::Paint([color]));
-                    let drawOval = expr.add(SkiLang::DrawOval([topPoint, botPoint, paint]));
+                SkDrawCommand::DrawOval {..} |
+                SkDrawCommand::DrawRect {..} => {
+                    let drawOval = expr.add(SkiLang::DrawCommand(drawCommand.clone()));
                     let nextDst = expr.add(SkiLang::SrcOver([dst, drawOval]));
-
-                    build_expr(drawCommands, nextDst, expr)
-                }
-                SkDrawCommand::DrawRect {
-                    coords,
-                    paint,
-                    visible,
-                } => {
-                    let l = expr.add(SkiLang::Num(Num::from(coords[0])));
-                    let t = expr.add(SkiLang::Num(Num::from(coords[1])));
-                    let r = expr.add(SkiLang::Num(Num::from(coords[2])));
-                    let b = expr.add(SkiLang::Num(Num::from(coords[3])));
-
-                    let ca = expr.add(SkiLang::ColorChannel(paint.color[0] as u16));
-                    let cr = expr.add(SkiLang::ColorChannel(paint.color[1] as u16));
-                    let cg = expr.add(SkiLang::ColorChannel(paint.color[2] as u16));
-                    let cb = expr.add(SkiLang::ColorChannel(paint.color[3] as u16));
-
-                    let topPoint = expr.add(SkiLang::Point([l, t]));
-                    let botPoint = expr.add(SkiLang::Point([r, b]));
-                    let color = expr.add(SkiLang::Color([ca, cr, cg, cb]));
-
-                    let paint = expr.add(SkiLang::Paint([color]));
-                    let drawRect = expr.add(SkiLang::DrawRect([topPoint, botPoint, paint]));
-                    let nextDst = expr.add(SkiLang::SrcOver([dst, drawRect]));
 
                     build_expr(drawCommands, nextDst, expr)
                 }
@@ -186,17 +139,17 @@ where
                     build_expr(drawCommands, nextDst, expr)
                 }
                 SkDrawCommand::ClipRect { coords, visible } => {
-                    let l = expr.add(SkiLang::Num(Num::from(coords[0])));
-                    let t = expr.add(SkiLang::Num(Num::from(coords[1])));
-                    let r = expr.add(SkiLang::Num(Num::from(coords[2])));
-                    let b = expr.add(SkiLang::Num(Num::from(coords[3])));
+                    let l = coords[0];
+                    let t = coords[1];
+                    let r = coords[2];
+                    let b = coords[3];
 
-                    let topPoint = expr.add(SkiLang::Point([l, t]));
-                    let botPoint = expr.add(SkiLang::Point([r, b]));
+                    let skBBox = SkBBox {l, t, r, b};
+                    let skBBoxId = expr.add(SkiLang::BBox(skBBox));
 
                     let newLayerDst = expr.add(SkiLang::Blank);
                     let newLayerId = build_expr(drawCommands, newLayerDst, expr);
-                    let clipRect = expr.add(SkiLang::ClipRect([topPoint, botPoint, newLayerId]));
+                    let clipRect = expr.add(SkiLang::ClipRect([newLayerId, skBBoxId]));
 
                     expr.add(SkiLang::SrcOver([dst, clipRect]))
                     // Don't build further. Let it unroll upto save.

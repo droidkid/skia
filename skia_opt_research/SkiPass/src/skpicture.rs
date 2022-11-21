@@ -1,40 +1,113 @@
 use egg::*;
-use serde::Deserialize;
-use skia_safe::{canvas::SaveLayerRec, ClipOp, Color, Paint, PictureRecorder, Rect, Surface};
+use std::fmt;
+use std::str::FromStr;
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
+use serde::Deserialize;
+use skia_safe::{canvas::SaveLayerRec, ClipOp, Color, Paint, PictureRecorder, Rect, Surface};
 use strum_macros::{EnumString, EnumVariantNames};
+use ordered_float::OrderedFloat;
+use parse_display::{Display, FromStr};
 
 use crate::ski_lang::SkiLang;
-use crate::num::Num;
 
-#[derive(Deserialize, Debug, Clone)]
+
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SkPaint {
     // ARGB, 0-255
     #[serde(default = "default_color")]
     pub color: Vec<u8>,
 }
 
+impl fmt::Display for SkPaint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(a:{:?}, r:{:?}, g:{:?}, b:{:?})", 
+            self.color[0], 
+            self.color[1], 
+            self.color[2], 
+            self.color[3], 
+        )
+    }
+}
+
+impl FromStr for SkPaint {
+    type Err = Box<dyn Error>;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!("Parsing from string not implemented yet!");
+    }
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SkBBox { 
+    pub l: OrderedFloat<f32>, 
+    pub t: OrderedFloat<f32>, 
+    pub r: OrderedFloat<f32>,
+    pub b: OrderedFloat<f32> 
+}
+
+impl fmt::Display for SkBBox {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({:?}, {:?}, {:?}, {:?})", self.l, self.t, self.r, self.b)
+    }
+}
+
+impl FromStr for SkBBox {
+    type Err = Box<dyn Error>;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!("Parsing from string not implemented yet!");
+    }
+}
+
 fn default_color() -> Vec<u8> {
     vec![255, 0, 0, 0]
 }
 
-#[derive(Deserialize, Debug, Clone, EnumVariantNames)]
+fn get_skbbox(skilang_expr: &RecExpr<SkiLang>, id: Id) -> SkBBox {
+    match &skilang_expr[id] {
+        SkiLang::BBox(val) => (*val).try_into().unwrap(),
+        _ => {
+            panic!("This is not a Bounding Box!")
+        }
+    }
+}
+
+fn build_rect(coords: &Vec<OrderedFloat<f32>>) -> Rect {
+    Rect::new(
+        f32::from(coords[0]),
+        f32::from(coords[1]),
+        f32::from(coords[2]),
+        f32::from(coords[3])
+    )
+}
+
+fn build_paint(paint: &SkPaint) -> Paint {
+    let mut p = Paint::default();
+    p.set_argb(
+        paint.color[0], 
+        paint.color[1], 
+        paint.color[2], 
+        paint.color[3]
+    ); 
+    p
+}
+
+
+#[derive(Deserialize, Debug, Clone, EnumVariantNames, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(tag = "command")]
 pub enum SkDrawCommand {
     DrawRect {
-        coords: Vec<f64>,
+        coords: Vec<OrderedFloat<f32>>,
         paint: SkPaint,
         visible: bool,
     },
     DrawOval {
-        coords: Vec<f64>,
+        coords: Vec<OrderedFloat<f32>>,
         paint: SkPaint,
         visible: bool,
     },
     ClipRect {
-        coords: Vec<f64>,
+        coords: Vec<OrderedFloat<f32>>,
         visible: bool,
     }, // TODO: Support op, antiAlias
     Save {
@@ -47,6 +120,19 @@ pub enum SkDrawCommand {
     Restore {
         visible: bool,
     },
+}
+
+impl fmt::Display for SkDrawCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SkDrawCommand")
+    }
+}
+
+impl FromStr for SkDrawCommand {
+    type Err = Box<dyn Error>;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!("Parsing from string not implemented yet!");
+    }
 }
 
 #[derive(Debug)]
@@ -64,72 +150,6 @@ pub struct SkPicture {
     pub surfaceType: Option<SurfaceType>,
 }
 
-struct Point {
-    x: f64,
-    y: f64,
-}
-
-fn get_color_channel(skilang_expr: &RecExpr<SkiLang>, id: Id) -> u8 {
-    match &skilang_expr[id] {
-        SkiLang::ColorChannel(val) => (*val).try_into().unwrap(),
-        _ => {
-            panic!("This is not a num!")
-        }
-    }
-}
-
-fn get_num(skilang_expr: &RecExpr<SkiLang>, id: Id) -> Num {
-    match &skilang_expr[id] {
-        SkiLang::Num(val) => *val,
-        _ => {
-            panic!("This is not a num!")
-        }
-    }
-}
-
-fn get_point(expr: &RecExpr<SkiLang>, id: Id) -> Point {
-    match &expr[id] {
-        SkiLang::Point(ids) => {
-            let x_id = ids[0];
-            let y_id = ids[1];
-
-            Point {
-                x: get_num(expr, x_id).to_f64(),
-                y: get_num(expr, y_id).to_f64(),
-            }
-        }
-        _ => {
-            panic!("This is not a point!")
-        }
-    }
-}
-
-fn get_color(expr: &RecExpr<SkiLang>, id: Id) -> Vec<u8> {
-    match &expr[id] {
-        SkiLang::Color(ids) => {
-            let a = get_color_channel(expr, ids[0]) as u8;
-            let r = get_color_channel(expr, ids[1]) as u8;
-            let g = get_color_channel(expr, ids[2]) as u8;
-            let b = get_color_channel(expr, ids[3]) as u8;
-            vec![a, r, g, b]
-        }
-        _ => {
-            panic!("This is not a color!")
-        }
-    }
-}
-
-fn get_paint(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
-    match &expr[id] {
-        SkiLang::Paint(ids) => SkPaint {
-            color: get_color(expr, ids[0]),
-        },
-        _ => {
-            panic!("This is not a paint!")
-        }
-    }
-}
-
 pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) -> Result<(), Box<dyn Error>> {
     let mut recorder = PictureRecorder::new();
     let canvas = recorder.begin_recording(Rect::new(0.0, 0.0, 512.0, 512.0), None);
@@ -143,19 +163,8 @@ pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) -> Result<(),
                 paint,
                 visible: _,
             } => {
-                let r = Rect::new(
-                    coords[0] as f32,
-                    coords[1] as f32,
-                    coords[2] as f32,
-                    coords[3] as f32,
-                );
-                let mut p = Paint::default();
-                p.set_argb(
-                    paint.color[0],
-                    paint.color[1],
-                    paint.color[2],
-                    paint.color[3],
-                );
+                let r = build_rect(&coords);
+                let p = build_paint(&paint);
                 canvas.draw_oval(&r, &p);
             }
             SkDrawCommand::DrawRect {
@@ -163,19 +172,8 @@ pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) -> Result<(),
                 paint,
                 visible: _,
             } => {
-                let r = Rect::new(
-                    coords[0] as f32,
-                    coords[1] as f32,
-                    coords[2] as f32,
-                    coords[3] as f32,
-                );
-                let mut p = Paint::default();
-                p.set_argb(
-                    paint.color[0],
-                    paint.color[1],
-                    paint.color[2],
-                    paint.color[3],
-                );
+                let r = build_rect(&coords);
+                let p = build_paint(&paint);
                 canvas.draw_rect(&r, &p);
             }
             SkDrawCommand::SaveLayer {
@@ -189,12 +187,7 @@ pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) -> Result<(),
                 canvas.save();
             }
             SkDrawCommand::ClipRect { coords, visible } => {
-                let r = Rect::new(
-                    coords[0] as f32,
-                    coords[1] as f32,
-                    coords[2] as f32,
-                    coords[3] as f32,
-                );
+                let r = build_rect(&coords);
                 canvas.clip_rect(r, ClipOp::Intersect, true);
             }
             SkDrawCommand::Restore { visible: _ } => {
@@ -215,41 +208,18 @@ pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) -> Result<(),
 pub fn generate_skpicture(expr: &RecExpr<SkiLang>, id: Id) -> SkPicture {
     let node = &expr[id];
     match node {
-        SkiLang::DrawOval(ids) => {
-            let top_left = get_point(expr, ids[0]);
-            let bot_rght = get_point(expr, ids[1]);
-            let paint = get_paint(expr, ids[2]);
+        SkiLang::DrawCommand(skDrawCommand) => {
             SkPicture {
-                drawCommands: vec![SkDrawCommand::DrawOval {
-                    coords: vec![top_left.x, top_left.y, bot_rght.x, bot_rght.y],
-                    paint,
-                    visible: true,
-                }],
-                surfaceType: Some(SurfaceType::Abstract),
-            }
-        }
-        SkiLang::DrawRect(ids) => {
-            let top_left = get_point(expr, ids[0]);
-            let bot_rght = get_point(expr, ids[1]);
-            let paint = get_paint(expr, ids[2]);
-            SkPicture {
-                drawCommands: vec![SkDrawCommand::DrawRect {
-                    coords: vec![top_left.x, top_left.y, bot_rght.x, bot_rght.y],
-                    paint,
-                    visible: true,
-                }],
+                drawCommands: vec![skDrawCommand.clone()],
                 surfaceType: Some(SurfaceType::Abstract),
             }
         }
         SkiLang::ClipRect(ids) => {
-            let top_left = get_point(expr, ids[0]);
-            let bot_rght = get_point(expr, ids[1]);
-
-            let mut src = generate_skpicture(&expr, ids[2]);
-
+            let mut src = generate_skpicture(&expr, ids[0]);
+            let skBBox = get_skbbox(&expr, ids[1]);
             let mut drawCommands: Vec<SkDrawCommand> = vec![];
             drawCommands.push(SkDrawCommand::ClipRect {
-                coords: vec![top_left.x, top_left.y, bot_rght.x, bot_rght.y],
+                coords: vec![skBBox.l, skBBox.t, skBBox.r, skBBox.b],
                 visible: true,
             });
             drawCommands.append(&mut src.drawCommands);
