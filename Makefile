@@ -26,9 +26,11 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = python
 gen-proto:
 	${PROTOC} -I=${PROTO_SRC_DIR} --cpp_out=${PROTO_CPP_GEN_DIR} --python_out=${PROTO_PY_GEN_DIR} ${PROTOS}
 
-clean:
-	$(RM) -r $(BUILD_DIR)
+clean-skp:
 	$(RM) -r $(SKP_DIR)
+
+clean: clean-skp
+	$(RM) -r $(BUILD_DIR)
 	cargo clean --manifest-path=$(SKI_PASS_DIR)/Cargo.toml --release
 
 gen-nightly:
@@ -63,7 +65,7 @@ nightly-dry:
 	@@echo scp -r -C $(NIGHTLY_REPORT_DIR) uwplse.org:/var/www/skia
 
 
-local-nightly: build-nightly gen-skiopt-skps
+local-nightly: clean-skp build-nightly gen-skiopt-skps
 	mkdir -p $(SKP_RENDERS)
 	mkdir -p $(SKI_PASS_SKP_RENDERS)
 	mkdir -p $(DIFF_REPORT_DIR)
