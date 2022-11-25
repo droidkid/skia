@@ -181,7 +181,6 @@ void dump_skp(
             fprintf(stderr, "Could not read %s. Skipping this file\n", skpName);
             if (run_info.unsupported_draw_commands().draw_commands().size()) {
                 for (auto v : run_info.unsupported_draw_commands().draw_commands()) {
-                    fprintf(stderr, "Unsupported Draw Command: %s.", v.c_str());
                     unsupported_draw_commands_count[v]++;
                 }
 
