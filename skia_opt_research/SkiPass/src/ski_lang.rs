@@ -17,11 +17,12 @@ use crate::skpicture::{SkDrawCommand, SkPicture, SkPaint, SkBBox};
 // But why does BBox(SkBBox work then?)
 define_language! {
     pub enum SkiLang {
-        BBox(SkBBox),
-        DrawCommand(SkDrawCommand),
         "clipRect" = ClipRect([Id; 2]), // layer, bbox
         "blank" = Blank,
         "srcOver" = SrcOver([Id; 2]), // dst, src
+        // The commands below don't have string parsing implemented.
+        BBox(SkBBox),
+        DrawCommand(SkDrawCommand),
     }
 }
 
