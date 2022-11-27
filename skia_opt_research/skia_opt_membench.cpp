@@ -136,6 +136,7 @@ int main(int argc, char** argv) {
 
         skp_benchmark->set_skp_name(FLAGS_skps[i]);
 
+        // TODO: Put this in a for loop.
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::NO_OPT, skp_benchmark->add_optimization_benchmark_runs());
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::SKIA_RECORD_OPTS, skp_benchmark->add_optimization_benchmark_runs());
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::SKIA_RECORD_OPTS_2, skp_benchmark->add_optimization_benchmark_runs());
