@@ -12,6 +12,9 @@
 #include "src/core/SkRecordPattern.h"
 #include "src/core/SkRecords.h"
 
+#include "skia_opt_research/ski_pass.pb.h"
+#include "skia_opt_research/SkiPass.h"
+
 using namespace SkRecords;
 
 // Most of the optimizations in this file are pattern-based.  These are all defined as structs with:
@@ -311,4 +314,7 @@ void SkRecordOptimize2(SkRecord* record) {
     SkRecordMergeSvgOpacityAndFilterLayers(record);
 
     record->defrag();
+}
+
+void SkiPassOptimize() {
 }

@@ -3,6 +3,7 @@
 
 _src = get_path_info("../src", "abspath")
 _include = get_path_info("../include", "abspath")
+_skia_opt_research = get_path_info("../skia_opt_research", "abspath")
 
 skia_core_public = [
   "$_include/core/SkAlphaType.h",
@@ -662,10 +663,17 @@ skia_skpicture_sources = [
   "$_src/shaders/SkPictureShader.cpp",
 ]
 
+skia_skipass_sources = [
+  "$_skia_opt_research/SkiPass.h",
+  "$_skia_opt_research/ski_pass.pb.cc",
+  "$_skia_opt_research/ski_pass.pb.h",
+]
+
 src_images_srcs = [ "$_src/images/SkImageEncoder.cpp" ]
 
 skia_core_sources += skia_pathops_sources
 skia_core_sources += skia_skpicture_sources
+skia_core_sources += skia_skipass_sources
 
 skia_core_public += skia_pathops_public
 skia_core_public += skia_skpicture_public

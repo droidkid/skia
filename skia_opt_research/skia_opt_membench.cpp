@@ -73,6 +73,7 @@ void benchmark_optimization(
             SkRecordOptimize2(&record);
             break;
         case skia_opt_metrics::SKI_PASS:
+            SkiPassOptimize();
             break;
     }
 
