@@ -48,7 +48,6 @@ pub fn optimize(
     // Until then, use this roundabout way to get the optimized recexpr id.
     let mut egraph = EGraph::<SkiLang, ()>::default();
     let id = egraph.add_expr(&optimized);
-    run_info.ski_pass_parse_expr = optimized.pretty(50);
 
     Ok(SkiLangExpr {
         expr: optimized,
@@ -74,41 +73,6 @@ impl Error for UnsupportedDrawCommandsError {
     fn description(&self) -> &str {
         "Error resulting from having unsupported draw commands."
     }
-}
-
-pub fn parse_skp_json_file(
-    skp_json_path: &str,
-    run_info: &mut protos::SkiPassRunInfo,
-) -> Result<SkiLangExpr, Box<dyn Error>> {
-    let r = BufReader::new(File::open(skp_json_path).unwrap());
-    let u: Value = serde_json::from_reader(r)?;
-
-    let mut unsupported_draw_commands = protos::UnsupportedDrawCommands::default();
-
-    let mut drawCommands: Vec<SkDrawCommand> = vec![];
-    let commandJsonArray = u["commands"].as_array().unwrap();
-    for commandJson in commandJsonArray {
-        let commandName = commandJson["command"].as_str().unwrap();
-        if SkDrawCommand::VARIANTS.contains(&commandName) {
-            let drawCommand: SkDrawCommand = serde_json::from_str(&commandJson.to_string())?;
-            drawCommands.push(drawCommand);
-        } else {
-            unsupported_draw_commands.draw_commands.push(commandName.to_string());
-        }
-    }
-
-    if !unsupported_draw_commands.draw_commands.is_empty() {
-        run_info.unsupported_draw_commands = Some(unsupported_draw_commands);
-        return Err(Box::new(UnsupportedDrawCommandsError {}));
-    }
-
-    let mut expr = RecExpr::default();
-    let blankSurface = expr.add(SkiLang::Blank);
-    let id = build_expr(&mut drawCommands.iter(), blankSurface, &mut expr);
-
-    run_info.skp_json_parse_expr = expr.pretty(50);
-
-    Ok(SkiLangExpr { expr, id })
 }
 
 fn build_expr<'a, I>(drawCommands: &mut I, dst: Id, expr: &mut RecExpr<SkiLang>) -> Id

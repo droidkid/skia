@@ -1,30 +1,68 @@
 syntax = "proto3";
 
-package ski_pass;
+package ski_pass_proto;
 
-enum SkiPassRunStatus {
-    OK = 0;
-    FAILED = 1;
+/*
+    SkRecords parallels src/core/SkRecords.h
+    SkRecord parallels src/core/SkRecord.h
+
+    SkRecords represents the different type of draw commands.
+    SkRecord is a collection of SkRecords.
+*/
+
+message SkRecords  {
+    message SaveLayer {};
+    message Save {};
+    message ClipRect {
+        // Insert Rect
+    };
+    message Restore {};
+    message DrawCommand {
+        string name = 1;
+    }
+    oneof record {
+        SaveLayer save_layer = 1;
+        Save save = 2;
+        ClipRect clip_rect = 3;
+        Restore restore = 4;
+        DrawCommand draw_command = 5;
+    }
 }
 
-message RustError {
-    string error_message = 1;
-}
-
-message UnsupportedDrawCommands {
-    repeated string draw_commands = 1;
+message SkRecord {
+    repeated SkRecords records = 1;
 }
 
 message SkiPassRunInfo {
+    enum SkiPassRunStatus {
+        UNKONWN = 0;
+        OK = 1;
+        FAILED = 2;
+    }
     SkiPassRunStatus status = 1;
-    
-    // Debug info
-    string input_skp_json_name = 2;
-    string optimized_skp_path = 3;
-    string skp_json_parse_expr = 4;
-    string ski_pass_parse_expr = 5;
 
-    // Filled in case status is not OK.
-    UnsupportedDrawCommands unsupported_draw_commands = 6;
-    RustError rust_error = 7;
+    // SkRecords that SkiPass didn't care about for this run.
+    repeated SkRecords ignored_records = 2;
+
+    message SkiPassRunError {
+        string error_message = 1;
+    }
+    SkiPassRunError error = 3;
 }
+
+/*
+    A SkiPassProgram is the list of SkiPassInstruction to perform
+    to reconstruct the Skp in optimal order (according to SkiPass). 
+*/
+message SkiPassInstruction {
+    // Copy over the SkRecord in the original SKP.
+    message SkiPassCopyRecord {
+        int32 index = 1;
+    }
+}
+
+message SkiPassProgram {
+    repeated SkiPassInstruction instructions = 1;
+}
+
+
