@@ -11,6 +11,7 @@
 #include "src/core/SkCanvasPriv.h"
 #include "src/core/SkRecordPattern.h"
 #include "src/core/SkRecords.h"
+#include "src/core/SkRecordDraw.h"
 
 #include "skia_opt_research/ski_pass.pb.h"
 #include "skia_opt_research/SkiPass.h"
@@ -345,20 +346,40 @@ class SkiPassRecordBuilder {
         int count;
 };
 
-void SkiPassOptimize(SkRecord* record) {
+class SkRecordApplier {
+public:
+    SkRecordApplier(SkCanvas *canvas):
+        fDraw(canvas, nullptr, nullptr, 0, nullptr) {}
+
+    template <typename T>
+    void operator()(const T& command) {
+        fDraw(command);
+    }
+private:
+    SkRecords::Draw fDraw;
+};
+
+void SkiPassOptimize(SkRecord* record, SkCanvas *canvas) {
     ski_pass_proto::SkRecord skipass_record;
     SkiPassRecordBuilder builder(&skipass_record);
-
     for (int i=0; i < record->count(); i++) {
         record->visit(i, builder);
     }
 
     std::string skipass_record_serialized;
     skipass_record.SerializeToString(&skipass_record_serialized);
-
-    SkiPassResult result = ski_pass_optimize(
+    SkiPassResultPtr result_ptr = ski_pass_optimize(
             (unsigned char *)skipass_record_serialized.data(), 
             skipass_record_serialized.size());
+    std::string result_data((const char *)result_ptr.ptr, result_ptr.len);
+    ski_pass_proto::SkiPassRunResult result;
+    result.ParseFromString(result_data);
 
-    free_ski_pass_result(result);
+    SkRecordApplier copier(canvas);
+    for (auto instruction: result.program().instructions()) {
+        if (instruction.has_copy_record()) {
+            record->visit((int)(instruction.copy_record().index()), copier);
+        }
+    }
+    free_ski_pass_result(result_ptr);
 }

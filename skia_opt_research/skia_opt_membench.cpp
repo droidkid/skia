@@ -58,22 +58,28 @@ void benchmark_optimization(
     // Load the SKP into a SkRecord.
     const int w = SkScalarCeilToInt(src->cullRect().width());
     const int h = SkScalarCeilToInt(src->cullRect().height());
-    SkRecord record;
-    SkRecorder recorder(&record, w, h);
-    src->playback(&recorder);
+    SkRecord skp_record;
+    SkRecorder skp_recorder(&skp_record, w, h);
+    src->playback(&skp_recorder);
+
+    SkRecord skipass_record;
+    SkRecorder skipass_recorder(&skipass_record, w, h);
+
+    SkRecord *record = &skp_record;
 
     // Optimize SkRecord.
     switch (optType) {
         case skia_opt_metrics::NO_OPT:
             break;
         case skia_opt_metrics::SKIA_RECORD_OPTS:
-            SkRecordOptimize(&record);
+            SkRecordOptimize(record);
             break;
         case skia_opt_metrics::SKIA_RECORD_OPTS_2:
-            SkRecordOptimize2(&record);
+            SkRecordOptimize2(record);
             break;
         case skia_opt_metrics::SKI_PASS:
-            SkiPassOptimize(&record);
+            SkiPassOptimize(record, &skipass_recorder);
+            record = &skipass_record;
             break;
     }
 
@@ -90,9 +96,9 @@ void benchmark_optimization(
         skia_opt_metrics::Optimization_Name(optType) + 
         "_log.txt";
     FILE *fp = fopen(optimization_log_fname.c_str(), "w");
-    SkpAnalyzer analyzer(&canvas, record.count(), fp);
-    for (int i = 0; i < record.count(); i++) {
-        record.visit(i, analyzer);
+    SkpAnalyzer analyzer(&canvas, record->count(), fp);
+    for (int i = 0; i < record->count(); i++) {
+        record->visit(i, analyzer);
     }
     fclose(fp);
 
