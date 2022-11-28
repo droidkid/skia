@@ -20,67 +20,43 @@ parser = argparse.ArgumentParser(description='Generate a HTML report of skp_opt_
 parser.add_argument('-d', '--report_dir', help='directory containing results of a skp_opt_membench run')
 parser.add_argument('-t', '--report_template', default='report_template.html', help='path to the html template')
 
-CSV_SUMMARY_FILE_NAME = "000_summary_csv.txt"
-PROTO_SUMMARY_FILE = "000_summary_csv.txt.pb"
+PROTO_SUMMARY_FILE = "benchmark.pb"
 
 args = parser.parse_args()
 
-membench_summary_filepath = os.path.join(args.report_dir, CSV_SUMMARY_FILE_NAME);
 proto_summary_filepath = os.path.join(args.report_dir, PROTO_SUMMARY_FILE);
-
 report_template_filepath = os.path.abspath(args.report_template)
 
 proto_file = open(proto_summary_filepath, "rb")
 proto_data = proto_file.read()
 proto_file.close()
-proto = SkiaOptMetrics.SkiaOptBenchmark()
-proto.ParseFromString(proto_data)
-print(proto)
+benchmark = SkiaOptMetrics.SkiaOptBenchmark()
+benchmark.ParseFromString(proto_data)
 
-# TODO(): Remove CSV File.
-# TODO(): Write out proto.UnsupportedDrawCommands
-# TODO(): Collect some web pages.
+opts = ['NO_OPT', 'SKIA_RECORD_OPTS', 'SKIA_RECORD_OPTS_2', 'SKI_PASS']
+skp_membench_results = []
+for skp_benchmark in benchmark.skp_benchmark_runs:
+    skp_name = os.path.basename(skp_benchmark.skp_name)
 
-with open(membench_summary_filepath) as csvfile:
-    results_csv = csv.DictReader(csvfile)
-    skp_name_field = results_csv.fieldnames[0]
-    opts = results_csv.fieldnames[1:]
+    skp_membench_result = {}
+    skp_membench_result['name'] = skp_name
+    skp_membench_result['ref_img_url'] = ("renders/%s.png" % skp_name)
+    for opt_benchmark in skp_benchmark.optimization_benchmark_runs:
+        opt = SkiaOptMetrics.Optimization.Name(opt_benchmark.optimization_type)
+        skp_membench_result[opt] = {}
+        skp_membench_result[opt]['value'] = opt_benchmark.malloc_allocated_bytes
+        skp_membench_result[opt]['link'] = ('./%s_%s_log.txt' % (skp_membench_result['name'], opt)) 
+    skp_membench_results.append(skp_membench_result)
 
-    skp_membench_results = []
-    for result_csv_row in results_csv:
-        skp_membench_result = {}
-        skp_membench_result['name'] = os.path.basename(result_csv_row[skp_name_field])
-        skp_membench_result['ref_img_url'] = ("renders/%s.png" % os.path.basename(result_csv_row[skp_name_field]))
-        for opt in opts:
-            skp_membench_result[opt] = {}
-            skp_membench_result[opt]['value'] = result_csv_row[opt]
-            skp_membench_result[opt]['link'] = ('./%s_%s_log.txt' % (skp_membench_result['name'], opt)) 
+template_loader = jinja2.FileSystemLoader(searchpath = "/")
+template_env = jinja2.Environment( loader=template_loader)
 
-            # Error Handling - Negative numbers indicate an error.
-            # TODO(chesetti): Add some documentation in skia_opt_membench.cpp about error types.
-            # Also see if there's a better way to have these error codes synced across the bench and report generator.
-            # Consider using string values instead of negative numbers.
-            if skp_membench_result[opt]['value'] == '-1':
-                skp_membench_result[opt]['value'] = 'SkiOpt had trouble parsing this. (TODO: Link to debug log)'
-                skp_membench_result[opt]['link'] = ('#') 
+template = template_env.get_template(report_template_filepath)
+template_vars = {
+    "title": os.path.basename(args.report_dir),
+    "skp_membench_opts": opts,
+    "skp_membench_results": skp_membench_results,
+}
 
-            if skp_membench_result[opt]['value'] == '-2':
-                skp_membench_result[opt]['value'] = 'SkiOpt optimization resulted in image diffs.'
-                # TODO(chesetti): Make the link point to the image diff.
-
-
-        skp_membench_results.append(skp_membench_result)
-
-    template_loader = jinja2.FileSystemLoader(searchpath = "/")
-    template_env = jinja2.Environment( loader=template_loader)
-
-    template = template_env.get_template(report_template_filepath)
-    template_vars = {
-        "title": os.path.basename(args.report_dir),
-        "skp_membench_opts": opts,
-        "skp_membench_results": skp_membench_results,
-        "ski_pass_summary": "{}".format(proto.ski_pass_summary) 
-    }
-
-    with open(os.path.join(args.report_dir, "index.html"), "w") as f:
-        f.write(template.render(template_vars))
+with open(os.path.join(args.report_dir, "index.html"), "w") as f:
+    f.write(template.render(template_vars))

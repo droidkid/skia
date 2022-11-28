@@ -63,6 +63,7 @@ local-nightly: clean-skp gen-skps build-nightly
 	mkdir -p $(NIGHTLY_REPORT_DIR)
 	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR)
 	$(BUILD_DIR)/skdiff $(SKP_RENDERS) $(SKI_PASS_SKP_RENDERS) $(DIFF_REPORT_DIR)
+	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE)
 
 nightly: clean local-nightly
 	scp -r -C $(NIGHTLY_REPORT_DIR) uwplse.org:/var/www/skia/

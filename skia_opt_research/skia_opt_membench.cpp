@@ -150,22 +150,7 @@ int main(int argc, char** argv) {
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::SKI_PASS, skp_benchmark->add_optimization_benchmark_runs());
     }
 
-    std::vector< std::pair<int, std::string> > unsupported_draw_commands_sorted;
-    for (auto p : unsupported_draw_commands_count) {
-        unsupported_draw_commands_sorted.push_back( std::pair<int, std::string>(p.second, p.first));
-    }
-    sort(unsupported_draw_commands_sorted.begin(), unsupported_draw_commands_sorted.end());
-    reverse(unsupported_draw_commands_sorted.begin(), unsupported_draw_commands_sorted.end());
-
-    skia_opt_metrics::SkiPassSummary ski_pass_summary = skia_opt_metrics::SkiPassSummary::default_instance();
-    for (auto p : unsupported_draw_commands_sorted) {
-        skia_opt_metrics::SkiPassSummary_UnsupportedDrawCommandStats *stats = 
-            benchmark.mutable_ski_pass_summary()->add_unsupported_draw_commands();
-        stats->set_draw_command(p.second);
-        stats->set_count(p.first);
-    }
-
-    std::string protoOutFilePath(outFilePath + ".pb");
+    std::string protoOutFilePath(outFilePath + "/benchmark.pb");
     std::ofstream protoOut(protoOutFilePath, std::ofstream::out);
     benchmark.SerializeToOstream(&protoOut);
 
