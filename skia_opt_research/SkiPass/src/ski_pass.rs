@@ -5,12 +5,15 @@ use prost::Message;
 
 use crate::protos;
 use crate::protos::{
-    SkRecords, 
     SkRecord, 
+    SkRecords, 
+    SkiPassInstruction,
     SkiPassProgram, 
     SkiPassRunInfo,
+    SkiPassRunResult,
+    ski_pass_instruction::SkiPassCopyRecord,
+    ski_pass_instruction::Instruction,
     sk_records::Command, 
-    SkiPassRunResult
 };
 
 pub fn optimize(record: SkRecord) -> SkiPassRunResult {
@@ -23,7 +26,9 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
 
     match run_eqsat_and_extract(&expr, &mut skiRunInfo) {
         Ok(optExpr) => {
-            skiPassRunResult.program = Some(build_program(optExpr));
+            let mut program = SkiPassProgram::default();
+            program.instructions = build_program(&optExpr.expr, optExpr.id);
+            skiPassRunResult.program = Some(program);
         }
         Err(e) => {}
     }
@@ -97,6 +102,34 @@ where
     }
 }
 
-fn build_program(expr: SkiLangExpr) -> SkiPassProgram {
-    let mut program = SkiPassProgram::default();
+fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
+    let node = &expr[id];
+    match node {
+        SkiLang::DrawCommand(index) => {
+            let instruction = SkiPassInstruction {
+                // oneof -> Option of a Enum
+                instruction: Some(Instruction::CopyRecord(
+                    SkiPassCopyRecord {
+                        index: *index
+                    }
+                ))
+            };
+            vec![instruction]
+        },
+        SkiLang::SrcOver(ids) => {
+            let mut src = build_program(&expr, ids[0]);
+            let mut dst = build_program(&expr, ids[1]);
+
+            let mut commands: Vec<SkiPassInstruction> = vec![];
+
+            // TODO: Implement saveLayer, save, clipRect
+            commands.append(&mut src);
+            commands.append(&mut dst);
+
+            commands
+        },
+        _ => {
+            vec![]
+        }
+    }
 }

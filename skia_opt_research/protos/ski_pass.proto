@@ -64,6 +64,9 @@ message SkiPassInstruction {
     message SkiPassCopyRecord {
         int32 index = 1;
     }
+    oneof instruction {
+        SkiPassCopyRecord copy_record = 1;
+    }
 }
 
 message SkiPassProgram {

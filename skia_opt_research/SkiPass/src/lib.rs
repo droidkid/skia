@@ -9,7 +9,14 @@ use libc::size_t;
 use ffi_utils;
 use std::slice;
 
-use protos::{SkRecord, SkiPassProgram};
+use protos::{
+    SkRecord, 
+    SkiPassProgram, 
+    SkiPassRunResult, 
+    SkiPassRunInfo,
+    ski_pass_run_info::SkiPassRunError,
+    ski_pass_run_info::SkiPassRunStatus,
+};
 use prost::Message;
 
 #[repr(C)]
@@ -25,22 +32,25 @@ pub extern "C" fn ski_pass_optimize(data_ptr: *const u8, len: size_t) -> SkiPass
         slice::from_raw_parts(data_ptr, len as usize)
     };
 
-    let mut ski_pass_program = SkiPassProgram::default();
+    let mut skipass_run = SkiPassRunResult::default();
 
     match SkRecord::decode(data_slice) {
         Ok(sk_record) => {
-            ski_pass::optimize(sk_record);
+            skipass_run = ski_pass::optimize(sk_record);
         }
         Err(e) => {
-            // TODO: Fill SkiPassProgram.run_info with 
-            panic!("Had troubling decoding parser");
+            let mut run_info = SkiPassRunInfo::default();
+            run_info.status = SkiPassRunStatus::Failed as i32;
+            run_info.error = Some(SkiPassRunError {
+                error_message: "Trouble decoding SkRecords proto bytes".to_string()
+            });
+            skipass_run.run_info = Some(run_info);
         }
     }
 
-
     let mut result_data: Vec<u8> = Vec::new();
-    result_data.reserve(ski_pass_program.encoded_len());
-    ski_pass_program.encode(&mut result_data);
+    result_data.reserve(skipass_run.encoded_len());
+    skipass_run.encode(&mut result_data);
 
     let (ptr, len) = ffi_utils::vec_into_raw_parts(result_data);
     SkiPassResult { ptr, len }
