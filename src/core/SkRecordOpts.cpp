@@ -316,5 +316,46 @@ void SkRecordOptimize2(SkRecord* record) {
     record->defrag();
 }
 
-void SkiPassOptimize() {
+
+class SkiPassRecordBuilder {
+    public:
+        SkiPassRecordBuilder(ski_pass_proto::SkRecord* skipass_record):
+            skipass_record(skipass_record) {}
+
+        template <typename T>
+            void operator()(const T& command) {
+                ski_pass_proto::SkRecords *records = skipass_record->add_records();
+                ski_pass_proto::SkRecords::DrawCommand *draw_command = 
+                    records->mutable_draw_command();
+                draw_command->set_name(std::string(NameOf(command)));
+            }
+
+        template <typename T>
+            static const char* NameOf(const T&) {
+#define CASE(U) case SkRecords::U##_Type: return #U;
+                switch (T::kType) { SK_RECORD_TYPES(CASE) }
+#undef CASE
+                SkDEBUGFAIL("Unknown T");
+                return "Unknown T";
+            }
+
+        ski_pass_proto::SkRecord* skipass_record;
+};
+
+void SkiPassOptimize(SkRecord* record) {
+    ski_pass_proto::SkRecord skipass_record;
+    SkiPassRecordBuilder builder(&skipass_record);
+
+    for (int i=0; i < record->count(); i++) {
+        record->visit(i, builder);
+    }
+
+    std::string skipass_record_serialized;
+    skipass_record.SerializeToString(&skipass_record_serialized);
+
+    SkiPassResult result = ski_pass_optimize(
+            (unsigned char *)skipass_record_serialized.data(), 
+            skipass_record_serialized.size());
+
+    free_ski_pass_result(result);
 }

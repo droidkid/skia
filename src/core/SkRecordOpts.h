@@ -29,6 +29,6 @@ void SkRecordMergeSvgOpacityAndFilterLayers(SkRecord*);
 // Experimental optimizers
 void SkRecordOptimize2(SkRecord*);
 
-void SkiPassOptimize();
+void SkiPassOptimize(SkRecord*);
 
 #endif//SkRecordOpts_DEFINED

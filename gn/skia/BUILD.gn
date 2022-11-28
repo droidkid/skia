@@ -236,7 +236,7 @@ config("default") {
     # SKI_PASS_LIB_PATH is set in the Makefile. 
     # Points to directory containing SkiPassIR static library.
     lib_dirs = [getenv("SKI_PASS_LIB_DIR")]
-    libs += [ "pthread" , "protobuf"]
+    libs += [ "pthread" , "protobuf", "ski_pass"]
   }
 
   if (is_mac) {

@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-skia-safe = "0"
 serde_json = "*"
 strum = "0.24"
 strum_macros = "0.24"

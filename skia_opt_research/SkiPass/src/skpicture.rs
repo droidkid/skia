@@ -5,7 +5,6 @@ use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 use serde::Deserialize;
-use skia_safe::{canvas::SaveLayerRec, ClipOp, Color, Paint, PictureRecorder, Rect, Surface};
 use strum_macros::{EnumString, EnumVariantNames};
 use ordered_float::OrderedFloat;
 use parse_display::{Display, FromStr};
@@ -72,27 +71,6 @@ fn get_skbbox(skilang_expr: &RecExpr<SkiLang>, id: Id) -> SkBBox {
     }
 }
 
-fn build_rect(coords: &Vec<OrderedFloat<f32>>) -> Rect {
-    Rect::new(
-        f32::from(coords[0]),
-        f32::from(coords[1]),
-        f32::from(coords[2]),
-        f32::from(coords[3])
-    )
-}
-
-fn build_paint(paint: &SkPaint) -> Paint {
-    let mut p = Paint::default();
-    p.set_argb(
-        paint.color[0], 
-        paint.color[1], 
-        paint.color[2], 
-        paint.color[3]
-    ); 
-    p
-}
-
-
 #[derive(Deserialize, Debug, Clone, EnumVariantNames, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(tag = "command")]
 pub enum SkDrawCommand {
@@ -150,60 +128,6 @@ pub struct SkPicture {
     pub surfaceType: Option<SurfaceType>,
 }
 
-pub fn write_skp(expr: &RecExpr<SkiLang>, id: Id, file_path: &str) -> Result<(), Box<dyn Error>> {
-    let mut recorder = PictureRecorder::new();
-    let canvas = recorder.begin_recording(Rect::new(0.0, 0.0, 512.0, 512.0), None);
-    let skp = generate_skpicture(expr, id);
-    println!("DrawCommands\n {:?}", &skp.drawCommands);
-
-    for drawCommand in skp.drawCommands {
-        match drawCommand {
-            SkDrawCommand::DrawOval {
-                coords,
-                paint,
-                visible: _,
-            } => {
-                let r = build_rect(&coords);
-                let p = build_paint(&paint);
-                canvas.draw_oval(&r, &p);
-            }
-            SkDrawCommand::DrawRect {
-                coords,
-                paint,
-                visible: _,
-            } => {
-                let r = build_rect(&coords);
-                let p = build_paint(&paint);
-                canvas.draw_rect(&r, &p);
-            }
-            SkDrawCommand::SaveLayer {
-                paint: _,
-                visible: _,
-            } => {
-                // SaveLayerRec seems to do some optimization.
-                canvas.save_layer_alpha(None, (255 as u8).into());
-            }
-            SkDrawCommand::Save { visible } => {
-                canvas.save();
-            }
-            SkDrawCommand::ClipRect { coords, visible } => {
-                let r = build_rect(&coords);
-                canvas.clip_rect(r, ClipOp::Intersect, true);
-            }
-            SkDrawCommand::Restore { visible: _ } => {
-                canvas.restore();
-            }
-        }
-    }
-
-    let picture = recorder.finish_recording_as_picture(None).unwrap();
-    let d = picture.serialize();
-    let mut file = File::create(file_path)?;
-    let bytes = d.as_bytes();
-    file.write_all(bytes)?;
-
-    Ok(())
-}
 
 pub fn generate_skpicture(expr: &RecExpr<SkiLang>, id: Id) -> SkPicture {
     let node = &expr[id];
