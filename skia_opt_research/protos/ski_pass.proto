@@ -70,4 +70,7 @@ message SkiPassProgram {
     repeated SkiPassInstruction instructions = 1;
 }
 
-
+message SkiPassRunResult {
+    SkiPassProgram program = 1;
+    SkiPassRunInfo run_info = 2;
+}
