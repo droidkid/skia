@@ -320,11 +320,12 @@ void SkRecordOptimize2(SkRecord* record) {
 class SkiPassRecordBuilder {
     public:
         SkiPassRecordBuilder(ski_pass_proto::SkRecord* skipass_record):
-            skipass_record(skipass_record) {}
+            skipass_record(skipass_record), count(0) {}
 
         template <typename T>
             void operator()(const T& command) {
                 ski_pass_proto::SkRecords *records = skipass_record->add_records();
+                records->set_index(count++);
                 ski_pass_proto::SkRecords::DrawCommand *draw_command = 
                     records->mutable_draw_command();
                 draw_command->set_name(std::string(NameOf(command)));
@@ -339,7 +340,9 @@ class SkiPassRecordBuilder {
                 return "Unknown T";
             }
 
+    private:
         ski_pass_proto::SkRecord* skipass_record;
+        int count;
 };
 
 void SkiPassOptimize(SkRecord* record) {

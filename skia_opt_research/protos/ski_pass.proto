@@ -11,6 +11,11 @@ package ski_pass_proto;
 */
 
 message SkRecords  {
+    // Index of this record in the SkRecords.
+    // This is used to make parsing easier.
+    // SkRecord will hold SkRecords in order.
+    int32 index = 1;;
+
     message SaveLayer {};
     message Save {};
     message ClipRect {
@@ -20,12 +25,12 @@ message SkRecords  {
     message DrawCommand {
         string name = 1;
     }
-    oneof record {
-        SaveLayer save_layer = 1;
-        Save save = 2;
-        ClipRect clip_rect = 3;
-        Restore restore = 4;
-        DrawCommand draw_command = 5;
+    oneof command {
+        SaveLayer save_layer = 2;
+        Save save = 3;
+        ClipRect clip_rect = 4;
+        Restore restore = 5;
+        DrawCommand draw_command = 6;
     }
 }
 

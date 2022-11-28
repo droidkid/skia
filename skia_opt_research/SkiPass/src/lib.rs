@@ -1,6 +1,5 @@
 #[macro_export]
-pub mod ski_lang;
-pub mod skpicture;
+pub mod ski_pass;
 pub mod protos {
     include!(concat!(env!("OUT_DIR"), "/ski_pass_proto.rs"));
 }
@@ -26,9 +25,18 @@ pub extern "C" fn ski_pass_optimize(data_ptr: *const u8, len: size_t) -> SkiPass
         slice::from_raw_parts(data_ptr, len as usize)
     };
 
-    let sk_record = SkRecord::decode(data_slice);
-    // TODO: pass through optimizer.
-    let ski_pass_program = SkiPassProgram::default();
+    let mut ski_pass_program = SkiPassProgram::default();
+
+    match SkRecord::decode(data_slice) {
+        Ok(sk_record) => {
+            ski_pass::optimize(sk_record);
+        }
+        Err(e) => {
+            // TODO: Fill SkiPassProgram.run_info with 
+            panic!("Had troubling decoding parser");
+        }
+    }
+
 
     let mut result_data: Vec<u8> = Vec::new();
     result_data.reserve(ski_pass_program.encoded_len());
