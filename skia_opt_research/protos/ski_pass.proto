@@ -18,9 +18,6 @@ message SkRecords  {
 
     message SaveLayer {};
     message Save {};
-    message ClipRect {
-        // Insert Rect
-    };
     message Restore {};
     message DrawCommand {
         string name = 1;
@@ -28,9 +25,8 @@ message SkRecords  {
     oneof command {
         SaveLayer save_layer = 2;
         Save save = 3;
-        ClipRect clip_rect = 4;
-        Restore restore = 5;
-        DrawCommand draw_command = 6;
+        Restore restore = 4;
+        DrawCommand draw_command = 5;
     }
 }
 
@@ -64,8 +60,14 @@ message SkiPassInstruction {
     message SkiPassCopyRecord {
         int32 index = 1;
     }
+    message SaveLayer {}
+    message Save {}
+    message Restore {}
     oneof instruction {
         SkiPassCopyRecord copy_record = 1;
+        SaveLayer save_layer = 2;
+        Save save = 3;
+        Restore restore = 4;
     }
 }
 

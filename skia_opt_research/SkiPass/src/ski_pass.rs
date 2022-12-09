@@ -13,6 +13,9 @@ use crate::protos::{
     SkiPassRunResult,
     ski_pass_instruction::SkiPassCopyRecord,
     ski_pass_instruction::Instruction,
+    ski_pass_instruction::SaveLayer,
+    ski_pass_instruction::Save,
+    ski_pass_instruction::Restore,
     sk_records::Command, 
 };
 
@@ -27,7 +30,7 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
     match run_eqsat_and_extract(&expr, &mut skiRunInfo) {
         Ok(optExpr) => {
             let mut program = SkiPassProgram::default();
-            program.instructions = build_program(&optExpr.expr, optExpr.id);
+            program.instructions = build_program(&optExpr.expr, optExpr.id).instructions;
             skiPassRunResult.program = Some(program);
         }
         Err(e) => {}
@@ -38,8 +41,8 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
 define_language! {
     enum SkiLang {
         DrawCommand(i32), // skRecords index
+        "matrixOp" = MatrixOp([Id; 2]), // layer to apply matrixOp, command referring original clipRect
         "blank" = Blank,
-        "clipRect" = ClipRect([Id; 1]), // layer
         "srcOver" = SrcOver([Id; 2]), // dst, src
     }
 }
@@ -55,7 +58,6 @@ fn run_eqsat_and_extract(
     expr: &RecExpr<SkiLang>,
     run_info: &mut protos::SkiPassRunInfo,
 ) -> Result<SkiLangExpr, Box<dyn Error>> {
-
     let mut runner = Runner::default().with_expr(expr).run(&make_rules());
     let root = runner.roots[0];
 
@@ -86,13 +88,41 @@ where
         Some(skRecords) => {
             match &skRecords.command {
                 Some(Command::DrawCommand(draw_command)) => {
-                    let drawCommand = expr.add(SkiLang::DrawCommand(skRecords.index));
-                    let nextDst = expr.add(SkiLang::SrcOver([dst, drawCommand]));
+                    let src = match draw_command.name.as_str() {
+                        "ClipRect" | "Concat44" => {
+                            // Reference to clipRect command in input SKP.
+                            let matrixOpCommand = expr.add(SkiLang::DrawCommand(skRecords.index));
+
+                            // Construct surface on which matrixOp should be applied.
+                            let newLayerDst = expr.add(SkiLang::Blank);
+                            let surfaceToApplyMatrixOp = build_expr(skRecordsIter, newLayerDst, expr);
+
+                            expr.add(SkiLang::MatrixOp([surfaceToApplyMatrixOp, matrixOpCommand]))
+                        }
+                        _ => {
+                            expr.add(SkiLang::DrawCommand(skRecords.index))
+                        }
+                    };
+                    let nextDst = expr.add(SkiLang::SrcOver([dst, src]));
                     build_expr(skRecordsIter, nextDst, expr)
+                },
+                Some(Command::Save(save)) => {
+                    // For now, ignored.
+                    // We depend on MatrixOp to decide where to put Save commands.
+                    build_expr(skRecordsIter, dst, expr)
+                },
+                Some(Command::SaveLayer(save_layer)) => {
+                    let blank = expr.add(SkiLang::Blank);
+                    let src = build_expr(skRecordsIter, blank, expr);
+                    let nextDst = expr.add(SkiLang::SrcOver([dst, src]));
+                    build_expr(skRecordsIter, nextDst, expr)
+                },
+                Some(Command::Restore(restore)) => {
+                    dst
                 },
                 _ => {
                     panic!("Not implemented yet!")
-                }
+                },
                 None => {
                     panic!("Empty command!")
                 }
@@ -102,7 +132,20 @@ where
     }
 }
 
-fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
+#[derive(Debug)]
+enum SkiPassSurfaceType {
+    Abstract,
+    AbstractWithState,
+    Allocated,
+}
+
+#[derive(Debug)]
+struct SkiPassSurface {
+    instructions: Vec<SkiPassInstruction>,
+    surface_type: SkiPassSurfaceType
+}
+
+fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
     let node = &expr[id];
     match node {
         SkiLang::DrawCommand(index) => {
@@ -114,22 +157,97 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
                     }
                 ))
             };
-            vec![instruction]
+            SkiPassSurface {
+                instructions: vec![instruction],
+                surface_type: SkiPassSurfaceType::Abstract
+            }
+        },
+        SkiLang::MatrixOp(ids) => {
+            let mut targetSurface = build_program(&expr, ids[0]);
+            let mut matrixOpCommand = build_program(&expr, ids[1]);
+
+            let mut instructions: Vec<SkiPassInstruction> = vec![];
+            instructions.append(&mut matrixOpCommand.instructions);
+
+            match targetSurface.surface_type {
+                SkiPassSurfaceType::Abstract => {
+                    instructions.append(&mut targetSurface.instructions);
+                },
+                SkiPassSurfaceType::AbstractWithState => {
+                    instructions.push(SkiPassInstruction {
+                        instruction: Some(Instruction::Save(Save{}))
+                    });
+                    instructions.append(&mut targetSurface.instructions);
+                    instructions.push(SkiPassInstruction {
+                        instruction: Some(Instruction::Restore(Restore{}))
+                    });
+                },
+                SkiPassSurfaceType::Allocated => {
+                    instructions.append(&mut targetSurface.instructions);
+                },
+            };
+
+            SkiPassSurface {
+                instructions,
+                surface_type: SkiPassSurfaceType::AbstractWithState
+            }
         },
         SkiLang::SrcOver(ids) => {
-            let mut src = build_program(&expr, ids[0]);
-            let mut dst = build_program(&expr, ids[1]);
+            let mut dst = build_program(&expr, ids[0]);
+            let mut src = build_program(&expr, ids[1]);
 
-            let mut commands: Vec<SkiPassInstruction> = vec![];
+            let mut instructions: Vec<SkiPassInstruction> = vec![];
 
-            // TODO: Implement saveLayer, save, clipRect
-            commands.append(&mut src);
-            commands.append(&mut dst);
+            match dst.surface_type {
+                SkiPassSurfaceType::Abstract => {
+                    instructions.append(&mut dst.instructions);
+                },
+                SkiPassSurfaceType::AbstractWithState => {
+                    instructions.push(SkiPassInstruction {
+                        instruction: Some(Instruction::Save(Save{}))
+                    });
+                    instructions.append(&mut dst.instructions);
+                    instructions.push(SkiPassInstruction {
+                        instruction: Some(Instruction::Restore(Restore{}))
+                    });
+                },
+                SkiPassSurfaceType::Allocated => {
+                    instructions.append(&mut dst.instructions);
+                },
+            };
 
-            commands
+            match src.surface_type {
+                SkiPassSurfaceType::Abstract => {
+                    instructions.append(&mut src.instructions);
+                },
+                SkiPassSurfaceType::AbstractWithState => {
+                    instructions.push(SkiPassInstruction {
+                        instruction: Some(Instruction::Save(Save{}))
+                    });
+                    instructions.append(&mut src.instructions);
+                    instructions.push(SkiPassInstruction {
+                        instruction: Some(Instruction::Restore(Restore{}))
+                    });
+                },
+                SkiPassSurfaceType::Allocated => {
+                    instructions.push(SkiPassInstruction {
+                        instruction: Some(Instruction::SaveLayer(SaveLayer{}))
+                    });
+                    instructions.append(&mut src.instructions);
+                    instructions.push(SkiPassInstruction {
+                        instruction: Some(Instruction::Restore(Restore{}))
+                    });
+                },
+            };
+
+
+            SkiPassSurface {
+                instructions,
+                surface_type: SkiPassSurfaceType::Allocated
+            }
         },
         _ => {
-            vec![]
+            panic!("Badly constructed Recexpr");
         }
     }
 }

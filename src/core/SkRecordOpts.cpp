@@ -324,13 +324,31 @@ class SkiPassRecordBuilder {
             skipass_record(skipass_record), count(0) {}
 
         template <typename T>
-            void operator()(const T& command) {
-                ski_pass_proto::SkRecords *records = skipass_record->add_records();
-                records->set_index(count++);
-                ski_pass_proto::SkRecords::DrawCommand *draw_command = 
-                    records->mutable_draw_command();
-                draw_command->set_name(std::string(NameOf(command)));
-            }
+        void operator()(const T& command) {
+            ski_pass_proto::SkRecords *records = skipass_record->add_records();
+            records->set_index(count++);
+            ski_pass_proto::SkRecords::DrawCommand *draw_command = 
+                records->mutable_draw_command();
+            draw_command->set_name(std::string(NameOf(command)));
+        }
+
+        void operator()(const SkRecords::SaveLayer& command) {
+            ski_pass_proto::SkRecords *records = skipass_record->add_records();
+            records->set_index(count++);
+            records->mutable_save_layer();
+        }
+
+        void operator()(const SkRecords::Save& command) {
+            ski_pass_proto::SkRecords *records = skipass_record->add_records();
+            records->set_index(count++);
+            records->mutable_save();
+        }
+
+        void operator()(const SkRecords::Restore& command) {
+            ski_pass_proto::SkRecords *records = skipass_record->add_records();
+            records->set_index(count++);
+            records->mutable_restore();
+        }
 
         template <typename T>
             static const char* NameOf(const T&) {
@@ -379,6 +397,15 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas) {
     for (auto instruction: result.program().instructions()) {
         if (instruction.has_copy_record()) {
             record->visit((int)(instruction.copy_record().index()), copier);
+        }
+        if (instruction.has_save()) {
+            canvas->save();
+        }
+        if (instruction.has_save_layer()) {
+            canvas->saveLayer(nullptr, nullptr);
+        }
+        if (instruction.has_restore()) {
+            canvas->restore();
         }
     }
     free_ski_pass_result(result_ptr);

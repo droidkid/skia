@@ -95,8 +95,13 @@ void draw_004_drawOval(SkCanvas *canvas) {
 
 void draw_005_clipRect(SkCanvas *canvas) {
     SkPaint paint;
+    canvas->drawOval(SkRect::MakeLTRB(10, 0, 260, 120), paint);
   	canvas->save();
     canvas->clipRect(SkRect::MakeWH(90, 80));
+  	    canvas->save();
+        canvas->clipRect(SkRect::MakeWH(90, 80));
+        canvas->drawOval(SkRect::MakeLTRB(40, 0, 160, 120), paint);
+        canvas->restore();
     canvas->drawOval(SkRect::MakeLTRB(40, 0, 160, 120), paint);
     canvas->restore();
 }
@@ -125,6 +130,6 @@ int main(int argc, char **argv) {
     raster(512, 512, draw_002_blankSaveLayer, FLAGS_dir[0], "002_blankSaveLayer.skp");
     raster(512, 512, draw_003_nestedSaveLayer, FLAGS_dir[0], "003_nestedSaveLayer.skp");
     raster(512, 512, draw_004_drawOval, FLAGS_dir[0], "004_drawOval.skp");
-     raster(512, 512, draw_005_clipRect, FLAGS_dir[0], "005_clipRect.skp");
-     raster(512, 512, draw_006_clipRect2, FLAGS_dir[0], "006_clipRect2.skp");
+    raster(512, 512, draw_005_clipRect, FLAGS_dir[0], "005_clipRect.skp");
+    raster(512, 512, draw_006_clipRect2, FLAGS_dir[0], "006_clipRect2.skp");
 }
