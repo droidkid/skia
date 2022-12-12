@@ -29,6 +29,7 @@ DIFF_REPORT_DIR = $(REPORT_TIMESTAMP)/diff
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = python
 export SKI_PASS_LIB_DIR = $(realpath ${SKI_PASS_BUILD_DIR})
+export PATH := $(PATH):${HOME}/.cargo/bin
 
 gen-proto:
 	${PROTOC} -I=${PROTO_SRC_DIR} --cpp_out=${PROTO_CPP_GEN_DIR} --python_out=${PROTO_PY_GEN_DIR} ${PROTOS}
