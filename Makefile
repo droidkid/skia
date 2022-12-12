@@ -1,7 +1,9 @@
 PROTOC=/usr/bin/protoc
 
-BUILD_DIR :=./out/Nightly
-NIGHTLY_REPORT_DIR:=./skia_opt_research/out/$(shell date +'%Y-%m-%d_%H-%M-%S')
+BUILD_DIR := $(realpath ./out/Nightly)
+NIGHTLY_DIR:=./skia_opt_research/out
+REPORT_TIMESTAMP := $(shell date +'%Y-%m-%d_%H-%M-%S')
+NIGHTLY_REPORT_DIR:=${NIGHTLY_DIR}/${REPORT_TIMESTAMP}
 REPORT_GENERATOR=python3 ./skia_opt_research/gen_report.py
 REPORT_TEMPLATE=./skia_opt_research/report_template.html
 
@@ -19,9 +21,11 @@ PROTO_CPP_GEN_DIR=./skia_opt_research/
 PROTO_PY_GEN_DIR=./skia_opt_research/
 PROTOS = $(wildcard ./skia_opt_research/protos/*.proto)
 
-SKP_RENDERS = $(NIGHTLY_REPORT_DIR)/renders
-SKI_PASS_SKP_RENDERS = $(NIGHTLY_REPORT_DIR)/skipass_renders
-DIFF_REPORT_DIR = $(NIGHTLY_REPORT_DIR)/diff
+# These variables must be relative to ${NIGHTLY_DIR} so that the 
+# diff tool generates the correct relative paths.
+SKP_RENDERS = ${REPORT_TIMESTAMP}/renders
+SKI_PASS_SKP_RENDERS = $(REPORT_TIMESTAMP)/skipass_renders
+DIFF_REPORT_DIR = $(REPORT_TIMESTAMP)/diff
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = python
 export SKI_PASS_LIB_DIR = $(realpath ${SKI_PASS_BUILD_DIR})
@@ -57,12 +61,13 @@ gen-skps: build-nightly
 	cp ${WEBPAGE_SKPS_DIR}/* ${SKP_DIR}/
 
 local-nightly: clean-skp gen-skps build-nightly
-	mkdir -p $(SKP_RENDERS)
-	mkdir -p $(SKI_PASS_SKP_RENDERS)
-	mkdir -p $(DIFF_REPORT_DIR)
 	mkdir -p $(NIGHTLY_REPORT_DIR)
+	mkdir -p ${NIGHTLY_DIR}/$(SKP_RENDERS)
+	mkdir -p ${NIGHTLY_DIR}/$(SKI_PASS_SKP_RENDERS)
+	mkdir -p ${NIGHTLY_DIR}/$(DIFF_REPORT_DIR)
 	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR)
-	$(BUILD_DIR)/skdiff $(SKP_RENDERS) $(SKI_PASS_SKP_RENDERS) $(DIFF_REPORT_DIR)
+	cd $(NIGHTLY_DIR) && \
+		$(BUILD_DIR)/skdiff ${SKP_RENDERS} ${SKI_PASS_SKP_RENDERS} ${DIFF_REPORT_DIR}
 	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE)
 
 nightly: clean local-nightly
