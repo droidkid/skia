@@ -1,5 +1,6 @@
 #include "include/core/SkBitmap.h"
 #include "include/core/SkImageEncoder.h"
+#include "include/core/SkEncodedImageFormat.h"
 #include "include/core/SkPicture.h"
 #include "include/core/SkPictureRecorder.h"
 #include "include/core/SkStream.h"
@@ -138,7 +139,7 @@ int main(int argc, char** argv) {
     skia_opt_metrics::SkiaOptBenchmark benchmark = skia_opt_metrics::SkiaOptBenchmark::default_instance();
     std::string outFilePath(FLAGS_out_dir[0]);
 
-    for (int i=0; i < FLAGS_skps.count(); i++) {
+    for (int i=0; i < FLAGS_skps.size(); i++) {
         skia_opt_metrics::SkpBenchmark *skp_benchmark = benchmark.add_skp_benchmark_runs();
 
         skp_benchmark->set_skp_name(FLAGS_skps[i]);
