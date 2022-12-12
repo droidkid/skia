@@ -5,11 +5,27 @@
  * found in the LICENSE file.
  */
 
+#include "include/core/SkFont.h"
+#include "include/core/SkFontStyle.h"
+#include "include/core/SkFontTypes.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkSurface.h"
 #include "include/core/SkTextBlob.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/gpu/GrDirectContext.h"
+#include "include/private/SkTDArray.h"
 #include "include/private/chromium/Slug.h"
-#include "src/gpu/ganesh/GrDirectContextPriv.h"
+#include "tests/CtsEnforcement.h"
 #include "tests/Test.h"
 #include "tools/ToolUtils.h"
+
+#include <cstdint>
+#include <cstring>
+
+struct GrContextOptions;
 
 DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(GrSlug_empty,
                                        reporter,
@@ -37,8 +53,8 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(GrSlug_empty,
     font.setTypeface(typeface);
     font.setSize(16);
 
-    const SkTextBlobBuilder::RunBuffer& buf = builder.allocRun(font, glyphs.count(), 0, 0);
-    memcpy(buf.glyphs, glyphs.begin(), glyphs.count() * sizeof(uint16_t));
+    const SkTextBlobBuilder::RunBuffer& buf = builder.allocRun(font, glyphs.size(), 0, 0);
+    memcpy(buf.glyphs, glyphs.begin(), glyphs.size() * sizeof(uint16_t));
     auto blob = builder.make();
 
     SkPaint p;

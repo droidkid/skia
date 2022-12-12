@@ -11,6 +11,7 @@
 #include "include/private/SkSLDefines.h"
 #include "include/private/SkTArray.h"
 #include "include/sksl/SkSLErrorReporter.h"
+#include "include/sksl/SkSLOperator.h"
 #include "src/sksl/SkSLAnalysis.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
 #include "src/sksl/SkSLConstantFolder.h"
@@ -128,7 +129,7 @@ std::unique_ptr<Expression> IndexExpression::Make(const Context& context,
                 if (baseExpr->is<ConstructorArray>()) {
                     const ConstructorArray& arrayCtor = baseExpr->as<ConstructorArray>();
                     const ExpressionArray& arguments = arrayCtor.arguments();
-                    SkASSERT(arguments.count() == baseType.columns());
+                    SkASSERT(arguments.size() == baseType.columns());
 
                     return arguments[indexValue]->clone(pos);
                 }
@@ -167,6 +168,11 @@ std::unique_ptr<Expression> IndexExpression::Make(const Context& context,
     }
 
     return std::make_unique<IndexExpression>(context, pos, std::move(base), std::move(index));
+}
+
+std::string IndexExpression::description(OperatorPrecedence) const {
+    return this->base()->description(OperatorPrecedence::kPostfix) + "[" +
+           this->index()->description(OperatorPrecedence::kTopLevel) + "]";
 }
 
 }  // namespace SkSL

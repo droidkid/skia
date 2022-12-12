@@ -20,12 +20,12 @@ namespace {
     const SkISize kSize = {16, 16};
 }
 
-DEF_GRAPHITE_TEST_FOR_CONTEXTS(MtlBackendTextureTest, reporter, context) {
+DEF_GRAPHITE_TEST_FOR_METAL_CONTEXT(MtlBackendTextureTest, reporter, context) {
     auto recorder = context->makeRecorder();
 
     MtlTextureInfo textureInfo;
     textureInfo.fSampleCount = 1;
-    textureInfo.fLevelCount = 1;
+    textureInfo.fMipmapped = Mipmapped::kNo;
     textureInfo.fFormat = MTLPixelFormatRGBA8Unorm;
     textureInfo.fStorageMode = MTLStorageModePrivate;
     textureInfo.fUsage = MTLTextureUsageShaderRead;

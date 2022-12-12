@@ -122,7 +122,7 @@ bool ImGuiLayer::onMouseWheel(float delta, skui::ModifierKey modifiers) {
 }
 
 void ImGuiLayer::skiaWidget(const ImVec2& size, SkiaWidgetFunc func) {
-    intptr_t funcIndex = fSkiaWidgetFuncs.count();
+    intptr_t funcIndex = fSkiaWidgetFuncs.size();
     fSkiaWidgetFuncs.push_back(func);
     ImGui::Image((ImTextureID)funcIndex, size);
 }
@@ -164,7 +164,7 @@ void ImGuiLayer::onPaint(SkSurface* surface) {
         const ImDrawList* drawList = drawData->CmdLists[i];
 
         // De-interleave all vertex data (sigh), convert to Skia types
-        pos.rewind(); uv.rewind(); color.rewind();
+        pos.clear(); uv.clear(); color.clear();
         for (int j = 0; j < drawList->VtxBuffer.size(); ++j) {
             const ImDrawVert& vert = drawList->VtxBuffer[j];
             pos.push_back(SkPoint::Make(vert.pos.x, vert.pos.y));
@@ -172,7 +172,7 @@ void ImGuiLayer::onPaint(SkSurface* surface) {
             color.push_back(vert.col);
         }
         // ImGui colors are RGBA
-        SkSwapRB(color.begin(), color.begin(), color.count());
+        SkSwapRB(color.begin(), color.begin(), color.size());
 
         int indexOffset = 0;
 
@@ -187,7 +187,7 @@ void ImGuiLayer::onPaint(SkSurface* surface) {
                 drawCmd->UserCallback(drawList, drawCmd);
             } else {
                 intptr_t idIndex = (intptr_t)drawCmd->TextureId;
-                if (idIndex < fSkiaWidgetFuncs.count()) {
+                if (idIndex < fSkiaWidgetFuncs.size()) {
                     // Small image IDs are actually indices into a list of callbacks. We directly
                     // examing the vertex data to deduce the image rectangle, then reconfigure the
                     // canvas to be clipped and translated so that the callback code gets to use

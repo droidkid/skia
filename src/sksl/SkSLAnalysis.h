@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <memory>
 #include <set>
+#include <vector>
 
 namespace SkSL {
 
@@ -26,13 +27,13 @@ class Position;
 class ProgramElement;
 class ProgramUsage;
 class Statement;
+class SymbolTable;
 class Variable;
 class VariableReference;
 enum class VariableRefKind : int8_t;
 struct ForLoopPositions;
-struct LoadedModule;
 struct LoopUnrollInfo;
-struct ParsedModule;
+struct Module;
 struct Program;
 
 /**
@@ -106,7 +107,7 @@ bool SwitchCaseContainsUnconditionalExit(Statement& stmt);
 bool SwitchCaseContainsConditionalExit(Statement& stmt);
 
 std::unique_ptr<ProgramUsage> GetUsage(const Program& program);
-std::unique_ptr<ProgramUsage> GetUsage(const LoadedModule& module, const ParsedModule& base);
+std::unique_ptr<ProgramUsage> GetUsage(const Module& module);
 
 bool StatementWritesToVariable(const Statement& stmt, const Variable& var);
 
@@ -198,7 +199,6 @@ bool CanExitWithoutReturningValue(const FunctionDeclaration& funcDecl, const Sta
 
 /**
  * Runs at finalization time to perform any last-minute correctness checks:
- * - Reports @if/@switch statements that didn't optimize away
  * - Reports dangling FunctionReference or TypeReference expressions
  * - Reports function `out` params which are never written to (structs are currently exempt)
  */
@@ -208,8 +208,25 @@ void DoFinalizationChecks(const Program& program);
  * Error checks compute shader in/outs and returns a vector containing them ordered by location.
  */
 SkTArray<const SkSL::Variable*> GetComputeShaderMainParams(const Context& context,
-        const Program& program);
+                                                           const Program& program);
 
+/**
+ * Tracks the symbol table stack, in conjunction with a ProgramVisitor. Inside `visitStatement`,
+ * pass the current statement and a symbol-table vector to a SymbolTableStackBuilder and the symbol
+ * table stack will be maintained automatically.
+ */
+class SymbolTableStackBuilder {
+public:
+    // If the passed-in statement holds a symbol table, adds it to the stack.
+    SymbolTableStackBuilder(const Statement* stmt,
+                            std::vector<std::shared_ptr<SymbolTable>>* stack);
+
+    // If a symbol table was added to the stack earlier, removes it from the stack.
+    ~SymbolTableStackBuilder();
+
+private:
+    std::vector<std::shared_ptr<SymbolTable>>* fStackToPop = nullptr;
+};
 
 }  // namespace Analysis
 }  // namespace SkSL

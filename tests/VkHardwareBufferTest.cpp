@@ -412,7 +412,7 @@ public:
     }
 
     void releaseSurfaceToExternal(SkSurface* surface) override {
-        GrBackendSurfaceMutableState newState(VK_IMAGE_LAYOUT_UNDEFINED, VK_QUEUE_FAMILY_EXTERNAL);
+        skgpu::MutableTextureState newState(VK_IMAGE_LAYOUT_UNDEFINED, VK_QUEUE_FAMILY_EXTERNAL);
         surface->flush({}, &newState);
     }
 
@@ -743,6 +743,7 @@ bool VulkanTestHelper::importHardwareBuffer(skiatest::Reporter* reporter,
             if (supportedFlags == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
                 typeIndex = i;
                 heapIndex = pdmp.memoryTypes[i].heapIndex;
+                REPORTER_ASSERT(reporter, heapIndex < pdmp.memoryHeapCount);
                 foundHeap = true;
             }
         }

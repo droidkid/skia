@@ -1,6 +1,6 @@
 // Copyright 2019 Google LLC.
+
 #include "include/core/SkBlurTypes.h"
-#include "include/core/SkCanvas.h"
 #include "include/core/SkFont.h"
 #include "include/core/SkFontMetrics.h"
 #include "include/core/SkMaskFilter.h"
@@ -13,11 +13,13 @@
 #include "include/private/SkTo.h"
 #include "modules/skparagraph/include/DartTypes.h"
 #include "modules/skparagraph/include/Metrics.h"
+#include "modules/skparagraph/include/ParagraphPainter.h"
 #include "modules/skparagraph/include/ParagraphStyle.h"
 #include "modules/skparagraph/include/TextShadow.h"
 #include "modules/skparagraph/include/TextStyle.h"
 #include "modules/skparagraph/src/Decorations.h"
 #include "modules/skparagraph/src/ParagraphImpl.h"
+#include "modules/skparagraph/src/ParagraphPainterImpl.h"
 #include "modules/skparagraph/src/TextLine.h"
 #include "modules/skshaper/include/SkShaper.h"
 
@@ -132,12 +134,19 @@ TextLine::TextLine(ParagraphImpl* owner,
     // This is just chosen to catch the common/fast cases. Feel free to tweak.
     constexpr int kPreallocCount = 4;
     SkAutoSTArray<kPreallocCount, SkUnicode::BidiLevel> runLevels(numRuns);
+    std::vector<RunIndex> placeholdersInOriginalOrder;
     size_t runLevelsIndex = 0;
+    // Placeholders must be laid out using the original order in which they were added
+    // in the input. The API does not provide a way to indicate that a placeholder
+    // position was moved due to bidi reordering.
     for (auto runIndex = start.runIndex(); runIndex <= end.runIndex(); ++runIndex) {
         auto& run = fOwner->run(runIndex);
         runLevels[runLevelsIndex++] = run.fBidiLevel;
         fMaxRunMetrics.add(
             InternalLineMetrics(run.correctAscent(), run.correctDescent(), run.fFontMetrics.fLeading));
+        if (run.isPlaceholder()) {
+            placeholdersInOriginalOrder.push_back(runIndex);
+        }
     }
     SkASSERT(runLevelsIndex == numRuns);
 
@@ -146,8 +155,14 @@ TextLine::TextLine(ParagraphImpl* owner,
     // TODO: hide all these logic in SkUnicode?
     fOwner->getUnicode()->reorderVisual(runLevels.data(), numRuns, logicalOrder.data());
     auto firstRunIndex = start.runIndex();
+    auto placeholderIter = placeholdersInOriginalOrder.begin();
     for (auto index : logicalOrder) {
-        fRunsInVisualOrder.push_back(firstRunIndex + index);
+        auto runIndex = firstRunIndex + index;
+        if (fOwner->run(runIndex).isPlaceholder()) {
+            fRunsInVisualOrder.push_back(*placeholderIter++);
+        } else {
+            fRunsInVisualOrder.push_back(runIndex);
+        }
     }
 
     // TODO: This is the fix for flutter. Must be removed...
@@ -159,15 +174,15 @@ TextLine::TextLine(ParagraphImpl* owner,
     }
 }
 
-void TextLine::paint(SkCanvas* textCanvas, SkScalar x, SkScalar y) {
+void TextLine::paint(ParagraphPainter* painter, SkScalar x, SkScalar y) {
     if (fHasBackground) {
         this->iterateThroughVisualRuns(false,
-            [textCanvas, x, y, this]
+            [painter, x, y, this]
             (const Run* run, SkScalar runOffsetInLine, TextRange textRange, SkScalar* runWidthInLine) {
                 *runWidthInLine = this->iterateThroughSingleRunByStyles(
                 run, runOffsetInLine, textRange, StyleType::kBackground,
-                [textCanvas, x, y, this](TextRange textRange, const TextStyle& style, const ClipContext& context) {
-                    this->paintBackground(textCanvas, x, y, textRange, style, context);
+                [painter, x, y, this](TextRange textRange, const TextStyle& style, const ClipContext& context) {
+                    this->paintBackground(painter, x, y, textRange, style, context);
                 });
             return true;
             });
@@ -175,13 +190,13 @@ void TextLine::paint(SkCanvas* textCanvas, SkScalar x, SkScalar y) {
 
     if (fHasShadows) {
         this->iterateThroughVisualRuns(false,
-            [textCanvas, x, y, this]
+            [painter, x, y, this]
             (const Run* run, SkScalar runOffsetInLine, TextRange textRange, SkScalar* runWidthInLine) {
             *runWidthInLine = this->iterateThroughSingleRunByStyles(
                 run, runOffsetInLine, textRange, StyleType::kShadow,
-                [textCanvas, x, y, this]
+                [painter, x, y, this]
                 (TextRange textRange, const TextStyle& style, const ClipContext& context) {
-                    this->paintShadow(textCanvas, x, y, textRange, style, context);
+                    this->paintShadow(painter, x, y, textRange, style, context);
                 });
             return true;
             });
@@ -190,18 +205,18 @@ void TextLine::paint(SkCanvas* textCanvas, SkScalar x, SkScalar y) {
     ensureTextBlobCachePopulated();
 
     for (auto& record : fTextBlobCache) {
-        record.paint(textCanvas, x, y);
+        record.paint(painter, x, y);
     }
 
     if (fHasDecorations) {
         this->iterateThroughVisualRuns(false,
-            [textCanvas, x, y, this]
+            [painter, x, y, this]
             (const Run* run, SkScalar runOffsetInLine, TextRange textRange, SkScalar* runWidthInLine) {
                 *runWidthInLine = this->iterateThroughSingleRunByStyles(
                 run, runOffsetInLine, textRange, StyleType::kDecorations,
-                [textCanvas, x, y, this]
+                [painter, x, y, this]
                 (TextRange textRange, const TextStyle& style, const ClipContext& context) {
-                    this->paintDecorations(textCanvas, x, y, textRange, style, context);
+                    this->paintDecorations(painter, x, y, textRange, style, context);
                 });
                 return true;
         });
@@ -312,33 +327,6 @@ SkRect TextLine::extendHeight(const ClipContext& context) const {
     return result;
 }
 
-SkScalar TextLine::metricsWithoutMultiplier(TextHeightBehavior correction) {
-
-    if (this->fSizes.getForceStrut()) {
-        return 0;
-    }
-
-    InternalLineMetrics result;
-    this->iterateThroughVisualRuns(true,
-        [&result](const Run* run, SkScalar runOffset, TextRange textRange, SkScalar* width) {
-        InternalLineMetrics runMetrics(run->ascent(), run->descent(), run->leading());
-        result.add(runMetrics);
-        return true;
-    });
-    SkScalar delta = 0;
-    if (correction  == TextHeightBehavior::kDisableFirstAscent) {
-        delta += (this->fSizes.fAscent - result.fAscent);
-        this->fSizes.fAscent = result.fAscent;
-        this->fAscentStyle = LineMetricStyle::Typographic;
-    } else if (correction  == TextHeightBehavior::kDisableLastDescent) {
-        delta -= (this->fSizes.fDescent - result.fDescent);
-        this->fSizes.fDescent = result.fDescent;
-        this->fDescentStyle = LineMetricStyle::Typographic;
-    }
-    fAdvance.fY += delta;
-    return delta;
-}
-
 void TextLine::buildTextBlob(TextRange textRange, const TextStyle& style, const ClipContext& context) {
     if (context.run->placeholderStyle() != nullptr) {
         return;
@@ -348,9 +336,9 @@ void TextLine::buildTextBlob(TextRange textRange, const TextStyle& style, const 
     TextBlobRecord& record = fTextBlobCache.back();
 
     if (style.hasForeground()) {
-        record.fPaint = style.getForeground();
+        record.fPaint = style.getForegroundPaintOrID();
     } else {
-        record.fPaint.setColor(style.getColor());
+        std::get<SkPaint>(record.fPaint).setColor(style.getColor());
     }
     record.fVisitor_Run = context.run;
     record.fVisitor_Pos = context.pos;
@@ -376,30 +364,30 @@ void TextLine::buildTextBlob(TextRange textRange, const TextStyle& style, const 
                                    this->offset().fY + correctedBaseline);
 }
 
-void TextLine::TextBlobRecord::paint(SkCanvas* canvas, SkScalar x, SkScalar y) {
+void TextLine::TextBlobRecord::paint(ParagraphPainter* painter, SkScalar x, SkScalar y) {
     if (fClippingNeeded) {
-        canvas->save();
-        canvas->clipRect(fClipRect.makeOffset(x, y));
+        painter->save();
+        painter->clipRect(fClipRect.makeOffset(x, y));
     }
-    canvas->drawTextBlob(fBlob, x + fOffset.x(), y + fOffset.y(), fPaint);
+    painter->drawTextBlob(fBlob, x + fOffset.x(), y + fOffset.y(), fPaint);
     if (fClippingNeeded) {
-        canvas->restore();
+        painter->restore();
     }
 }
 
-void TextLine::paintBackground(SkCanvas* canvas,
+void TextLine::paintBackground(ParagraphPainter* painter,
                                SkScalar x,
                                SkScalar y,
                                TextRange textRange,
                                const TextStyle& style,
                                const ClipContext& context) const {
     if (style.hasBackground()) {
-        canvas->drawRect(context.clip.makeOffset(this->offset() + SkPoint::Make(x, y)),
-                         style.getBackground());
+        painter->drawRect(context.clip.makeOffset(this->offset() + SkPoint::Make(x, y)),
+                          style.getBackgroundPaintOrID());
     }
 }
 
-void TextLine::paintShadow(SkCanvas* canvas,
+void TextLine::paintShadow(ParagraphPainter* painter,
                            SkScalar x,
                            SkScalar y,
                            TextRange textRange,
@@ -410,42 +398,34 @@ void TextLine::paintShadow(SkCanvas* canvas,
     for (TextShadow shadow : style.getShadows()) {
         if (!shadow.hasShadow()) continue;
 
-        SkPaint paint;
-        paint.setColor(shadow.fColor);
-        if (shadow.fBlurSigma != 0.0) {
-            auto filter = SkMaskFilter::MakeBlur(kNormal_SkBlurStyle,
-                                                 SkDoubleToScalar(shadow.fBlurSigma), false);
-            paint.setMaskFilter(filter);
-        }
-
         SkTextBlobBuilder builder;
         context.run->copyTo(builder, context.pos, context.size);
 
         if (context.clippingNeeded) {
-            canvas->save();
+            painter->save();
             SkRect clip = extendHeight(context);
             clip.offset(x, y);
             clip.offset(this->offset());
-            canvas->clipRect(clip);
+            painter->clipRect(clip);
         }
         auto blob = builder.make();
-        canvas->drawTextBlob(blob,
+        painter->drawTextShadow(blob,
             x + this->offset().fX + shadow.fOffset.x() + context.fTextShift,
             y + this->offset().fY + shadow.fOffset.y() + correctedBaseline,
-            paint);
+            shadow.fColor,
+            SkDoubleToScalar(shadow.fBlurSigma));
         if (context.clippingNeeded) {
-            canvas->restore();
+            painter->restore();
         }
     }
 }
 
-void TextLine::paintDecorations(SkCanvas* canvas, SkScalar x, SkScalar y, TextRange textRange, const TextStyle& style, const ClipContext& context) const {
-
-    SkAutoCanvasRestore acr(canvas, true);
-    canvas->translate(x + this->offset().fX, y + this->offset().fY + style.getBaselineShift());
+void TextLine::paintDecorations(ParagraphPainter* painter, SkScalar x, SkScalar y, TextRange textRange, const TextStyle& style, const ClipContext& context) const {
+    ParagraphPainterAutoRestore ppar(painter);
+    painter->translate(x + this->offset().fX, y + this->offset().fY + style.getBaselineShift());
     Decorations decorations;
-    SkScalar correctedBaseline = SkScalarFloorToScalar(this->baseline() + style.getBaselineShift() + 0.5);
-    decorations.paint(canvas, style, context, correctedBaseline);
+    SkScalar correctedBaseline = SkScalarFloorToScalar(-this->sizes().rawAscent() + style.getBaselineShift() + 0.5);
+    decorations.paint(painter, style, context, correctedBaseline);
 }
 
 void TextLine::justify(SkScalar maxWidth) {
@@ -547,9 +527,9 @@ void TextLine::createEllipsis(SkScalar maxWidth, const SkString& ellipsis, bool)
             }
             // Shape the ellipsis if the run has changed
             if (leftRun != cluster->runIndex()) {
-                ellipsisRun = shapeEllipsis(ellipsis, cluster->run());
+                ellipsisRun = shapeEllipsis(ellipsis, cluster);
                 if (ellipsisRun->advance().fX > maxWidth) {
-                    // Ellipsis is bigger than the entire line
+                    // Ellipsis is bigger than the entire line; no way we can add it at all
                     return false;
                 }
                 ellipsisRun->fClusterStart = cluster->textRange().start;
@@ -559,7 +539,7 @@ void TextLine::createEllipsis(SkScalar maxWidth, const SkString& ellipsis, bool)
             // See if it fits
             if (width + ellipsisRun->advance().fX > maxWidth) {
                 width -= cluster->width();
-                // Continue if it's not
+                // Continue if the ellipsis does not fit
                 return true;
             }
             fEllipsis = std::move(ellipsisRun);
@@ -581,7 +561,7 @@ void TextLine::createEllipsis(SkScalar maxWidth, const SkString& ellipsis, bool)
             // Shape the ellipsis if the run has changed
             if (rightRun != cluster->runIndex()) {
                 // Shape the ellipsis
-                ellipsisRun = shapeEllipsis(ellipsis, cluster->run());
+                ellipsisRun = shapeEllipsis(ellipsis, cluster);
                 if (ellipsisRun->advance().fX > maxWidth) {
                     // Ellipsis is bigger than the entire line
                     return false;
@@ -593,7 +573,7 @@ void TextLine::createEllipsis(SkScalar maxWidth, const SkString& ellipsis, bool)
             // See if it fits
             if (width + ellipsisRun->advance().fX > maxWidth) {
                 width -= cluster->width();
-                // Continue if it's not
+                // Continue if the ellipsis does not fit
                 return true;
             }
             fEllipsis = std::move(ellipsisRun);
@@ -617,14 +597,18 @@ void TextLine::createEllipsis(SkScalar maxWidth, const SkString& ellipsis, bool)
     fAdvance.fX = 0;
 }
 
-std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Run& run) {
+static inline SkUnichar nextUtf8Unit(const char** ptr, const char* end) {
+    SkUnichar val = SkUTF::NextUTF8(ptr, end);
+    return val < 0 ? 0xFFFD : val;
+}
+
+std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Cluster* cluster) {
 
     class ShapeHandler final : public SkShaper::RunHandler {
     public:
         ShapeHandler(SkScalar lineHeight, bool useHalfLeading, SkScalar baselineShift, const SkString& ellipsis)
             : fRun(nullptr), fLineHeight(lineHeight), fUseHalfLeading(useHalfLeading), fBaselineShift(baselineShift), fEllipsis(ellipsis) {}
-        Run* run() & { return fRun.get(); }
-        std::unique_ptr<Run> run() && { return std::move(fRun); }
+        std::unique_ptr<Run> run() & { return std::move(fRun); }
 
     private:
         void beginLine() override {}
@@ -655,14 +639,71 @@ std::unique_ptr<Run> TextLine::shapeEllipsis(const SkString& ellipsis, const Run
         SkString fEllipsis;
     };
 
-    ShapeHandler handler(run.heightMultiplier(), run.useHalfLeading(), run.baselineShift(), ellipsis);
-    std::unique_ptr<SkShaper> shaper = SkShaper::MakeShapeDontWrapOrReorder();
-    SkASSERT_RELEASE(shaper != nullptr);
-    shaper->shape(ellipsis.c_str(), ellipsis.size(), run.font(), true,
-                  std::numeric_limits<SkScalar>::max(), &handler);
-    handler.run()->fTextRange = TextRange(0, ellipsis.size());
-    handler.run()->fOwner = fOwner;
-    return std::move(handler).run();
+    const Run& run = cluster->run();
+    TextStyle textStyle = fOwner->paragraphStyle().getTextStyle();
+    for (auto i = fBlockRange.start; i < fBlockRange.end; ++i) {
+        auto& block = fOwner->block(i);
+        if (run.leftToRight() && cluster->textRange().end <= block.fRange.end) {
+            textStyle = block.fStyle;
+            break;
+        } else if (!run.leftToRight() && cluster->textRange().start <= block.fRange.end) {
+            textStyle = block.fStyle;
+            break;
+        }
+    }
+
+    auto shaped = [&](sk_sp<SkTypeface> typeface, bool fallback) -> std::unique_ptr<Run> {
+        ShapeHandler handler(run.heightMultiplier(), run.useHalfLeading(), run.baselineShift(), ellipsis);
+        SkFont font(typeface, textStyle.getFontSize());
+        font.setEdging(SkFont::Edging::kAntiAlias);
+        font.setHinting(SkFontHinting::kSlight);
+        font.setSubpixel(true);
+
+        std::unique_ptr<SkShaper> shaper = SkShaper::MakeShapeDontWrapOrReorder(
+                            fallback ? SkFontMgr::RefDefault() : SkFontMgr::RefEmpty());
+        shaper->shape(ellipsis.c_str(),
+                      ellipsis.size(),
+                      font,
+                      true,
+                      std::numeric_limits<SkScalar>::max(),
+                      &handler);
+        auto ellipsisRun = handler.run();
+        ellipsisRun->fTextRange = TextRange(0, ellipsis.size());
+        ellipsisRun->fOwner = fOwner;
+        return ellipsisRun;
+    };
+
+    // Check the current font
+    auto ellipsisRun = shaped(run.fFont.refTypeface(), false);
+    if (ellipsisRun->isResolved()) {
+        return ellipsisRun;
+    }
+
+    // Check all allowed fonts
+    std::vector<sk_sp<SkTypeface>> typefaces = fOwner->fontCollection()->findTypefaces(
+            textStyle.getFontFamilies(), textStyle.getFontStyle(), textStyle.getFontArguments());
+    for (const auto& typeface : typefaces) {
+        ellipsisRun = shaped(typeface, false);
+        if (ellipsisRun->isResolved()) {
+            return ellipsisRun;
+        }
+    }
+
+    // Try the fallback
+    if (fOwner->fontCollection()->fontFallbackEnabled()) {
+        const char* ch = ellipsis.c_str();
+        SkUnichar unicode = nextUtf8Unit(&ch, ellipsis.c_str() + ellipsis.size());
+
+       auto typeface = fOwner->fontCollection()->defaultFallback(
+                    unicode, textStyle.getFontStyle(), textStyle.getLocale());
+        if (typeface) {
+            ellipsisRun = shaped(typeface, true);
+            if (ellipsisRun->isResolved()) {
+                return ellipsisRun;
+            }
+        }
+    }
+    return ellipsisRun;
 }
 
 TextLine::ClipContext TextLine::measureTextInsideOneRun(TextRange textRange,
@@ -711,28 +752,36 @@ TextLine::ClipContext TextLine::measureTextInsideOneRun(TextRange textRange,
             break;
         }
 
-        // Update textRange by cluster edges
+        // Update textRange by cluster edges (shift start up to the edge of the cluster)
+        TextRange updatedTextRange(textRange);
         if (run->leftToRight()) {
             if (textRange.start != start->textRange().start) {
-                textRange.start = start->textRange().end;
+                updatedTextRange.start = start->textRange().end;
             }
-            textRange.end = end->textRange().end;
+            updatedTextRange.end = end->textRange().end;
         } else {
             if (textRange.start != end->textRange().start) {
-                textRange.start = end->textRange().end;
+                updatedTextRange.start = end->textRange().end;
             }
-            textRange.end = start->textRange().end;
+            updatedTextRange.end = start->textRange().end;
         }
+        SkASSERT(updatedTextRange.start >= textRange.start);
 
-        std::tie(found, startIndex, endIndex) = run->findLimitingGraphemes(textRange);
-        if (startIndex == textRange.start && endIndex == textRange.end) {
+        // Update text range by grapheme edges (shift start up to the edge of the grapheme)
+        std::tie(found, updatedTextRange.start, updatedTextRange.end) =
+                run->findLimitingGraphemes(updatedTextRange);
+        SkASSERT(updatedTextRange.start >= textRange.start);
+        SkASSERT(updatedTextRange.end >= textRange.end);
+
+        // Updated text could only shift right from the initial text
+        // so this loop is going to break soon enough
+        if (updatedTextRange == textRange) {
             break;
         }
 
         // Some clusters are inside graphemes and we need to adjust them
         //SkDebugf("Correct range: [%d:%d) -> [%d:%d)\n", textRange.start, textRange.end, startIndex, endIndex);
-        textRange.start = startIndex;
-        textRange.end = endIndex;
+        textRange = updatedTextRange;
 
         // Move the start until it's on the grapheme edge (and glypheme, too)
     } while (true);
@@ -834,10 +883,22 @@ SkScalar TextLine::iterateThroughSingleRunByStyles(const Run* run,
                                                    StyleType styleType,
                                                    const RunStyleVisitor& visitor) const {
 
+    auto correctContext = [&](TextRange textRange, SkScalar textOffsetInRun) -> ClipContext {
+        auto result = this->measureTextInsideOneRun(
+                                        textRange, run, runOffset, textOffsetInRun, false, true);
+        if (styleType == StyleType::kDecorations) {
+            // Decorations are drawn based on the real font metrics (regardless of styles and strut)
+            result.clip.fTop = this->sizes().runTop(run, LineMetricStyle::CSS);
+            result.clip.fBottom =
+                    result.clip.fTop +
+                    run->calculateHeight(LineMetricStyle::CSS, LineMetricStyle::CSS);
+        }
+        return result;
+    };
+
     if (run->fEllipsis) {
         // Extra efforts to get the ellipsis text style
-        ClipContext clipContext = this->measureTextInsideOneRun(run->textRange(), run, runOffset,
-                                                                0, false, true);
+        ClipContext clipContext = correctContext(run->textRange(), 0.0f);
         TextRange testRange(run->fClusterStart, run->fClusterStart + run->textRange().width());
         for (BlockIndex index = fBlockRange.start; index < fBlockRange.end; ++index) {
            auto block = fOwner->styles().begin() + index;
@@ -851,8 +912,7 @@ SkScalar TextLine::iterateThroughSingleRunByStyles(const Run* run,
     }
 
     if (styleType == StyleType::kNone) {
-        ClipContext clipContext = this->measureTextInsideOneRun(textRange, run, runOffset,
-                                                                0, false, true);
+        ClipContext clipContext = correctContext(textRange, 0.0f);
         if (clipContext.clip.height() > 0) {
             visitor(textRange, TextStyle(), clipContext);
             return clipContext.clip.width();
@@ -911,9 +971,7 @@ SkScalar TextLine::iterateThroughSingleRunByStyles(const Run* run,
 
         // We have the style and the text
         auto runStyleTextRange = TextRange(start, start + size);
-        // Measure the text
-        ClipContext clipContext = this->measureTextInsideOneRun(runStyleTextRange, run, runOffset,
-                                                                textOffsetInRun, false, true);
+        ClipContext clipContext = correctContext(runStyleTextRange, textOffsetInRun);
         textOffsetInRun += clipContext.clip.width();
         if (clipContext.clip.height() == 0) {
             continue;
@@ -1031,11 +1089,11 @@ LineMetrics TextLine::getMetrics() const {
     return result;
 }
 
-bool TextLine::isFirstLine() {
+bool TextLine::isFirstLine() const {
     return this == &fOwner->lines().front();
 }
 
-bool TextLine::isLastLine() {
+bool TextLine::isLastLine() const {
     return this == &fOwner->lines().back();
 }
 

@@ -8,7 +8,7 @@
 #include "include/gpu/GrBackendSurface.h"
 
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
-#include "src/gpu/ganesh/GrBackendSurfaceMutableStateImpl.h"
+#include "src/gpu/MutableTextureStateRef.h"
 
 #if defined(SK_GL)
 #include "src/gpu/ganesh/gl/GrGLUtil.h"
@@ -23,6 +23,7 @@
 #include "include/gpu/vk/GrVkTypes.h"
 #include "src/gpu/ganesh/vk/GrVkImageLayout.h"
 #include "src/gpu/ganesh/vk/GrVkUtil.h"
+#include "src/gpu/vk/VulkanUtils.h"
 #endif
 #ifdef SK_METAL
 #include "include/gpu/mtl/GrMtlTypes.h"
@@ -233,7 +234,7 @@ uint32_t GrBackendFormat::channelMask() const {
 #endif
 #ifdef SK_VULKAN
         case GrBackendApi::kVulkan:
-            return GrVkFormatChannels(fVk.fFormat);
+            return skgpu::VkFormatChannels(fVk.fFormat);
 #endif
 #ifdef SK_METAL
         case GrBackendApi::kMetal:
@@ -407,6 +408,7 @@ bool GrBackendFormat::operator==(const GrBackendFormat& that) const {
 #endif
 #ifdef SK_VULKAN
 #include "src/gpu/ganesh/vk/GrVkUtil.h"
+#include "src/gpu/vk/VulkanUtils.h"
 #endif
 
 SkString GrBackendFormat::toStr() const {
@@ -427,7 +429,7 @@ SkString GrBackendFormat::toStr() const {
             break;
         case GrBackendApi::kVulkan:
 #ifdef SK_VULKAN
-            str.append(GrVkFormatToStr(fVk.fFormat));
+            str.append(skgpu::VkFormatToStr(fVk.fFormat));
 #endif
             break;
         case GrBackendApi::kMetal:
@@ -483,7 +485,7 @@ GrBackendTexture::GrBackendTexture(int width,
                   width,
                   height,
                   vkInfo,
-                  sk_sp<GrBackendSurfaceMutableStateImpl>(new GrBackendSurfaceMutableStateImpl(
+                  sk_sp<skgpu::MutableTextureStateRef>(new skgpu::MutableTextureStateRef(
                           vkInfo.fImageLayout, vkInfo.fCurrentQueueFamily)),
                   label) {}
 
@@ -516,7 +518,7 @@ static GrTextureType vk_image_info_to_texture_type(const GrVkImageInfo& info) {
 GrBackendTexture::GrBackendTexture(int width,
                                    int height,
                                    const GrVkImageInfo& vkInfo,
-                                   sk_sp<GrBackendSurfaceMutableStateImpl> mutableState,
+                                   sk_sp<skgpu::MutableTextureStateRef> mutableState,
                                    std::string_view label)
         : fIsValid(true)
         , fWidth(width)
@@ -701,7 +703,7 @@ GrBackendTexture& GrBackendTexture::operator=(const GrBackendTexture& that) {
     return *this;
 }
 
-sk_sp<GrBackendSurfaceMutableStateImpl> GrBackendTexture::getMutableState() const {
+sk_sp<skgpu::MutableTextureStateRef> GrBackendTexture::getMutableState() const {
     return fMutableState;
 }
 
@@ -797,7 +799,7 @@ bool GrBackendTexture::getMockTextureInfo(GrMockTextureInfo* outInfo) const {
     return false;
 }
 
-void GrBackendTexture::setMutableState(const GrBackendSurfaceMutableState& state) {
+void GrBackendTexture::setMutableState(const skgpu::MutableTextureState& state) {
     fMutableState->set(state);
 }
 
@@ -984,8 +986,8 @@ GrBackendRenderTarget::GrBackendRenderTarget(int width,
                                              int height,
                                              const GrVkImageInfo& vkInfo)
         : GrBackendRenderTarget(width, height, vkInfo,
-                                sk_sp<GrBackendSurfaceMutableStateImpl>(
-                                        new GrBackendSurfaceMutableStateImpl(
+                                sk_sp<skgpu::MutableTextureStateRef>(
+                                        new skgpu::MutableTextureStateRef(
                                                 vkInfo.fImageLayout, vkInfo.fCurrentQueueFamily))) {}
 
 static const VkImageUsageFlags kDefaultRTUsageFlags =
@@ -994,7 +996,7 @@ static const VkImageUsageFlags kDefaultRTUsageFlags =
 GrBackendRenderTarget::GrBackendRenderTarget(int width,
                                              int height,
                                              const GrVkImageInfo& vkInfo,
-                                             sk_sp<GrBackendSurfaceMutableStateImpl> mutableState)
+                                             sk_sp<skgpu::MutableTextureStateRef> mutableState)
         : fIsValid(true)
         , fWidth(width)
         , fHeight(height)
@@ -1145,7 +1147,7 @@ GrBackendRenderTarget& GrBackendRenderTarget::operator=(const GrBackendRenderTar
     return *this;
 }
 
-sk_sp<GrBackendSurfaceMutableStateImpl> GrBackendRenderTarget::getMutableState() const {
+sk_sp<skgpu::MutableTextureStateRef> GrBackendRenderTarget::getMutableState() const {
     return fMutableState;
 }
 
@@ -1272,7 +1274,7 @@ bool GrBackendRenderTarget::getMockRenderTargetInfo(GrMockRenderTargetInfo* outI
     return false;
 }
 
-void GrBackendRenderTarget::setMutableState(const GrBackendSurfaceMutableState& state) {
+void GrBackendRenderTarget::setMutableState(const skgpu::MutableTextureState& state) {
     fMutableState->set(state);
 }
 

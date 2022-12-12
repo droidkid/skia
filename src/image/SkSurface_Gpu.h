@@ -21,6 +21,8 @@ public:
     SkSurface_Gpu(sk_sp<skgpu::v1::Device>);
     ~SkSurface_Gpu() override;
 
+    SkImageInfo imageInfo() const override;
+
     GrRecordingContext* onGetRecordingContext() override;
 
     GrBackendTexture onGetBackendTexture(BackendHandleAccess) override;
@@ -32,14 +34,14 @@ public:
     sk_sp<SkSurface> onNewSurface(const SkImageInfo&) override;
     sk_sp<SkImage> onNewImageSnapshot(const SkIRect* subset) override;
     void onWritePixels(const SkPixmap&, int x, int y) override;
-    void onAsyncRescaleAndReadPixels(const SkImageInfo& info, const SkIRect& srcRect,
+    void onAsyncRescaleAndReadPixels(const SkImageInfo& info, SkIRect srcRect,
                                      RescaleGamma rescaleGamma, RescaleMode,
                                      ReadPixelsCallback callback,
                                      ReadPixelsContext context) override;
     void onAsyncRescaleAndReadPixelsYUV420(SkYUVColorSpace yuvColorSpace,
                                            sk_sp<SkColorSpace> dstColorSpace,
-                                           const SkIRect& srcRect,
-                                           const SkISize& dstSize,
+                                           SkIRect srcRect,
+                                           SkISize dstSize,
                                            RescaleGamma rescaleGamma,
                                            RescaleMode,
                                            ReadPixelsCallback callback,
@@ -48,7 +50,7 @@ public:
     void onDiscard() override;
     void onResolveMSAA() override;
     GrSemaphoresSubmitted onFlush(BackendSurfaceAccess access, const GrFlushInfo& info,
-                                  const GrBackendSurfaceMutableState*) override;
+                                  const skgpu::MutableTextureState*) override;
     bool onWait(int numSemaphores, const GrBackendSemaphore* waitSemaphores,
                  bool deleteSemaphoresAfterWait) override;
     bool onCharacterize(SkSurfaceCharacterization*) const override;

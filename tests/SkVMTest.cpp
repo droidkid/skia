@@ -5,19 +5,36 @@
  * found in the LICENSE file.
  */
 
-#include "include/core/SkColorPriv.h"
+#include "include/core/SkColorType.h"
+#include "include/core/SkData.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSpan.h"
 #include "include/core/SkStream.h"
-#include "include/private/SkColorData.h"
-#include "src/core/SkCpu.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkFloatingPoint.h"
+#include "include/private/SkSLProgramKind.h"
 #include "src/core/SkMSAN.h"
 #include "src/core/SkVM.h"
-#include "src/gpu/ganesh/GrShaderCaps.h"
 #include "src/sksl/SkSLCompiler.h"
+#include "src/sksl/SkSLProgramSettings.h"
+#include "src/sksl/SkSLUtil.h"
 #include "src/sksl/codegen/SkSLVMCodeGenerator.h"
+#include "src/sksl/ir/SkSLFunctionDeclaration.h"
 #include "src/sksl/ir/SkSLProgram.h"
 #include "src/sksl/tracing/SkVMDebugTrace.h"
 #include "src/utils/SkVMVisualizer.h"
 #include "tests/Test.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <initializer_list>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 template <typename Fn>
 static void test_jit_and_interpreter(const skvm::Builder& b, Fn&& test) {
@@ -2787,7 +2804,7 @@ DEF_TEST(SkVM_fast_mul, r) {
             if (i < 4) {
                 REPORTER_ASSERT(r, slow[i] == 0.0f);
             } else {
-                REPORTER_ASSERT(r, isnan(slow[i]));
+                REPORTER_ASSERT(r, std::isnan(slow[i]));
             }
         }
     });
@@ -2855,12 +2872,12 @@ DEF_TEST(SkVM_Visualizer, r) {
     SkSL::ProgramSettings settings;
     auto program = compiler.convertProgram(SkSL::ProgramKind::kGeneric,
                                            std::string(src), settings);
-    const SkSL::FunctionDefinition* main = SkSL::Program_GetFunction(*program, "main");
+    const SkSL::FunctionDeclaration* main = program->getFunction("main");
     SkSL::SkVMDebugTrace d;
     d.setSource(src);
     auto v = std::make_unique<skvm::viz::Visualizer>(&d);
     skvm::Builder b(skvm::Features{}, /*createDuplicates=*/true);
-    SkSL::ProgramToSkVM(*program, *main, &b, &d, /*uniforms=*/{});
+    SkSL::ProgramToSkVM(*program, *main->definition(), &b, &d, /*uniforms=*/{});
 
     skvm::Program p = b.done(nullptr, true, std::move(v));
     SkDynamicMemoryWStream vizFile;

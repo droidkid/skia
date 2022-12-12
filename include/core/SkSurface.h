@@ -32,16 +32,19 @@ class SkPaint;
 class SkSurfaceCharacterization;
 class GrBackendRenderTarget;
 class GrBackendSemaphore;
-class GrBackendSurfaceMutableState;
 class GrBackendTexture;
 class GrDirectContext;
 class GrRecordingContext;
 class GrRenderTarget;
 enum GrSurfaceOrigin: int;
 
+namespace skgpu {
+class MutableTextureState;
+}
+
 namespace skgpu::graphite {
-    class BackendTexture;
-    class Recorder;
+class BackendTexture;
+class Recorder;
 }
 
 /** \class SkSurface
@@ -522,7 +525,7 @@ public:
 
     /** Returns an ImageInfo describing the surface.
      */
-    SkImageInfo imageInfo();
+    virtual SkImageInfo imageInfo() const { return SkImageInfo::MakeUnknown(fWidth, fHeight); }
 
     /** Returns unique value identifying the content of SkSurface. Returned value changes
         each time the content changes. Content is changed by drawing, or by calling
@@ -686,6 +689,35 @@ public:
         example: https://fiddle.skia.org/c/@Surface_makeImageSnapshot_2
      */
     sk_sp<SkImage> makeImageSnapshot(const SkIRect& bounds);
+
+#ifdef SK_GRAPHITE_ENABLED
+    /**
+     * The 'asImage' and 'makeImageCopy' API/entry points are currently only available for
+     * Graphite.
+     *
+     * In this API, SkSurface no longer supports copy-on-write behavior. Instead, when creating
+     * an image for a surface, the client must explicitly indicate if a copy should be made.
+     * In both of the below calls the resource backing the surface will never change.
+     *
+     * The 'asImage' entry point has some major ramifications for the mutability of the
+     * returned SkImage. Since the originating surface and the returned image share the
+     * same backing, care must be taken by the client to ensure that the contents of the image
+     * reflect the desired contents when it is consumed by the gpu.
+     * Note: if the backing GPU buffer isn't textureable this method will return null. Graphite
+     * will not attempt to make a copy.
+     * Note: For 'asImage', the mipmapping of the image will match that of the source surface.
+     *
+     * The 'makeImageCopy' entry point allows subsetting and the addition of mipmaps (since
+     * a copy is already being made).
+     *
+     * In Graphite, the legacy API call (i.e., makeImageSnapshot) will just always make a copy.
+     */
+    sk_sp<SkImage> asImage();
+
+    sk_sp<SkImage> makeImageCopy(const SkIRect* subset = nullptr,
+                                 skgpu::graphite::Mipmapped mipmapped =
+                                                              skgpu::graphite::Mipmapped::kNo);
+#endif
 
     /** Draws SkSurface contents to canvas, with its top-left corner at (x, y).
 
@@ -1034,15 +1066,15 @@ public:
         The GrFlushInfo describes additional options to flush. Please see documentation at
         GrFlushInfo for more info.
 
-        If a GrBackendSurfaceMutableState is passed in, at the end of the flush we will transition
-        the surface to be in the state requested by the GrBackendSurfaceMutableState. If the surface
+        If a skgpu::MutableTextureState is passed in, at the end of the flush we will transition
+        the surface to be in the state requested by the skgpu::MutableTextureState. If the surface
         (or SkImage or GrBackendSurface wrapping the same backend object) is used again after this
         flush the state may be changed and no longer match what is requested here. This is often
         used if the surface will be used for presenting or external use and the client wants backend
         object to be prepped for that use. A finishedProc or semaphore on the GrFlushInfo will also
         include the work for any requested state change.
 
-        If the backend API is Vulkan, the caller can set the GrBackendSurfaceMutableState's
+        If the backend API is Vulkan, the caller can set the skgpu::MutableTextureState's
         VkImageLayout to VK_IMAGE_LAYOUT_UNDEFINED or queueFamilyIndex to VK_QUEUE_FAMILY_IGNORED to
         tell Skia to not change those respective states.
 
@@ -1066,7 +1098,7 @@ public:
         @param access  optional state change request after flush
     */
     GrSemaphoresSubmitted flush(const GrFlushInfo& info,
-                                const GrBackendSurfaceMutableState* newState = nullptr);
+                                const skgpu::MutableTextureState* newState = nullptr);
 #endif // SK_SUPPORT_GPU
 
     void flush();

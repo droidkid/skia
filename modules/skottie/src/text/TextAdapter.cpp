@@ -69,7 +69,7 @@ static float align_factor(SkTextUtils::Align a) {
     }
 
     SkUNREACHABLE;
-};
+}
 
 // Text path semantics
 //
@@ -534,11 +534,15 @@ uint32_t TextAdapter::shaperFlags() const {
 }
 
 void TextAdapter::reshape() {
+    // AE clamps the font size to a reasonable range.
+    // We do the same, since HB is susceptible to int overflows for degenerate values.
+    static constexpr float kMinSize =    0.1f,
+                           kMaxSize = 1296.0f;
     const Shaper::TextDesc text_desc = {
         fText->fTypeface,
-        fText->fTextSize,
-        fText->fMinTextSize,
-        fText->fMaxTextSize,
+        SkTPin(fText->fTextSize,    kMinSize, kMaxSize),
+        SkTPin(fText->fMinTextSize, kMinSize, kMaxSize),
+        SkTPin(fText->fMaxTextSize, kMinSize, kMaxSize),
         fText->fLineHeight,
         fText->fLineShift,
         fText->fAscent,
@@ -672,7 +676,7 @@ void TextAdapter::onSync() {
         float total_tracking = 0;
 
         // Only compute these when needed.
-        if (fRequiresLineAdjustments) {
+        if (fRequiresLineAdjustments && line_span.fCount) {
             for (size_t i = line_span.fOffset; i < line_span.fOffset + line_span.fCount; ++i) {
                 const auto& props = buf[i].props;
                 total_spacing  += props.line_spacing;

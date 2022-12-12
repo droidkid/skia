@@ -122,8 +122,8 @@ public:
     // equal to the proxy bounds. This is because the render pass will have to do a full size
     // resolve back into the single sample FBO when rendering is complete.
     void drawSingleIntoMSAAFBO(GrGLRenderTarget* rt, const SkIRect& drawBounds) {
-        this->copySurfaceAsDraw(rt, true/*drawToMultisampleFBO*/, rt, drawBounds,
-                                drawBounds.topLeft());
+        this->copySurfaceAsDraw(rt, true/*drawToMultisampleFBO*/, rt, drawBounds, drawBounds,
+                                GrSamplerState::Filter::kNearest);
     }
 
     // The GrGLOpsRenderPass does not buffer up draws before submitting them to the gpu.
@@ -216,6 +216,10 @@ public:
 
     // Version for programs that aren't GrGLProgram.
     void flushProgram(GrGLuint);
+
+    // GrGLOpsRenderPass directly makes GL draws. GrGLGpu uses this notification to mark the
+    // destination surface dirty if color writes are enabled.
+    void didDrawTo(GrRenderTarget*);
 
 private:
     GrGLGpu(std::unique_ptr<GrGLContext>, GrDirectContext*);
@@ -367,8 +371,9 @@ private:
 
     bool onRegenerateMipMapLevels(GrTexture*) override;
 
-    bool onCopySurface(GrSurface* dst, GrSurface* src, const SkIRect& srcRect,
-                       const SkIPoint& dstPoint) override;
+    bool onCopySurface(GrSurface* dst, const SkIRect& dstRect,
+                       GrSurface* src, const SkIRect& srcRect,
+                       GrSamplerState::Filter) override;
 
     // binds texture unit in GL
     void setTextureUnit(int unitIdx);
@@ -393,11 +398,11 @@ private:
     bool waitSync(GrGLsync, uint64_t timeout, bool flush);
 
     bool copySurfaceAsDraw(GrSurface* dst, bool drawToMultisampleFBO, GrSurface* src,
-                           const SkIRect& srcRect, const SkIPoint& dstPoint);
+                           const SkIRect& srcRect, const SkIRect& dstRect, GrSamplerState::Filter);
     void copySurfaceAsCopyTexSubImage(GrSurface* dst, GrSurface* src, const SkIRect& srcRect,
                                       const SkIPoint& dstPoint);
     bool copySurfaceAsBlitFramebuffer(GrSurface* dst, GrSurface* src, const SkIRect& srcRect,
-                                      const SkIPoint& dstPoint);
+                                      const SkIRect& dstRect, GrSamplerState::Filter);
 
     class ProgramCache : public GrThreadSafePipelineBuilder {
     public:
@@ -455,14 +460,7 @@ private:
     // and the binding for 'target' will change.
     void bindTextureToScratchUnit(GrGLenum target, GrGLint textureID);
 
-    // The passed bounds contains the render target's color values that will subsequently be
-    // written.
-    void flushRenderTarget(GrGLRenderTarget*, bool useMultisampleFBO, GrSurfaceOrigin,
-                           const SkIRect& bounds);
-    // This version has an implicit bounds of the entire render target.
     void flushRenderTarget(GrGLRenderTarget*, bool useMultisampleFBO);
-    // This version can be used when the render target's colors will not be written.
-    void flushRenderTargetNoColorWrites(GrGLRenderTarget*, bool useMultisampleFBO);
 
     void flushStencil(const GrStencilSettings&, GrSurfaceOrigin);
     void disableStencil();

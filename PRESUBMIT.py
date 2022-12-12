@@ -242,6 +242,24 @@ def _RegenerateAllExamplesCPP(input_api, output_api):
     )]
   return results
 
+
+def _CheckGeneratedBazelBUILDFiles(input_api, output_api):
+    if 'win32' in sys.platform:
+      # TODO(crbug.com/skia/12541): Remove when Bazel builds work on Windows.
+      # Note: `make` is not installed on Windows by default.
+      return []
+    if 'darwin' in sys.platform:
+      # This takes too long on Mac with default settings. Probably due to sandboxing.
+      return []
+    for affected_file in input_api.AffectedFiles(include_deletes=True):
+      affected_file_path = affected_file.LocalPath()
+      if (affected_file_path.endswith('.go') or
+          affected_file_path.endswith('BUILD.bazel')):
+        return _RunCommandAndCheckGitDiff(output_api,
+                                          ['make', '-C', 'bazel', 'generate_go'])
+    return []  # No modified Go source files.
+
+
 def _CheckBazelBUILDFiles(input_api, output_api):
   """Makes sure our BUILD.bazel files are compatible with G3."""
   results = []
@@ -250,7 +268,9 @@ def _CheckBazelBUILDFiles(input_api, output_api):
     is_bazel = affected_file_path.endswith('BUILD.bazel')
     # This list lines up with the one in autoroller_lib.py (see G3).
     excluded_paths = ["infra/", "bazel/rbe/", "bazel/external/", "bazel/common_config_settings/",
-                      "modules/canvaskit/go/", "experimental/", "bazel/platform", "third_party/"]
+                      "modules/canvaskit/go/", "experimental/", "bazel/platform", "third_party/",
+                      "tests/", "resources/", "bazel/deps_parser/", "bazel/exporter_tool/",
+                      "tools/gpu/gl/interface/", "bazel/utils/"]
     is_excluded = any(affected_file_path.startswith(n) for n in excluded_paths)
     if is_bazel and not is_excluded:
       with open(affected_file_path, 'r') as file:
@@ -330,6 +350,37 @@ def _RunCommandAndCheckGitDiff(output_api, command):
   return results
 
 
+def _CheckGNIGenerated(input_api, output_api):
+  """Ensures that the generated *.gni files are current.
+
+  The Bazel project files are authoritative and some *.gni files are
+  generated from them using the exporter_tool. This check ensures they
+  are still current.
+  """
+  if 'win32' in sys.platform:
+    # TODO(crbug.com/skia/12541): Remove when Bazel builds work on Windows.
+    # Note: `make` is not installed on Windows by default.
+    return [
+        output_api.PresubmitPromptWarning(
+            'Skipping Bazel=>GNI export check on Windows (unsupported platform).'
+        )
+    ]
+  if 'darwin' in sys.platform:
+      # This takes too long on Mac with default settings. Probably due to sandboxing.
+      return []
+  for affected_file in input_api.AffectedFiles(include_deletes=True):
+    affected_file_path = affected_file.LocalPath()
+    if affected_file_path.endswith('BUILD.bazel') or affected_file_path.endswith('.gni'):
+      # Generate GNI files and verify no changes.
+      results = _RunCommandAndCheckGitDiff(output_api,
+              ['make', '-C', 'bazel', 'generate_gni'])
+      if results:
+        return results
+
+  # No Bazel build files changed.
+  return []
+
+
 def _CheckBuildifier(input_api, output_api):
   """Runs Buildifier and fails on linting errors, or if it produces any diffs.
 
@@ -360,6 +411,79 @@ def _CheckBuildifier(input_api, output_api):
     output_api, ['buildifier', '--mode=fix', '--lint=warn'] + files)
 
 
+def _CheckBannedAPIs(input_api, output_api):
+  """Check source code for functions and packages that should not be used."""
+
+  # A list of tuples of a regex to match an API and a suggested replacement for
+  # that API. There is an optional third parameter for files which *can* use this
+  # API without warning.
+  banned_replacements = [
+    (r'std::stof\(', 'std::strtof(), which does not throw'),
+    (r'std::stod\(', 'std::strtod(), which does not throw'),
+    (r'std::stold\(', 'std::strtold(), which does not throw'),
+  ]
+
+  compiled_replacements = []
+  for rep in banned_replacements:
+    exceptions = []
+    if len(rep) == 3:
+      (re, replacement, exceptions) = rep
+    else:
+      (re, replacement) = rep
+
+    compiled_re = input_api.re.compile(re)
+    compiled_exceptions = [input_api.re.compile(exc) for exc in exceptions]
+    compiled_replacements.append(
+        (compiled_re, replacement, compiled_exceptions))
+
+  errors = []
+  file_filter = lambda x: (x.LocalPath().endswith('.h') or
+                           x.LocalPath().endswith('.cpp') or
+                           x.LocalPath().endswith('.cc') or
+                           x.LocalPath().endswith('.m') or
+                           x.LocalPath().endswith('.mm'))
+  for affected_file in input_api.AffectedSourceFiles(file_filter):
+    affected_filepath = affected_file.LocalPath()
+    for (line_num, line) in affected_file.ChangedContents():
+      for (re, replacement, exceptions) in compiled_replacements:
+        match = re.search(line)
+        if match:
+          for exc in exceptions:
+            if exc.search(affected_filepath):
+              break
+          else:
+            errors.append('%s:%s: Instead of %s, please use %s.' % (
+                affected_filepath, line_num, match.group(), replacement))
+
+  if errors:
+    return [output_api.PresubmitError('\n'.join(errors))]
+
+  return []
+
+
+def _CheckDEPS(input_api, output_api):
+  """If DEPS was modified, run the deps_parser to update bazel/deps.bzl"""
+  needs_running = False
+  for affected_file in input_api.AffectedFiles(include_deletes=False):
+    affected_file_path = affected_file.LocalPath()
+    if affected_file_path.endswith('DEPS') or affected_file_path.endswith('deps.bzl'):
+      needs_running = True
+      break
+  if not needs_running:
+    return []
+  try:
+    subprocess.check_output(
+        ['bazelisk', '--version'],
+        stderr=subprocess.STDOUT)
+  except:
+    return [output_api.PresubmitNotifyResult(
+      'Skipping DEPS check because bazelisk is not on PATH. \n' +
+      'You can download it from https://github.com/bazelbuild/bazelisk/releases/tag/v1.14.0')]
+
+  return _RunCommandAndCheckGitDiff(
+    output_api, ['bazelisk', 'run', '//bazel/deps_parser'])
+
+
 def _CommonChecks(input_api, output_api):
   """Presubmit checks common to upload and commit."""
   results = []
@@ -388,6 +512,7 @@ def _CommonChecks(input_api, output_api):
   results.extend(_CheckGitConflictMarkers(input_api, output_api))
   results.extend(_RegenerateAllExamplesCPP(input_api, output_api))
   results.extend(_CheckBazelBUILDFiles(input_api, output_api))
+  results.extend(_CheckBannedAPIs(input_api, output_api))
   return results
 
 
@@ -404,6 +529,11 @@ def CheckChangeOnUpload(input_api, output_api):
   results.extend(_CheckPublicBzl(input_api, output_api))
   # Buildifier might not be on the CI machines.
   results.extend(_CheckBuildifier(input_api, output_api))
+  # We don't want this to block the CQ (for now).
+  results.extend(_CheckDEPS(input_api, output_api))
+  # Bazelisk is not yet included in the Presubmit job.
+  results.extend(_CheckGeneratedBazelBUILDFiles(input_api, output_api))
+  results.extend(_CheckGNIGenerated(input_api, output_api))
   return results
 
 

@@ -21,17 +21,15 @@
 #include "src/core/SkWriteBuffer.h"
 #include "src/image/SkImage_Base.h"
 #include "src/shaders/SkBitmapProcShader.h"
+#include "src/shaders/SkLocalMatrixShader.h"
 #include "src/shaders/SkTransformShader.h"
-
-#ifdef SK_ENABLE_SKSL
 
 #ifdef SK_GRAPHITE_ENABLED
 #include "src/gpu/graphite/ImageUtils.h"
-#endif
-
-#include "src/core/SkKeyContext.h"
-#include "src/core/SkKeyHelpers.h"
-#include "src/core/SkPaintParamsKey.h"
+#include "src/gpu/graphite/KeyContext.h"
+#include "src/gpu/graphite/KeyHelpers.h"
+#include "src/gpu/graphite/PaintParamsKey.h"
+#include "src/gpu/graphite/TextureProxyView.h"
 #endif
 
 SkM44 SkImageShader::CubicResamplerMatrix(float B, float C) {
@@ -86,11 +84,9 @@ SkImageShader::SkImageShader(sk_sp<SkImage> img,
                              const SkRect& subset,
                              SkTileMode tmx, SkTileMode tmy,
                              const SkSamplingOptions& sampling,
-                             const SkMatrix* localMatrix,
                              bool raw,
                              bool clampAsIfUnpremul)
-        : INHERITED(localMatrix)
-        , fImage(std::move(img))
+        : fImage(std::move(img))
         , fSampling(sampling)
         , fTileModeX(optimize(tmx, fImage->width()))
         , fTileModeY(optimize(tmy, fImage->height()))
@@ -140,7 +136,9 @@ sk_sp<SkFlattenable> SkImageShader::CreateProc(SkReadBuffer& buffer) {
     }
 
     SkMatrix localMatrix;
-    buffer.readMatrix(&localMatrix);
+    if (buffer.isVersionLT(SkPicturePriv::Version::kNoShaderLocalMatrix)) {
+        buffer.readMatrix(&localMatrix);
+    }
     sk_sp<SkImage> img = buffer.readImage();
     if (!img) {
         return nullptr;
@@ -162,7 +160,6 @@ void SkImageShader::flatten(SkWriteBuffer& buffer) const {
 
     buffer.writeSampling(fSampling);
 
-    buffer.writeMatrix(this->getLocalMatrix());
     buffer.writeImage(fImage.get());
     SkASSERT(fClampAsIfUnpremul == false);
 
@@ -274,7 +271,7 @@ SkShaderBase::Context* SkImageShader::onMakeContext(const ContextRec& rec,
 
 SkImage* SkImageShader::onIsAImage(SkMatrix* texM, SkTileMode xy[]) const {
     if (texM) {
-        *texM = this->getLocalMatrix();
+        *texM = SkMatrix::I();
     }
     if (xy) {
         xy[0] = fTileModeX;
@@ -302,9 +299,14 @@ sk_sp<SkShader> SkImageShader::MakeRaw(sk_sp<SkImage> image,
     if (!image) {
         return SkShaders::Empty();
     }
-    return sk_sp<SkShader>{new SkImageShader(
-            image, SkRect::Make(image->dimensions()), tmx, tmy, options, localMatrix,
-            /*raw=*/true, /*clampAsIfUnpremul=*/false)};
+    auto subset = SkRect::Make(image->dimensions());
+    return SkLocalMatrixShader::MakeWrapped<SkImageShader>(localMatrix,
+                                                           image,
+                                                           subset,
+                                                           tmx, tmy,
+                                                           options,
+                                                           /*raw=*/true,
+                                                           /*clampAsIfUnpremul=*/false);
 }
 
 sk_sp<SkShader> SkImageShader::MakeSubset(sk_sp<SkImage> image,
@@ -331,8 +333,13 @@ sk_sp<SkShader> SkImageShader::MakeSubset(sk_sp<SkImage> image,
     }
     // TODO(skbug.com/12784): GPU-only for now since it's only supported in onAsFragmentProcessor()
     SkASSERT(!needs_subset(image.get(), subset) || image->isTextureBacked());
-    return sk_sp<SkShader>{new SkImageShader(
-            image, subset, tmx, tmy, options, localMatrix, /*raw=*/false, clampAsIfUnpremul)};
+    return SkLocalMatrixShader::MakeWrapped<SkImageShader>(localMatrix,
+                                                           std::move(image),
+                                                           subset,
+                                                           tmx, tmy,
+                                                           options,
+                                                           /*raw=*/false,
+                                                           clampAsIfUnpremul);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -345,9 +352,9 @@ sk_sp<SkShader> SkImageShader::MakeSubset(sk_sp<SkImage> image,
 
 std::unique_ptr<GrFragmentProcessor> SkImageShader::asFragmentProcessor(
         const GrFPArgs& args) const {
-    const auto lm = this->totalLocalMatrix(args.fLocalMatrix);
+    const auto& lm = args.fLocalMatrix ? *args.fLocalMatrix : SkMatrix::I();
     SkMatrix lmInverse;
-    if (!lm->invert(&lmInverse)) {
+    if (!lm.invert(&lmInverse)) {
         return nullptr;
     }
 
@@ -379,14 +386,14 @@ std::unique_ptr<GrFragmentProcessor> SkImageShader::asFragmentProcessor(
 
 #endif
 
-#ifdef SK_ENABLE_SKSL
-void SkImageShader::addToKey(const SkKeyContext& keyContext,
-                             SkPaintParamsKeyBuilder* builder,
-                             SkPipelineDataGatherer* gatherer) const {
-    ImageShaderBlock::ImageData imgData(fSampling, fTileModeX, fTileModeY, fSubset,
-                                        this->getLocalMatrix());
-
 #ifdef SK_GRAPHITE_ENABLED
+void SkImageShader::addToKey(const skgpu::graphite::KeyContext& keyContext,
+                             skgpu::graphite::PaintParamsKeyBuilder* builder,
+                             skgpu::graphite::PipelineDataGatherer* gatherer) const {
+    using namespace skgpu::graphite;
+
+    ImageShaderBlock::ImageData imgData(fSampling, fTileModeX, fTileModeY, fSubset);
+
     auto [ imageToDraw, newSampling ] = skgpu::graphite::GetGraphiteBacked(keyContext.recorder(),
                                                                            fImage.get(),
                                                                            fSampling);
@@ -400,9 +407,8 @@ void SkImageShader::addToKey(const SkKeyContext& keyContext,
         auto [view, _] = as_IB(imageToDraw)->asView(keyContext.recorder(), mipmapped);
         imgData.fTextureProxy = view.refProxy();
     }
-#endif
 
-    ImageShaderBlock::BeginBlock(keyContext, builder, gatherer, imgData);
+    ImageShaderBlock::BeginBlock(keyContext, builder, gatherer, &imgData);
     builder->endBlock();
 }
 #endif
@@ -463,23 +469,8 @@ static SkSamplingOptions tweak_sampling(SkSamplingOptions sampling, const SkMatr
     return SkSamplingOptions(filter, sampling.mipmap);
 }
 
-static SkMatrix tweak_inv_matrix(SkFilterMode filter, SkMatrix matrix) {
-    // See skia:4649 and the GM image_scale_aligned.
-    if (filter == SkFilterMode::kNearest) {
-        if (matrix.getScaleX() >= 0) {
-            matrix.setTranslateX(nextafterf(matrix.getTranslateX(),
-                                            floorf(matrix.getTranslateX())));
-        }
-        if (matrix.getScaleY() >= 0) {
-            matrix.setTranslateY(nextafterf(matrix.getTranslateY(),
-                                            floorf(matrix.getTranslateY())));
-        }
-    }
-    return matrix;
-}
-
 bool SkImageShader::doStages(const SkStageRec& rec, TransformShader* updater) const {
-    SkASSERT(!needs_subset(fImage.get(), fSubset)); // TODO(skbug.com/12784)
+    SkASSERT(!needs_subset(fImage.get(), fSubset));  // TODO(skbug.com/12784)
     // We only support certain sampling options in stages so far
     auto sampling = fSampling;
     if (sampling.isAniso()) {
@@ -524,7 +515,6 @@ bool SkImageShader::doStages(const SkStageRec& rec, TransformShader* updater) co
             if (rec.fMatrixProvider.localToDeviceHitsPixelCenters()) {
                 sampling = tweak_sampling(sampling, sampleM);
             }
-            sampleM = tweak_inv_matrix(sampling.filter, sampleM);
         }
         p->append_matrix(alloc, sampleM);
     }
@@ -532,8 +522,16 @@ bool SkImageShader::doStages(const SkStageRec& rec, TransformShader* updater) co
     auto gather = alloc->make<SkRasterPipeline_GatherCtx>();
     gather->pixels = pm.addr();
     gather->stride = pm.rowBytesAsPixels();
-    gather->width  = pm.width();
+    gather->width = pm.width();
     gather->height = pm.height();
+    // Our rasterizer biases upward. That is a rect from 0.5...1.5 fills pixel 1 and not pixel 0.
+    // To make an image that is mapped 1:1 with device pixels but at a half pixel offset select
+    // every pixel from the src image once we make exact integer pixel sample values round down not
+    // up. Note that a mirror mapping will not have this property.
+    if (!sampling.useCubic && sampling.filter == SkFilterMode::kNearest) {
+        gather->coordBiasInULPs = -1;
+    }
+
     if (sampling.useCubic) {
         CubicResamplerMatrix(sampling.cubic.B, sampling.cubic.C).getColMajor(gather->weights);
     }
@@ -678,8 +676,8 @@ bool SkImageShader::doStages(const SkStageRec& rec, TransformShader* updater) co
 
     SkRasterPipeline_SamplerCtx* sampler = alloc->make<SkRasterPipeline_SamplerCtx>();
 
-    auto sample = [&](SkRasterPipeline::StockStage setup_x,
-                      SkRasterPipeline::StockStage setup_y) {
+    auto sample = [&](SkRasterPipeline::Stage setup_x,
+                      SkRasterPipeline::Stage setup_y) {
         p->append(setup_x, sampler);
         p->append(setup_y, sampler);
         append_tiling_and_gather();
@@ -779,7 +777,6 @@ skvm::Color SkImageShader::makeProgram(
         if (matrices.localToDeviceHitsPixelCenters()) {
             sampling = tweak_sampling(sampling, upperInv);
         }
-        upperInv = tweak_inv_matrix(sampling.filter, upperInv);
     }
 
     SkPixmap lowerPixmap;
@@ -974,6 +971,12 @@ skvm::Color SkImageShader::makeProgram(
                         lerp(sample_texel(u, left,bottom), sample_texel(u, right,bottom), fx), fy);
         } else {
             SkASSERT(sampling.filter == SkFilterMode::kNearest);
+            // Our rasterizer biases upward. That is a rect from 0.5...1.5 fills pixel 1 and not
+            // pixel 0. To make an image that is mapped 1:1 with device pixels but at a half pixel
+            // offset select every pixel from the src image once we make exact integer pixel sample
+            // values round down not up. Note that a mirror mapping will not have this property.
+            local.x = skvm::pun_to_F32(skvm::pun_to_I32(local.x) - 1);
+            local.y = skvm::pun_to_F32(skvm::pun_to_I32(local.y) - 1);
             return sample_texel(u, local.x,local.y);
         }
     };

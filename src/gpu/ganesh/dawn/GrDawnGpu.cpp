@@ -12,6 +12,7 @@
 #include "include/gpu/GrBackendSurface.h"
 #include "include/gpu/GrContextOptions.h"
 #include "include/gpu/GrDirectContext.h"
+#include "include/private/SkSLProgramKind.h"
 #include "src/core/SkConvertPixels.h"
 #include "src/gpu/ganesh/GrDataUtils.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
@@ -32,6 +33,7 @@
 #include "src/gpu/ganesh/dawn/GrDawnRenderTarget.h"
 #include "src/gpu/ganesh/dawn/GrDawnTexture.h"
 #include "src/gpu/ganesh/dawn/GrDawnUtil.h"
+#include "src/sksl/SkSLProgramSettings.h"
 
 #include "src/core/SkAutoMalloc.h"
 #include "src/core/SkMipmap.h"
@@ -641,13 +643,15 @@ static wgpu::Texture get_dawn_texture_from_surface(GrSurface* src) {
     }
 }
 
-bool GrDawnGpu::onCopySurface(GrSurface* dst,
-                              GrSurface* src,
-                              const SkIRect& srcRect,
-                              const SkIPoint& dstPoint) {
+bool GrDawnGpu::onCopySurface(GrSurface* dst, const SkIRect& dstRect,
+                              GrSurface* src, const SkIRect& srcRect,
+                              GrSamplerState::Filter) {
     wgpu::Texture srcTexture = get_dawn_texture_from_surface(src);
     wgpu::Texture dstTexture = get_dawn_texture_from_surface(dst);
     if (!srcTexture || !dstTexture) {
+        return false;
+    }
+    if (srcRect.size() != dstRect.size()) {
         return false;
     }
 
@@ -657,7 +661,7 @@ bool GrDawnGpu::onCopySurface(GrSurface* dst,
     srcTextureView.texture = srcTexture;
     srcTextureView.origin = {(uint32_t) srcRect.x(), (uint32_t) srcRect.y(), 0};
     dstTextureView.texture = dstTexture;
-    dstTextureView.origin = {(uint32_t) dstPoint.x(), (uint32_t) dstPoint.y(), 0};
+    dstTextureView.origin = {(uint32_t) dstRect.x(), (uint32_t) dstRect.y(), 0};
 
     wgpu::Extent3D copySize = {width, height, 1};
     this->getCopyEncoder().CopyTextureToTexture(&srcTextureView, &dstTextureView, &copySize);
@@ -749,7 +753,7 @@ bool GrDawnGpu::onRegenerateMipMapLevels(GrTexture* tex) {
     wgpu::Texture dstTexture = fDevice.CreateTexture(&texDesc);
 
     const char* vs =
-        "layout(location = 0) out float2 texCoord;"
+        "layout(spirv, location = 0) out float2 texCoord;"
         "float2 positions[4] = float2[4](float2(-1.0, 1.0),"
                                         "float2(1.0, 1.0),"
                                         "float2(-1.0, -1.0),"
@@ -768,8 +772,8 @@ bool GrDawnGpu::onRegenerateMipMapLevels(GrTexture* tex) {
                                             nullptr);
 
     const char* fs =
-        "layout(set = 0, binding = 0) uniform sampler samp;"
-        "layout(set = 0, binding = 1) uniform texture2D tex;"
+        "layout(spirv, set = 0, binding = 0) uniform sampler samp;"
+        "layout(spirv, set = 0, binding = 1) uniform texture2D tex;"
         "layout(location = 0) in float2 texCoord;"
         "void main() {"
             "sk_FragColor = sample(makeSampler2D(tex, samp), texCoord);"

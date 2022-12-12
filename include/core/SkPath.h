@@ -10,18 +10,25 @@
 
 #include "include/core/SkMatrix.h"
 #include "include/core/SkPathTypes.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkTemplates.h"
 #include "include/private/SkTo.h"
 
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
 #include <initializer_list>
 #include <tuple>
+#include <type_traits>
 
-class SkAutoPathBoundsUpdate;
 class SkData;
 class SkPathRef;
 class SkRRect;
 class SkWStream;
-
 enum class SkPathConvexity;
 enum class SkPathFirstDirection;
 
@@ -1756,6 +1763,8 @@ public:
     */
     bool isValid() const;
 
+    using sk_is_trivially_relocatable = std::true_type;
+
 private:
     SkPath(sk_sp<SkPathRef>, SkPathFillType, bool isVolatile, SkPathConvexity,
            SkPathFirstDirection firstDirection);
@@ -1766,6 +1775,8 @@ private:
     mutable std::atomic<uint8_t>   fFirstDirection; // SkPathFirstDirection
     uint8_t                        fFillType    : 2;
     uint8_t                        fIsVolatile  : 1;
+
+    static_assert(::sk_is_trivially_relocatable<decltype(fPathRef)>::value);
 
     /** Resets all fields other than fPathRef to their initial 'empty' values.
      *  Assumes the caller has already emptied fPathRef.

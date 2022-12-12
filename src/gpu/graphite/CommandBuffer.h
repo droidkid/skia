@@ -40,9 +40,9 @@ class Sampler;
 class Texture;
 class TextureProxy;
 
-class CommandBuffer : public SkRefCnt {
+class CommandBuffer {
 public:
-    ~CommandBuffer() override;
+    virtual ~CommandBuffer();
 
 #ifdef SK_DEBUG
     bool hasWork() { return fHasWork; }
@@ -50,7 +50,10 @@ public:
 
     void trackResource(sk_sp<Resource> resource);
     // Release all tracked Resources
-    void releaseResources();
+    void resetCommandBuffer();
+
+    // If any work is needed to create new resources for a fresh command buffer do that here.
+    virtual bool setNewCommandBufferResources() = 0;
 
     void addFinishedProc(sk_sp<RefCntedCallback> finishedProc);
     void callFinishedProcs(bool success);
@@ -59,6 +62,7 @@ public:
                        sk_sp<Texture> colorTexture,
                        sk_sp<Texture> resolveTexture,
                        sk_sp<Texture> depthStencilTexture,
+                       SkRect viewport,
                        const std::vector<std::unique_ptr<DrawPass>>& drawPasses);
 
     bool addComputePass(const ComputePassDesc&,
@@ -68,6 +72,11 @@ public:
     //---------------------------------------------------------------
     // Can only be used outside renderpasses
     //---------------------------------------------------------------
+    bool copyBufferToBuffer(sk_sp<Buffer> srcBuffer,
+                            size_t srcOffset,
+                            sk_sp<Buffer> dstBuffer,
+                            size_t dstOffset,
+                            size_t size);
     bool copyTextureToBuffer(sk_sp<Texture>,
                              SkIRect srcRect,
                              sk_sp<Buffer>,
@@ -77,6 +86,10 @@ public:
                              sk_sp<Texture>,
                              const BufferTextureCopyData*,
                              int count);
+    bool copyTextureToTexture(sk_sp<Texture> src,
+                              SkIRect srcRect,
+                              sk_sp<Texture> dst,
+                              SkIPoint dstPoint);
     bool synchronizeBufferToCpu(sk_sp<Buffer>);
 
 #ifdef SK_ENABLE_PIET_GPU
@@ -87,16 +100,27 @@ protected:
     CommandBuffer();
 
 private:
+    // Release all tracked Resources
+    void releaseResources();
+
+    virtual void onResetCommandBuffer() = 0;
+
     virtual bool onAddRenderPass(const RenderPassDesc&,
                                  const Texture* colorTexture,
                                  const Texture* resolveTexture,
                                  const Texture* depthStencilTexture,
+                                 SkRect viewport,
                                  const std::vector<std::unique_ptr<DrawPass>>& drawPasses) = 0;
 
     virtual bool onAddComputePass(const ComputePassDesc&,
                                   const ComputePipeline*,
                                   const std::vector<ResourceBinding>& bindings) = 0;
 
+    virtual bool onCopyBufferToBuffer(const Buffer* srcBuffer,
+                                      size_t srcOffset,
+                                      const Buffer* dstBuffer,
+                                      size_t dstOffset,
+                                      size_t size) = 0;
     virtual bool onCopyTextureToBuffer(const Texture*,
                                        SkIRect srcRect,
                                        const Buffer*,
@@ -106,6 +130,10 @@ private:
                                        const Texture*,
                                        const BufferTextureCopyData*,
                                        int count) = 0;
+    virtual bool onCopyTextureToTexture(const Texture* src,
+                                        SkIRect srcRect,
+                                        const Texture* dst,
+                                        SkIPoint dstPoint) = 0;
     virtual bool onSynchronizeBufferToCpu(const Buffer*, bool* outDidResultInWork) = 0;
 
 #ifdef SK_ENABLE_PIET_GPU

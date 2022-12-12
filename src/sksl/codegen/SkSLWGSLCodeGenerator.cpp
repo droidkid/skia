@@ -15,15 +15,15 @@
 #include "include/core/SkSpan.h"
 #include "include/core/SkTypes.h"
 #include "include/private/SkBitmaskEnum.h"
+#include "include/private/SkSLIRNode.h"
 #include "include/private/SkSLLayout.h"
 #include "include/private/SkSLModifiers.h"
 #include "include/private/SkSLProgramElement.h"
-#include "include/private/SkSLProgramKind.h"
 #include "include/private/SkSLStatement.h"
 #include "include/private/SkSLString.h"
 #include "include/private/SkSLSymbol.h"
-#include "include/private/SkTArray.h"
 #include "include/sksl/SkSLErrorReporter.h"
+#include "include/sksl/SkSLOperator.h"
 #include "include/sksl/SkSLPosition.h"
 #include "src/sksl/SkSLAnalysis.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
@@ -60,6 +60,9 @@
 #define DUMP_SRC_IR 0
 
 namespace SkSL {
+
+enum class ProgramKind : int8_t;
+
 namespace {
 
 // See https://www.w3.org/TR/WGSL/#memory-view-types
@@ -248,8 +251,8 @@ std::optional<WGSLCodeGenerator::Builtin> builtin_from_sksl_name(int builtin) {
     return std::nullopt;
 }
 
-std::shared_ptr<SymbolTable> top_level_symbol_table(const FunctionDefinition& f) {
-    return f.body()->as<Block>().symbolTable()->fParent;
+const SymbolTable* top_level_symbol_table(const FunctionDefinition& f) {
+    return f.body()->as<Block>().symbolTable()->fParent.get();
 }
 
 const char* delimiter_to_str(WGSLCodeGenerator::Delimiter delimiter) {
@@ -377,14 +380,13 @@ int count_pipeline_inputs(const Program* program) {
     int inputCount = 0;
     for (const ProgramElement* e : program->elements()) {
         if (e->is<GlobalVarDeclaration>()) {
-            const Variable& v =
-                    e->as<GlobalVarDeclaration>().declaration()->as<VarDeclaration>().var();
-            if (v.modifiers().fFlags & Modifiers::kIn_Flag) {
+            const Variable* v = e->as<GlobalVarDeclaration>().varDeclaration().var();
+            if (v->modifiers().fFlags & Modifiers::kIn_Flag) {
                 inputCount++;
             }
         } else if (e->is<InterfaceBlock>()) {
-            const Variable& v = e->as<InterfaceBlock>().variable();
-            if (v.modifiers().fFlags & Modifiers::kIn_Flag) {
+            const Variable* v = e->as<InterfaceBlock>().var();
+            if (v->modifiers().fFlags & Modifiers::kIn_Flag) {
                 inputCount++;
             }
         }
@@ -546,20 +548,19 @@ void WGSLCodeGenerator::writeFunctionDeclaration(const FunctionDeclaration& f) {
     this->write("fn ");
     this->write(f.mangledName());
     this->write("(");
-    const char* separator = "";
+    auto separator = SkSL::String::Separator();
     FunctionDependencies* deps = fRequirements.dependencies.find(&f);
     if (deps) {
         std::string_view structNamePrefix = pipeline_struct_prefix(fProgram.fConfig->fKind);
         if (structNamePrefix.length() != 0) {
             if ((*deps & FunctionDependencies::kPipelineInputs) != FunctionDependencies::kNone) {
-                separator = ", ";
+                this->write(separator());
                 this->write("_stageIn: ");
                 this->write(structNamePrefix);
                 this->write("In");
             }
             if ((*deps & FunctionDependencies::kPipelineOutputs) != FunctionDependencies::kNone) {
-                this->write(separator);
-                separator = ", ";
+                this->write(separator());
                 this->write("_stageOut: ptr<function, ");
                 this->write(structNamePrefix);
                 this->write("Out>");
@@ -567,8 +568,7 @@ void WGSLCodeGenerator::writeFunctionDeclaration(const FunctionDeclaration& f) {
         }
     }
     for (const Variable* param : f.parameters()) {
-        this->write(separator);
-        separator = ", ";
+        this->write(separator());
         this->writeName(param->mangledName());
         this->write(": ");
 
@@ -621,8 +621,8 @@ void WGSLCodeGenerator::writeEntryPoint(const FunctionDefinition& main) {
 
     // Generate assignment to sk_FragColor built-in if the user-defined main returns a color.
     if (ProgramConfig::IsFragment(fProgram.fConfig->fKind)) {
-        auto symbolTable = top_level_symbol_table(main);
-        const Symbol* symbol = (*symbolTable)["sk_FragColor"];
+        const SymbolTable* symbolTable = top_level_symbol_table(main);
+        const Symbol* symbol = symbolTable->find("sk_FragColor");
         SkASSERT(symbol);
         if (main.declaration().returnType().matches(symbol->type())) {
             this->write("_stageOut.sk_FragColor = ");
@@ -632,16 +632,15 @@ void WGSLCodeGenerator::writeEntryPoint(const FunctionDefinition& main) {
     // Generate the function call to the user-defined main:
     this->write(main.declaration().mangledName());
     this->write("(");
-    const char* separator = "";
+    auto separator = SkSL::String::Separator();
     FunctionDependencies* deps = fRequirements.dependencies.find(&main.declaration());
     if (deps) {
         if ((*deps & FunctionDependencies::kPipelineInputs) != FunctionDependencies::kNone) {
-            separator = ", ";
+            this->write(separator());
             this->write("_stageIn");
         }
         if ((*deps & FunctionDependencies::kPipelineOutputs) != FunctionDependencies::kNone) {
-            this->write(separator);
-            separator = ", ";
+            this->write(separator());
             this->write("&_stageOut");
         }
     }
@@ -657,8 +656,7 @@ void WGSLCodeGenerator::writeEntryPoint(const FunctionDefinition& main) {
                 return;
             }
 
-            this->write(separator);
-            separator = ", ";
+            this->write(separator());
             this->write("_stageIn.sk_FragCoord.xy");
         }
     }
@@ -684,7 +682,8 @@ void WGSLCodeGenerator::writeStatement(const Statement& s) {
             this->writeVarDeclaration(s.as<VarDeclaration>());
             break;
         default:
-            SkDEBUGFAILF("unsupported statement (kind: %d) %s", s.kind(), s.description().c_str());
+            SkDEBUGFAILF("unsupported statement (kind: %d) %s",
+                         static_cast<int>(s.kind()), s.description().c_str());
             break;
     }
 }
@@ -730,15 +729,15 @@ void WGSLCodeGenerator::writeReturnStatement(const ReturnStatement& s) {
 }
 
 void WGSLCodeGenerator::writeVarDeclaration(const VarDeclaration& varDecl) {
-    bool isConst = varDecl.var().modifiers().fFlags & Modifiers::kConst_Flag;
+    bool isConst = varDecl.var()->modifiers().fFlags & Modifiers::kConst_Flag;
     if (isConst) {
         this->write("let ");
     } else {
         this->write("var ");
     }
-    this->writeName(varDecl.var().mangledName());
+    this->writeName(varDecl.var()->mangledName());
     this->write(": ");
-    this->write(to_wgsl_type(varDecl.var().type()));
+    this->write(to_wgsl_type(varDecl.var()->type()));
 
     if (varDecl.value()) {
         this->write(" = ");
@@ -832,12 +831,8 @@ void WGSLCodeGenerator::writeFieldAccess(const FieldAccess& f) {
 
 void WGSLCodeGenerator::writeLiteral(const Literal& l) {
     const Type& type = l.type();
-    if (type.isFloat()) {
-        this->write(skstd::to_string(l.floatValue()));
-        return;
-    }
-    if (type.isBoolean()) {
-        this->write(l.boolValue() ? "true" : "false");
+    if (type.isFloat() || type.isBoolean()) {
+        this->write(l.description(OperatorPrecedence::kTopLevel));
         return;
     }
     SkASSERT(type.isInteger());
@@ -891,10 +886,9 @@ void WGSLCodeGenerator::writeVariableReference(const VariableReference& r) {
 void WGSLCodeGenerator::writeAnyConstructor(const AnyConstructor& c, Precedence parentPrecedence) {
     this->write(to_wgsl_type(c.type()));
     this->write("(");
-    const char* separator = "";
+    auto separator = SkSL::String::Separator();
     for (const auto& e : c.argumentSpan()) {
-        this->write(separator);
-        separator = ", ";
+        this->write(separator());
         this->writeExpression(*e, Precedence::kSequence);
     }
     this->write(")");
@@ -975,26 +969,26 @@ void WGSLCodeGenerator::writeStageInputStruct() {
     bool declaredFragCoordsBuiltin = false;
     for (const ProgramElement* e : fProgram.elements()) {
         if (e->is<GlobalVarDeclaration>()) {
-            const Variable& v =
-                    e->as<GlobalVarDeclaration>().declaration()->as<VarDeclaration>().var();
-            if (v.modifiers().fFlags & Modifiers::kIn_Flag) {
-                this->writePipelineIODeclaration(
-                        v.modifiers(), v.type(), v.mangledName(), Delimiter::kComma);
-                if (v.modifiers().fLayout.fBuiltin == SK_FRAGCOORD_BUILTIN) {
+            const Variable* v = e->as<GlobalVarDeclaration>().declaration()
+                                 ->as<VarDeclaration>().var();
+            if (v->modifiers().fFlags & Modifiers::kIn_Flag) {
+                this->writePipelineIODeclaration(v->modifiers(), v->type(), v->mangledName(),
+                                                 Delimiter::kComma);
+                if (v->modifiers().fLayout.fBuiltin == SK_FRAGCOORD_BUILTIN) {
                     declaredFragCoordsBuiltin = true;
                 }
             }
         } else if (e->is<InterfaceBlock>()) {
-            const Variable& v = e->as<InterfaceBlock>().variable();
+            const Variable* v = e->as<InterfaceBlock>().var();
             // Merge all the members of `in` interface blocks to the input struct, which are
             // specified as either "builtin" or with a "layout(location=".
             //
             // TODO(armansito): Is it legal to have an interface block without a storage qualifier
             // but with members that have individual storage qualifiers?
-            if (v.modifiers().fFlags & Modifiers::kIn_Flag) {
-                for (const auto& f : v.type().fields()) {
-                    this->writePipelineIODeclaration(
-                            f.fModifiers, *f.fType, f.fName, Delimiter::kComma);
+            if (v->modifiers().fFlags & Modifiers::kIn_Flag) {
+                for (const auto& f : v->type().fields()) {
+                    this->writePipelineIODeclaration(f.fModifiers, *f.fType, f.fName,
+                                                     Delimiter::kComma);
                     if (f.fModifiers.fLayout.fBuiltin == SK_FRAGCOORD_BUILTIN) {
                         declaredFragCoordsBuiltin = true;
                     }
@@ -1030,23 +1024,23 @@ void WGSLCodeGenerator::writeStageOutputStruct() {
     bool requiresPointSizeBuiltin = false;
     for (const ProgramElement* e : fProgram.elements()) {
         if (e->is<GlobalVarDeclaration>()) {
-            const Variable& v =
-                    e->as<GlobalVarDeclaration>().declaration()->as<VarDeclaration>().var();
-            if (v.modifiers().fFlags & Modifiers::kOut_Flag) {
-                this->writePipelineIODeclaration(
-                        v.modifiers(), v.type(), v.mangledName(), Delimiter::kComma);
+            const Variable* v = e->as<GlobalVarDeclaration>().declaration()
+                                 ->as<VarDeclaration>().var();
+            if (v->modifiers().fFlags & Modifiers::kOut_Flag) {
+                this->writePipelineIODeclaration(v->modifiers(), v->type(), v->mangledName(),
+                                                 Delimiter::kComma);
             }
         } else if (e->is<InterfaceBlock>()) {
-            const Variable& v = e->as<InterfaceBlock>().variable();
+            const Variable* v = e->as<InterfaceBlock>().var();
             // Merge all the members of `out` interface blocks to the output struct, which are
             // specified as either "builtin" or with a "layout(location=".
             //
             // TODO(armansito): Is it legal to have an interface block without a storage qualifier
             // but with members that have individual storage qualifiers?
-            if (v.modifiers().fFlags & Modifiers::kOut_Flag) {
-                for (const auto& f : v.type().fields()) {
-                    this->writePipelineIODeclaration(
-                            f.fModifiers, *f.fType, f.fName, Delimiter::kComma);
+            if (v->modifiers().fFlags & Modifiers::kOut_Flag) {
+                for (const auto& f : v->type().fields()) {
+                    this->writePipelineIODeclaration(f.fModifiers, *f.fType, f.fName,
+                                                     Delimiter::kComma);
                     if (f.fModifiers.fLayout.fBuiltin == SK_POSITION_BUILTIN) {
                         declaredPositionBuiltin = true;
                     } else if (f.fModifiers.fLayout.fBuiltin == SK_POINTSIZE_BUILTIN) {

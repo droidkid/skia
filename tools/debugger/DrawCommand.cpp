@@ -9,7 +9,9 @@
 
 #include "include/core/SkAlphaType.h"
 #include "include/core/SkBitmap.h"
+#include "include/core/SkBlendMode.h"
 #include "include/core/SkBlurTypes.h"
+#include "include/core/SkClipOp.h"
 #include "include/core/SkColorFilter.h"
 #include "include/core/SkColorType.h"
 #include "include/core/SkDrawable.h"
@@ -47,7 +49,7 @@
 #include "tools/debugger/JsonWriteBuffer.h"
 
 #include <algorithm>
-#include <string>
+#include <cstring>
 #include <utility>
 
 class GrDirectContext;
@@ -389,7 +391,7 @@ void apply_paint_blend_mode(const SkPaint& paint, SkJSONWriter& writer) {
     }
 }
 
-};  // namespace
+}  // namespace
 
 void DrawCommand::MakeJsonColor(SkJSONWriter& writer, const SkColor color) {
     writer.beginArray(nullptr, false);
@@ -1617,7 +1619,7 @@ DrawPointsCommand::DrawPointsCommand(SkCanvas::PointMode mode,
         : INHERITED(kDrawPoints_OpType), fMode(mode), fPts(pts, count), fPaint(paint) {}
 
 void DrawPointsCommand::execute(SkCanvas* canvas) const {
-    canvas->drawPoints(fMode, fPts.count(), fPts.begin(), fPaint);
+    canvas->drawPoints(fMode, fPts.size(), fPts.begin(), fPaint);
 }
 
 bool DrawPointsCommand::render(SkCanvas* canvas) const {
@@ -1627,7 +1629,7 @@ bool DrawPointsCommand::render(SkCanvas* canvas) const {
     SkRect bounds;
 
     bounds.setEmpty();
-    for (int i = 0; i < fPts.count(); ++i) {
+    for (int i = 0; i < fPts.size(); ++i) {
         SkRectPriv::GrowToInclude(&bounds, fPts[i]);
     }
 
@@ -1637,7 +1639,7 @@ bool DrawPointsCommand::render(SkCanvas* canvas) const {
     p.setColor(SK_ColorBLACK);
     p.setStyle(SkPaint::kStroke_Style);
 
-    canvas->drawPoints(fMode, fPts.count(), fPts.begin(), p);
+    canvas->drawPoints(fMode, fPts.size(), fPts.begin(), p);
     canvas->restore();
 
     return true;
@@ -1647,7 +1649,7 @@ void DrawPointsCommand::toJSON(SkJSONWriter& writer, UrlDataManager& urlDataMana
     INHERITED::toJSON(writer, urlDataManager);
     writer.appendCString(DEBUGCANVAS_ATTRIBUTE_MODE, pointmode_name(fMode));
     writer.beginArray(DEBUGCANVAS_ATTRIBUTE_POINTS);
-    for (int i = 0; i < fPts.count(); i++) {
+    for (int i = 0; i < fPts.size(); i++) {
         MakeJsonPoint(writer, fPts[i]);
     }
     writer.endArray();  // points
@@ -1996,8 +1998,8 @@ void DrawAtlasCommand::execute(SkCanvas* canvas) const {
     canvas->drawAtlas(fImage.get(),
                       fXform.begin(),
                       fTex.begin(),
-                      fColors.isEmpty() ? nullptr : fColors.begin(),
-                      fXform.count(),
+                      fColors.empty() ? nullptr : fColors.begin(),
+                      fXform.size(),
                       fBlendMode,
                       fSampling,
                       fCull.getMaybeNull(),

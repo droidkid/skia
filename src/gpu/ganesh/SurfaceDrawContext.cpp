@@ -18,6 +18,7 @@
 #include "include/private/gpu/ganesh/GrImageContext.h"
 #include "include/utils/SkShadowUtils.h"
 #include "src/core/SkAutoPixmapStorage.h"
+#include "src/core/SkBlendModePriv.h"
 #include "src/core/SkConvertPixels.h"
 #include "src/core/SkDrawProcs.h"
 #include "src/core/SkDrawShadowInfo.h"
@@ -639,14 +640,14 @@ void SurfaceDrawContext::drawTexturedQuad(const GrClip* clip,
         const GrClip* finalClip = opt == QuadOptimization::kClipApplied ? nullptr : clip;
         GrAAType aaType = this->chooseAAType(GrAA{quad->fEdgeFlags != GrQuadAAFlags::kNone});
         auto clampType = GrColorTypeClampType(this->colorInfo().colorType());
-        auto saturate = clampType == GrClampType::kManual ? TextureOp::Saturate::kYes
-                                                          : TextureOp::Saturate::kNo;
+        auto saturate = clampType == GrClampType::kManual ? ganesh::TextureOp::Saturate::kYes
+                                                          : ganesh::TextureOp::Saturate::kNo;
         // Use the provided subset, although hypothetically we could detect that the cropped local
         // quad is sufficiently inside the subset and the constraint could be dropped.
         this->addDrawOp(finalClip,
-                        TextureOp::Make(fContext, std::move(proxyView), srcAlphaType,
-                                        std::move(textureXform), filter, mm, color, saturate,
-                                        blendMode, aaType, quad, subset));
+                        ganesh::TextureOp::Make(fContext, std::move(proxyView), srcAlphaType,
+                                                std::move(textureXform), filter, mm, color,
+                                                saturate, blendMode, aaType, quad, subset));
     }
 }
 
@@ -689,8 +690,8 @@ void SurfaceDrawContext::drawRect(const GrClip* clip,
                            stroke.getJoin() == SkPaint::kMiter_Join &&
                            stroke.getMiter() >= SK_ScalarSqrt2) ? GrAAType::kCoverage
                                                                 : this->chooseAAType(aa);
-        GrOp::Owner op = StrokeRectOp::Make(fContext, std::move(paint), aaType, viewMatrix,
-                                            rect, stroke);
+        GrOp::Owner op = ganesh::StrokeRectOp::Make(fContext, std::move(paint), aaType, viewMatrix,
+                                                    rect, stroke);
         // op may be null if the stroke is not supported or if using coverage aa and the view matrix
         // does not preserve rectangles.
         if (op) {
@@ -890,10 +891,11 @@ void SurfaceDrawContext::drawTextureSet(const GrClip* clip,
     AutoCheckFlush acf(this->drawingManager());
     GrAAType aaType = this->chooseAAType(GrAA::kYes);
     auto clampType = GrColorTypeClampType(this->colorInfo().colorType());
-    auto saturate = clampType == GrClampType::kManual ? TextureOp::Saturate::kYes
-                                                      : TextureOp::Saturate::kNo;
-    TextureOp::AddTextureSetOps(this, clip, fContext, set, cnt, proxyRunCnt, filter, mm, saturate,
-                                mode, aaType, constraint, viewMatrix, std::move(texXform));
+    auto saturate = clampType == GrClampType::kManual ? ganesh::TextureOp::Saturate::kYes
+                                                      : ganesh::TextureOp::Saturate::kNo;
+    ganesh::TextureOp::AddTextureSetOps(this, clip, fContext, set, cnt, proxyRunCnt, filter, mm,
+                                        saturate, mode, aaType, constraint, viewMatrix,
+                                        std::move(texXform));
 }
 
 void SurfaceDrawContext::drawVertices(const GrClip* clip,
@@ -1759,8 +1761,8 @@ bool SurfaceDrawContext::drawSimpleShape(const GrClip* clip,
             SkRect rects[2];
             if (shape.asNestedRects(rects)) {
                 // Concave AA paths are expensive - try to avoid them for special cases
-                GrOp::Owner op = StrokeRectOp::MakeNested(fContext, std::move(*paint),
-                                                          viewMatrix, rects);
+                GrOp::Owner op = ganesh::StrokeRectOp::MakeNested(fContext, std::move(*paint),
+                                                                  viewMatrix, rects);
                 if (op) {
                     this->addDrawOp(clip, std::move(op));
                     return true;

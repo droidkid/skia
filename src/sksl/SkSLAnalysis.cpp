@@ -10,6 +10,7 @@
 #include "include/core/SkSpan.h"
 #include "include/core/SkTypes.h"
 #include "include/private/SkSLDefines.h"
+#include "include/private/SkSLIRNode.h"
 #include "include/private/SkSLLayout.h"
 #include "include/private/SkSLModifiers.h"
 #include "include/private/SkSLProgramElement.h"
@@ -114,24 +115,6 @@ protected:
 
         return INHERITED::visitExpression(e);
     }
-
-    using INHERITED = ProgramVisitor;
-};
-
-// Visitor that searches through the program for references to a particular builtin variable
-class BuiltinVariableVisitor : public ProgramVisitor {
-public:
-    BuiltinVariableVisitor(int builtin) : fBuiltin(builtin) {}
-
-    bool visitExpression(const Expression& e) override {
-        if (e.is<VariableReference>()) {
-            const VariableReference& var = e.as<VariableReference>();
-            return var.variable()->modifiers().fLayout.fBuiltin == fBuiltin;
-        }
-        return INHERITED::visitExpression(e);
-    }
-
-    int fBuiltin;
 
     using INHERITED = ProgramVisitor;
 };
@@ -334,8 +317,13 @@ SampleUsage Analysis::GetSampleUsage(const Program& program,
 }
 
 bool Analysis::ReferencesBuiltin(const Program& program, int builtin) {
-    BuiltinVariableVisitor visitor(builtin);
-    return visitor.visit(program);
+    SkASSERT(program.fUsage);
+    for (const auto& [variable, counts] : program.fUsage->fVariableCounts) {
+        if (counts.fRead > 0 && variable->modifiers().fLayout.fBuiltin == builtin) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Analysis::ReferencesSampleCoords(const Program& program) {
@@ -427,7 +415,7 @@ bool Analysis::DetectVarDeclarationWithoutScope(const Statement& stmt, ErrorRepo
     const Variable* var;
     if (stmt.is<VarDeclaration>()) {
         // The single-variable case. No blocks at all.
-        var = &stmt.as<VarDeclaration>().var();
+        var = stmt.as<VarDeclaration>().var();
     } else if (stmt.is<Block>()) {
         // The multiple-variable case: an unscoped, non-empty block...
         const Block& block = stmt.as<Block>();
@@ -439,7 +427,7 @@ bool Analysis::DetectVarDeclarationWithoutScope(const Statement& stmt, ErrorRepo
         if (!innerStmt.is<VarDeclaration>()) {
             return false;
         }
-        var = &innerStmt.as<VarDeclaration>().var();
+        var = innerStmt.as<VarDeclaration>().var();
     } else {
         // This statement wasn't a variable declaration. No problem.
         return false;
@@ -493,7 +481,7 @@ public:
         if (s.is<ForStatement>()) {
             const ForStatement& f = s.as<ForStatement>();
             SkASSERT(f.initializer() && f.initializer()->is<VarDeclaration>());
-            const Variable* var = &f.initializer()->as<VarDeclaration>().var();
+            const Variable* var = f.initializer()->as<VarDeclaration>().var();
             auto [iter, inserted] = fLoopIndices.insert(var);
             SkASSERT(inserted);
             bool result = this->visitStatement(*f.statement());

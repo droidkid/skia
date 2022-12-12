@@ -528,7 +528,7 @@ static sk_sp<SkImageFilter> make_fuzz_imageFilter(Fuzz* fuzz, int depth) {
         return nullptr;
     }
     uint8_t imageFilterType;
-    fuzz->nextRange(&imageFilterType, 0, 24);
+    fuzz->nextRange(&imageFilterType, 0, 23);
     switch (imageFilterType) {
         case 0:
             return nullptr;
@@ -747,33 +747,22 @@ static sk_sp<SkImageFilter> make_fuzz_imageFilter(Fuzz* fuzz, int depth) {
                                           useCropRect ? &cropRect : nullptr);
         }
         case 19: {
-            SkPaint paint;
-            fuzz_paint(fuzz, &paint, depth - 1);
-            bool useCropRect;
-            fuzz->next(&useCropRect);
-            SkIRect cropRect;
-            if (useCropRect) {
-                fuzz->next(&cropRect);
-            }
-            return SkImageFilters::Paint(paint, useCropRect ? &cropRect : nullptr);
-        }
-        case 20: {
             sk_sp<SkPicture> picture = make_fuzz_picture(fuzz, depth - 1);
             return SkImageFilters::Picture(std::move(picture));
         }
-        case 21: {
+        case 20: {
             SkRect cropRect;
             fuzz->next(&cropRect);
             sk_sp<SkPicture> picture = make_fuzz_picture(fuzz, depth - 1);
             return SkImageFilters::Picture(std::move(picture), cropRect);
         }
-        case 22: {
+        case 21: {
             SkRect src, dst;
             fuzz->next(&src, &dst);
             sk_sp<SkImageFilter> input = make_fuzz_imageFilter(fuzz, depth - 1);
             return SkImageFilters::Tile(src, dst, std::move(input));
         }
-        case 23: {
+        case 22: {
             SkBlendMode blendMode;
             bool useCropRect;
             fuzz->next(&useCropRect);
@@ -787,7 +776,7 @@ static sk_sp<SkImageFilter> make_fuzz_imageFilter(Fuzz* fuzz, int depth) {
             return SkImageFilters::Blend(blendMode, std::move(bg), std::move(fg),
                                          useCropRect ? &cropRect : nullptr);
         }
-        case 24: {
+        case 23: {
             sk_sp<SkShader> shader = make_fuzz_shader(fuzz, depth - 1);
             bool useCropRect;
             fuzz->next(&useCropRect);
@@ -967,14 +956,14 @@ static sk_sp<SkTextBlob> make_fuzz_textblob(Fuzz* fuzz) {
         SkTextEncoding encoding = fuzz_paint_text_encoding(fuzz);
         font.setEdging(make_fuzz_t<bool>(fuzz) ? SkFont::Edging::kAlias : SkFont::Edging::kAntiAlias);
         SkTDArray<uint8_t> text = make_fuzz_text(fuzz, font, encoding);
-        int glyphCount = font.countText(text.begin(), SkToSizeT(text.count()), encoding);
+        int glyphCount = font.countText(text.begin(), SkToSizeT(text.size()), encoding);
         SkASSERT(glyphCount <= kMaxGlyphCount);
         SkScalar x, y;
         const SkTextBlobBuilder::RunBuffer* buffer;
         uint8_t runType;
         fuzz->nextRange(&runType, (uint8_t)0, (uint8_t)2);
         const void* textPtr = text.begin();
-        size_t textLen =  SkToSizeT(text.count());
+        size_t textLen =  SkToSizeT(text.size());
         switch (runType) {
             case 0:
                 fuzz->next(&x, &y);
@@ -1328,7 +1317,7 @@ static void fuzz_canvas(Fuzz* fuzz, SkCanvas* canvas, int depth = 9) {
                 SkScalar x, y;
                 fuzz->next(&x, &y);
                 SkTDArray<uint8_t> text = make_fuzz_text(fuzz, font, encoding);
-                canvas->drawSimpleText(text.begin(), SkToSizeT(text.count()), encoding, x, y,
+                canvas->drawSimpleText(text.begin(), SkToSizeT(text.size()), encoding, x, y,
                                        font, paint);
                 break;
             }

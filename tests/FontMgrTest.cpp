@@ -6,20 +6,32 @@
  */
 
 #include "include/core/SkFont.h"
+#include "include/core/SkFontArguments.h"
 #include "include/core/SkFontMgr.h"
-#include "include/core/SkPaint.h"
+#include "include/core/SkFontParameters.h"
+#include "include/core/SkFontStyle.h"
+#include "include/core/SkFontTypes.h"
+#include "include/core/SkRefCnt.h"
 #include "include/core/SkStream.h"
+#include "include/core/SkString.h"
 #include "include/core/SkTypeface.h"
-#include "src/core/SkAdvancedTypefaceMetrics.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkMalloc.h"
+#include "src/core/SkAdvancedTypefaceMetrics.h" // IWYU pragma: keep
 #include "src/core/SkScalerContext.h"
 #include "tests/Test.h"
 #include "tools/flags/CommandLineFlags.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <initializer_list>
-#include <limits>
+#include <memory>
 #include <vector>
 
-DEFINE_bool(verboseFontMgr, false, "FontMgr will be very verbose.");
+class SkDescriptor;
+class SkFontDescriptor;
+
+DECLARE_bool(verboseFontMgr)
 
 DEF_TEST(FontMgr_Font, reporter) {
     SkFont font(nullptr, 24);

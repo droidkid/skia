@@ -45,12 +45,12 @@ void JsonWriter::DumpJson(const char* dir,
 
     writer.beginObject(); // root
 
-    for (int i = 1; i < properties.count(); i += 2) {
+    for (int i = 1; i < properties.size(); i += 2) {
         writer.appendCString(properties[i-1], properties[i]);
     }
 
     writer.beginObject("key");
-    for (int i = 1; i < key.count(); i += 2) {
+    for (int i = 1; i < key.size(); i += 2) {
         writer.appendCString(key[i-1], key[i]);
     }
     writer.endObject();
@@ -63,7 +63,7 @@ void JsonWriter::DumpJson(const char* dir,
     {
         SkAutoMutexExclusive lock(bitmap_result_mutex());
         writer.beginArray("results");
-        for (int i = 0; i < gBitmapResults.count(); i++) {
+        for (int i = 0; i < gBitmapResults.size(); i++) {
             writer.beginObject();
 
             writer.beginObject("key");

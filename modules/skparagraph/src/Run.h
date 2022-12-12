@@ -120,7 +120,7 @@ public:
         return SkRect::MakeXYWH(fOffset.fX, fOffset.fY, fAdvance.fX, fAdvance.fY);
     }
 
-    SkScalar addSpacesAtTheEnd(SkScalar space, Cluster* cluster);
+    void addSpacesAtTheEnd(SkScalar space, Cluster* cluster);
     SkScalar addSpacesEvenly(SkScalar space, Cluster* cluster);
     SkScalar addSpacesEvenly(SkScalar space);
     void shift(const Cluster* cluster, SkScalar offset);
@@ -162,6 +162,8 @@ public:
     void resetJustificationShifts() {
         fJustificationShifts.reset();
     }
+
+    bool isResolved() const;
 private:
     friend class ParagraphImpl;
     friend class TextLine;
@@ -293,7 +295,7 @@ public:
 
     size_t roundPos(SkScalar s) const;
 
-    void space(SkScalar shift, SkScalar space) {
+    void space(SkScalar shift) {
         fWidth += shift;
     }
 

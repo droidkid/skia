@@ -22,7 +22,6 @@
 #include <memory>
 
 class SkRuntimeEffectDictionary;
-class SkTextureDataBlock;
 
 namespace skgpu::graphite {
 
@@ -34,6 +33,7 @@ class Recorder;
 struct RenderPassDesc;
 class ResourceProvider;
 class Sampler;
+class TextureDataBlock;
 class TextureProxy;
 class Texture;
 enum class UniformSlot;
@@ -54,10 +54,10 @@ class DrawPass {
 public:
     ~DrawPass();
 
-    // TODO: Replace SDC with the SDC's surface proxy view
     static std::unique_ptr<DrawPass> Make(Recorder*,
                                           std::unique_ptr<DrawList>,
                                           sk_sp<TextureProxy>,
+                                          SkISize deviceSize,
                                           std::pair<LoadOp, StoreOp>,
                                           std::array<float, 4> clearColor);
 

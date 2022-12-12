@@ -60,8 +60,7 @@ void test_draw(skiatest::Reporter* reporter,
     bool peekPixelsSuccess = result.peekPixels(&pm);
     REPORTER_ASSERT(reporter, peekPixelsSuccess);
 
-    bool readPixelsSuccess =
-            static_cast<Surface*>(surface.get())->onReadPixels(context, recorder.get(), pm, 0, 0);
+    bool readPixelsSuccess = surface->readPixels(pm, 0, 0);
     REPORTER_ASSERT(reporter, readPixelsSuccess);
 
     for (const Expectation& e : expectations) {
@@ -80,7 +79,7 @@ void test_draw(skiatest::Reporter* reporter,
 
 }  // anonymous namespace
 
-DEF_GRAPHITE_TEST_FOR_CONTEXTS(ImageShaderTest, reporter, context) {
+DEF_GRAPHITE_TEST_FOR_RENDERING_CONTEXTS(ImageShaderTest, reporter, context) {
     // Test that a subset bound covering less than half of a pixel causes that pixel not to be
     // drawn when using decal tiling and nearest-neighbor filtering. In this case we have a subset
     // that covers 3/4 the pixel column at y=1, all of the y=2 column, and 1/4 the y=3 column.

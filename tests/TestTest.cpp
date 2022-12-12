@@ -5,10 +5,10 @@
  * found in the LICENSE file.
  */
 
+#include "tests/CtsEnforcement.h"
 #include "tests/Test.h"
 
-#include "include/gpu/GrDirectContext.h"
-#include "tools/gpu/gl/GLTestContext.h"
+struct GrContextOptions;
 
 // This is an example of a normal test. It should not require any GPU backends, that is, it is a
 // CPU test.

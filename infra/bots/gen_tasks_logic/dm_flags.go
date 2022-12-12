@@ -228,7 +228,12 @@ func (b *taskBuilder) dmFlags(internalHardwareLabel string) {
 			}
 		} else if b.matchGpu("Intel") {
 			// MSAA doesn't work well on Intel GPUs chromium:527565, chromium:983926
-			sampleCount = 0
+			if b.gpu("IntelIrisXe") && b.matchOs("Win") && b.extraConfig("ANGLE") {
+				// Make an exception for newer GPUs + D3D
+				args = append(args, "--allowMSAAOnNewIntel", "true")
+			} else {
+				sampleCount = 0
+			}
 		} else if b.os("ChromeOS") {
 			glPrefix = "gles"
 		}
@@ -411,9 +416,9 @@ func (b *taskBuilder) dmFlags(internalHardwareLabel string) {
 				configs = append(configs, "mtlmsaa4")
 			}
 		}
-		if b.extraConfig("Slug") {
+        if b.extraConfig("Slug") {
 			// Test slug drawing
-			configs = []string{"glslug"}
+			configs = []string{"glslug", "glserializeslug", "glremoteslug"}
 		}
 		if b.extraConfig("Direct3D") {
 			configs = []string{"d3d"}
@@ -595,12 +600,14 @@ func (b *taskBuilder) dmFlags(internalHardwareLabel string) {
 	}
 
 	if b.matchExtraConfig("Graphite") {
-		// The Graphite bots run the skps, gms and tests
 		removeFromArgs("image")
 		removeFromArgs("lottie")
 		removeFromArgs("colorImage")
 		removeFromArgs("svg")
-	} else if b.matchExtraConfig("DDL", "PDF") {
+	}
+
+	// Remove skps for all bots except for a select few. On bots that will run SKPs remove some of their other tests.
+	if b.matchExtraConfig("DDL", "PDF") {
 		// The DDL and PDF bots just render the large skps and the gms
 		removeFromArgs("tests")
 		removeFromArgs("image")
@@ -612,13 +619,11 @@ func (b *taskBuilder) dmFlags(internalHardwareLabel string) {
 		removeFromArgs("gm")
 		removeFromArgs("image")
 		removeFromArgs("colorImage")
-		removeFromArgs("lottie")
 		removeFromArgs("svg")
 	} else if b.matchExtraConfig("FailFlushTimeCallbacks") {
 		// The FailFlushTimeCallbacks bot only runs skps, gms and svgs
 		removeFromArgs("tests")
 		removeFromArgs("image")
-		removeFromArgs("lottie")
 		removeFromArgs("colorImage")
 	} else {
 		// No other bots render the .skps.
@@ -838,6 +843,7 @@ func (b *taskBuilder) dmFlags(internalHardwareLabel string) {
 	badSerializeGMs = append(badSerializeGMs, "wacky_yuv_formats_qtr")
 	badSerializeGMs = append(badSerializeGMs, "runtime_effect_image")
 	badSerializeGMs = append(badSerializeGMs, "ctmpatheffect")
+	badSerializeGMs = append(badSerializeGMs, "image_out_of_gamut")
 
 	// This GM forces a path to be convex. That property doesn't survive
 	// serialization.
@@ -1022,8 +1028,14 @@ func (b *taskBuilder) dmFlags(internalHardwareLabel string) {
 		skip(ALL, "tests", ALL, "SkSLSwitchDefaultOnly_GPU") // skia:12465
 	}
 
-	if b.extraConfig("ANGLE") && b.matchOs("Win") && b.matchGpu("IntelIris(540|655)") {
+	if b.extraConfig("ANGLE") && b.matchOs("Win") && b.matchGpu("IntelIris(540|655|Xe)") {
 		skip(ALL, "tests", ALL, "SkSLSwitchDefaultOnly_GPU") // skia:12465
+	}
+
+	if b.extraConfig("Dawn") {
+		// skia:13922: WGSL does not support case fallthrough in switch statements.
+		skip(ALL, "tests", ALL, "SkSLSwitchWithFallthrough_GPU")
+		skip(ALL, "tests", ALL, "SkSLSwitchWithLoops_GPU")
 	}
 
 	if b.gpu("Tegra3") {
@@ -1231,6 +1243,12 @@ func (b *taskBuilder) dmFlags(internalHardwareLabel string) {
 	if b.arch("arm64") && b.extraConfig("ASAN") {
 		// skbug.com/13155 the use of longjmp may cause ASAN stack check issues.
 		skip(ALL, "test", ALL, "SkPDF_JpegIdentification")
+	}
+
+	if b.extraConfig("HWASAN") {
+		// HWASAN adds tag bytes to pointers. That's incompatible with this test -- it compares
+		// pointers from unrelated stack frames to check that RP isn't growing the stack.
+		skip(ALL, "test", ALL, "SkRasterPipeline_stack_rewind")
 	}
 
 	if b.matchOs("Mac") && b.gpu("IntelHD6000") {

@@ -5,22 +5,42 @@
  * found in the LICENSE file.
  */
 
-#include "tests/Test.h"
-
+#include "include/core/SkBlendMode.h"
 #include "include/core/SkColorSpace.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
 #include "include/core/SkPath.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkStrokeRec.h"
+#include "include/core/SkSurfaceProps.h"
+#include "include/core/SkTypes.h"
+#include "include/gpu/GrConfig.h"
 #include "include/gpu/GrDirectContext.h"
 #include "include/gpu/GrRecordingContext.h"
+#include "include/gpu/GrTypes.h"
+#include "include/private/gpu/ganesh/GrTypesPriv.h"
+#include "src/core/SkPathPriv.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
+#include "src/gpu/ganesh/GrPaint.h"
 #include "src/gpu/ganesh/GrRecordingContextPriv.h"
 #include "src/gpu/ganesh/GrResourceCache.h"
 #include "src/gpu/ganesh/GrStyle.h"
 #include "src/gpu/ganesh/GrUserStencilSettings.h"
+#include "src/gpu/ganesh/PathRenderer.h"
 #include "src/gpu/ganesh/SurfaceDrawContext.h"
 #include "src/gpu/ganesh/effects/GrPorterDuffXferProcessor.h"
 #include "src/gpu/ganesh/geometry/GrStyledShape.h"
 #include "src/gpu/ganesh/ops/SoftwarePathRenderer.h"
 #include "src/gpu/ganesh/ops/TriangulatingPathRenderer.h"
+#include "tests/CtsEnforcement.h"
+#include "tests/Test.h"
+
+#include <functional>
+#include <memory>
+#include <utility>
+
+struct GrContextOptions;
 
 static SkPath create_concave_path() {
     SkPath path;
@@ -133,6 +153,7 @@ static void test_path(skiatest::Reporter* reporter,
     REPORTER_ASSERT(reporter, SkPathPriv::GenIDChangeListenersCount(path) == 1);
 }
 
+#if !defined(SK_ENABLE_OPTIMIZE_SIZE)
 // Test that deleting the original path invalidates the VBs cached by the tessellating path renderer
 DEF_GANESH_TEST(TriangulatingPathRendererCacheTest,
                 reporter,
@@ -157,6 +178,7 @@ DEF_GANESH_TEST(TriangulatingPathRendererCacheTest,
     test_path(reporter, create_concave_path, createPR, kExpectedResources, false, GrAAType::kNone,
               style);
 }
+#endif
 
 // Test that deleting the original path invalidates the textures cached by the SW path renderer
 DEF_GANESH_TEST(SoftwarePathRendererCacheTest,

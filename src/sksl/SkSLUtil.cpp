@@ -7,6 +7,7 @@
 
 #include "src/sksl/SkSLUtil.h"
 
+#include "src/core/SkSLTypeShared.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
 #include "src/sksl/SkSLContext.h"
 #include "src/sksl/SkSLOutputStream.h"
@@ -24,6 +25,7 @@ namespace SkSL {
 std::unique_ptr<ShaderCaps> ShaderCapsFactory::MakeShaderCaps() {
     std::unique_ptr<ShaderCaps> standalone = std::make_unique<ShaderCaps>();
     standalone->fShaderDerivativeSupport = true;
+    standalone->fExplicitTextureLodSupport = true;
     standalone->fFlatInterpolationSupport = true;
     standalone->fNoPerspectiveInterpolationSupport = true;
     standalone->fSampleMaskSupport = true;

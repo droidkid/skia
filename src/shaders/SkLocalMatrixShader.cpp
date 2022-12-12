@@ -16,28 +16,42 @@
 #include "src/gpu/ganesh/effects/GrMatrixEffect.h"
 #endif
 
-#ifdef SK_ENABLE_SKSL
-#include "src/core/SkKeyHelpers.h"
-#include "src/core/SkPaintParamsKey.h"
+#ifdef SK_GRAPHITE_ENABLED
+#include "src/gpu/graphite/KeyContext.h"
+#include "src/gpu/graphite/KeyHelpers.h"
+#include "src/gpu/graphite/PaintParamsKey.h"
 #endif
+
+SkShaderBase::GradientType SkLocalMatrixShader::asGradient(GradientInfo* info,
+                                                           SkMatrix* localMatrix) const {
+    GradientType type = as_SB(fWrappedShader)->asGradient(info, localMatrix);
+    if (type != SkShaderBase::GradientType::kNone && localMatrix) {
+        *localMatrix = ConcatLocalMatrices(fLocalMatrix, *localMatrix);
+    }
+    return type;
+}
 
 #if SK_SUPPORT_GPU
 std::unique_ptr<GrFragmentProcessor> SkLocalMatrixShader::asFragmentProcessor(
         const GrFPArgs& args) const {
-    return as_SB(fProxyShader)->asFragmentProcessor(
-        GrFPArgs::ConcatLocalMatrix(args, this->getLocalMatrix()));
+    return as_SB(fWrappedShader)->asFragmentProcessor(GrFPArgs::ConcatLocalMatrix(args,
+                                                                                  fLocalMatrix));
 }
 #endif
 
-#ifdef SK_ENABLE_SKSL
-void SkLocalMatrixShader::addToKey(const SkKeyContext& keyContext,
-                                   SkPaintParamsKeyBuilder* builder,
-                                   SkPipelineDataGatherer* gatherer) const {
-    LocalMatrixShaderBlock::LMShaderData lmShaderData(this->getLocalMatrix());
+#ifdef SK_GRAPHITE_ENABLED
+void SkLocalMatrixShader::addToKey(const skgpu::graphite::KeyContext& keyContext,
+                                   skgpu::graphite::PaintParamsKeyBuilder* builder,
+                                   skgpu::graphite::PipelineDataGatherer* gatherer) const {
+    using namespace skgpu::graphite;
 
-    LocalMatrixShaderBlock::BeginBlock(keyContext, builder, gatherer, lmShaderData);
+    LocalMatrixShaderBlock::LMShaderData lmShaderData(fLocalMatrix);
 
-    as_SB(fProxyShader)->addToKey(keyContext, builder, gatherer);
+    KeyContextWithLocalMatrix newContext(keyContext, fLocalMatrix);
+
+    LocalMatrixShaderBlock::BeginBlock(newContext, builder, gatherer, &lmShaderData);
+
+    as_SB(fWrappedShader)->addToKey(newContext, builder, gatherer);
 
     builder->endBlock();
 }
@@ -54,15 +68,15 @@ sk_sp<SkFlattenable> SkLocalMatrixShader::CreateProc(SkReadBuffer& buffer) {
 }
 
 void SkLocalMatrixShader::flatten(SkWriteBuffer& buffer) const {
-    buffer.writeMatrix(this->getLocalMatrix());
-    buffer.writeFlattenable(fProxyShader.get());
+    buffer.writeMatrix(fLocalMatrix);
+    buffer.writeFlattenable(fWrappedShader.get());
 }
 
 #ifdef SK_ENABLE_LEGACY_SHADERCONTEXT
 SkShaderBase::Context* SkLocalMatrixShader::onMakeContext(
     const ContextRec& rec, SkArenaAlloc* alloc) const
 {
-    SkTCopyOnFirstWrite<SkMatrix> lm(this->getLocalMatrix());
+    SkTCopyOnFirstWrite<SkMatrix> lm(fLocalMatrix);
     if (rec.fLocalMatrix) {
         *lm.writable() = ConcatLocalMatrices(*rec.fLocalMatrix, *lm);
     }
@@ -70,29 +84,29 @@ SkShaderBase::Context* SkLocalMatrixShader::onMakeContext(
     ContextRec newRec(rec);
     newRec.fLocalMatrix = lm;
 
-    return as_SB(fProxyShader)->makeContext(newRec, alloc);
+    return as_SB(fWrappedShader)->makeContext(newRec, alloc);
 }
 #endif
 
 SkImage* SkLocalMatrixShader::onIsAImage(SkMatrix* outMatrix, SkTileMode* mode) const {
     SkMatrix imageMatrix;
-    SkImage* image = fProxyShader->isAImage(&imageMatrix, mode);
+    SkImage* image = fWrappedShader->isAImage(&imageMatrix, mode);
     if (image && outMatrix) {
-        *outMatrix = ConcatLocalMatrices(this->getLocalMatrix(), imageMatrix);
+        *outMatrix = ConcatLocalMatrices(fLocalMatrix, imageMatrix);
     }
 
     return image;
 }
 
 bool SkLocalMatrixShader::onAppendStages(const SkStageRec& rec) const {
-    SkTCopyOnFirstWrite<SkMatrix> lm(this->getLocalMatrix());
+    SkTCopyOnFirstWrite<SkMatrix> lm(fLocalMatrix);
     if (rec.fLocalM) {
         *lm.writable() = ConcatLocalMatrices(*rec.fLocalM, *lm);
     }
 
     SkStageRec newRec = rec;
     newRec.fLocalM = lm;
-    return as_SB(fProxyShader)->appendStages(newRec);
+    return as_SB(fWrappedShader)->appendStages(newRec);
 }
 
 
@@ -101,11 +115,11 @@ skvm::Color SkLocalMatrixShader::onProgram(skvm::Builder* p,
                                            const SkMatrixProvider& matrices, const SkMatrix* localM,
                                            const SkColorInfo& dst,
                                            skvm::Uniforms* uniforms, SkArenaAlloc* alloc) const {
-    SkTCopyOnFirstWrite<SkMatrix> lm(this->getLocalMatrix());
+    SkTCopyOnFirstWrite<SkMatrix> lm(fLocalMatrix);
     if (localM) {
         *lm.writable() = ConcatLocalMatrices(*localM, *lm);
     }
-    return as_SB(fProxyShader)->program(p, device,local, paint,
+    return as_SB(fWrappedShader)->program(p, device,local, paint,
                                         matrices,lm.get(), dst,
                                         uniforms,alloc);
 }
@@ -145,8 +159,8 @@ public:
     , fCTM(ctm)
     {}
 
-    GradientType asAGradient(GradientInfo* info) const override {
-        return fProxyShader->asAGradient(info);
+    GradientType asGradient(GradientInfo* info, SkMatrix* localMatrix) const override {
+        return as_SB(fProxyShader)->asGradient(info, localMatrix);
     }
 
 #if SK_SUPPORT_GPU
@@ -201,9 +215,7 @@ std::unique_ptr<GrFragmentProcessor> SkCTMShader::asFragmentProcessor(
     }
 
     auto ctmProvider = SkOverrideDeviceMatrixProvider(fCTM);
-    auto base = as_SB(fProxyShader)->asFragmentProcessor(
-        GrFPArgs::ConcatLocalMatrix(args.withNewMatrixProvider(ctmProvider),
-                                    this->getLocalMatrix()));
+    auto base = as_SB(fProxyShader)->asFragmentProcessor(args.withNewMatrixProvider(ctmProvider));
     if (!base) {
         return nullptr;
     }

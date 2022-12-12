@@ -13,6 +13,7 @@
 #include "src/gpu/graphite/ComputePipelineDesc.h"
 #include "src/gpu/graphite/GraphicsPipelineDesc.h"
 #include "src/gpu/graphite/GraphiteResourceKey.h"
+#include "src/gpu/graphite/TextureProxy.h"
 #include "src/gpu/graphite/mtl/MtlUtils.h"
 #include "src/sksl/SkSLUtil.h"
 
@@ -232,8 +233,12 @@ void MtlCaps::initCaps(const id<MTLDevice> device) {
         fRequiredUniformBufferAlignment = 16;
     }
 
+    fUniformBufferLayout = Layout::kMetal;
+
     // Metal does not distinguish between uniform and storage buffers.
     fRequiredStorageBufferAlignment = fRequiredUniformBufferAlignment;
+    fStorageBufferLayout = fUniformBufferLayout;
+
     fStorageBufferSupport = true;
     fStorageBufferPreferred = true;
 
@@ -523,7 +528,7 @@ void MtlCaps::initFormatTable() {
 }
 
 TextureInfo MtlCaps::getDefaultSampledTextureInfo(SkColorType colorType,
-                                                  uint32_t levelCount,
+                                                  Mipmapped mipmapped,
                                                   Protected,
                                                   Renderable renderable) const {
     MTLTextureUsage usage = MTLTextureUsageShaderRead;
@@ -538,7 +543,7 @@ TextureInfo MtlCaps::getDefaultSampledTextureInfo(SkColorType colorType,
 
     MtlTextureInfo info;
     info.fSampleCount = 1;
-    info.fLevelCount = levelCount;
+    info.fMipmapped = mipmapped;
     info.fFormat = format;
     info.fUsage = usage;
     info.fStorageMode = MTLStorageModePrivate;
@@ -566,7 +571,7 @@ TextureInfo MtlCaps::getDefaultMSAATextureInfo(const TextureInfo& singleSampledI
 
     MtlTextureInfo info;
     info.fSampleCount = this->defaultMSAASamples();
-    info.fLevelCount = 1;
+    info.fMipmapped = Mipmapped::kNo;
     info.fFormat = singleSpec.fFormat;
     info.fUsage = usage;
     info.fStorageMode = this->getDefaultMSAAStorageMode(discardable);
@@ -581,7 +586,7 @@ TextureInfo MtlCaps::getDefaultDepthStencilTextureInfo(
             Protected) const {
     MtlTextureInfo info;
     info.fSampleCount = sampleCount;
-    info.fLevelCount = 1;
+    info.fMipmapped = Mipmapped::kNo;
     info.fFormat = MtlDepthStencilFlagsToFormat(depthStencilType);
     info.fUsage = MTLTextureUsageRenderTarget;
     info.fStorageMode = this->getDefaultMSAAStorageMode(Discardable::kYes);
@@ -700,23 +705,75 @@ size_t MtlCaps::getTransferBufferAlignment(size_t bytesPerPixel) const {
     return std::max(bytesPerPixel, getMinBufferAlignment());
 }
 
-// There are only a few possible valid sample counts (1, 2, 4, 8, 16). So we can key on those 5
-// options instead of the actual sample value.
-uint32_t samples_to_key(uint32_t numSamples) {
-    switch (numSamples) {
-        case 1:
-            return 0;
-        case 2:
-            return 1;
-        case 4:
-            return 2;
-        case 8:
-            return 3;
-        case 16:
-            return 4;
-        default:
-            SkUNREACHABLE;
+bool MtlCaps::supportsWritePixels(const TextureInfo& texInfo) const {
+    MtlTextureInfo mtlInfo;
+    texInfo.getMtlTextureInfo(&mtlInfo);
+    if (mtlInfo.fFramebufferOnly) {
+        return false;
     }
+
+    if (texInfo.numSamples() > 1) {
+        return false;
+    }
+
+    return true;
+}
+
+bool MtlCaps::supportsReadPixels(const TextureInfo& texInfo) const {
+    MtlTextureInfo mtlInfo;
+    texInfo.getMtlTextureInfo(&mtlInfo);
+    if (mtlInfo.fFramebufferOnly) {
+        return false;
+    }
+
+    // We disallow reading back directly from compressed textures.
+    if (MtlFormatIsCompressed((MTLPixelFormat)mtlInfo.fFormat)) {
+        return false;
+    }
+
+    if (texInfo.numSamples() > 1) {
+        return false;
+    }
+
+    return true;
+}
+
+SkColorType MtlCaps::supportedWritePixelsColorType(SkColorType dstColorType,
+                                                   const TextureInfo& dstTextureInfo,
+                                                   SkColorType srcColorType) const {
+    MtlTextureInfo mtlInfo;
+    dstTextureInfo.getMtlTextureInfo(&mtlInfo);
+
+    const FormatInfo& info = this->getFormatInfo((MTLPixelFormat)mtlInfo.fFormat);
+    for (int i = 0; i < info.fColorTypeInfoCount; ++i) {
+        const auto& ctInfo = info.fColorTypeInfos[i];
+        if (ctInfo.fColorType == dstColorType) {
+            return dstColorType;
+        }
+    }
+    return kUnknown_SkColorType;
+}
+
+SkColorType MtlCaps::supportedReadPixelsColorType(SkColorType srcColorType,
+                                                  const TextureInfo& srcTextureInfo,
+                                                  SkColorType dstColorType) const {
+    MtlTextureInfo mtlInfo;
+    srcTextureInfo.getMtlTextureInfo(&mtlInfo);
+
+    // TODO: handle compressed formats
+    if (MtlFormatIsCompressed((MTLPixelFormat)mtlInfo.fFormat)) {
+        SkASSERT(this->isTexturable((MTLPixelFormat)mtlInfo.fFormat));
+        return kUnknown_SkColorType;
+    }
+
+    const FormatInfo& info = this->getFormatInfo((MTLPixelFormat)mtlInfo.fFormat);
+    for (int i = 0; i < info.fColorTypeInfoCount; ++i) {
+        const auto& ctInfo = info.fColorTypeInfos[i];
+        if (ctInfo.fColorType == srcColorType) {
+            return srcColorType;
+        }
+    }
+    return kUnknown_SkColorType;
 }
 
 void MtlCaps::buildKeyForTexture(SkISize dimensions,
@@ -735,10 +792,10 @@ void MtlCaps::buildKeyForTexture(SkISize dimensions,
     SkASSERT(mtlSpec.fFormat != MTLPixelFormatInvalid);
     uint64_t formatKey = static_cast<uint64_t>(mtlSpec.fFormat);
 
-    uint32_t samplesKey = samples_to_key(info.numSamples());
+    uint32_t samplesKey = SamplesToKey(info.numSamples());
     // We don't have to key the number of mip levels because it is inherit in the combination of
     // isMipped and dimensions.
-    bool isMipped = info.numMipLevels() > 1;
+    bool isMipped = info.mipmapped() == Mipmapped::kYes;
     Protected isProtected = info.isProtected();
     bool isFBOnly = mtlSpec.fFramebufferOnly;
 

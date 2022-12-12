@@ -52,6 +52,12 @@ public:
                               const SkColorInfo&,
                               const SkSurfaceProps&,
                               bool addInitialClear);
+    static sk_sp<Device> Make(Recorder* recorder,
+                              sk_sp<TextureProxy>,
+                              SkISize deviceSize,
+                              const SkColorInfo&,
+                              const SkSurfaceProps&,
+                              bool addInitialClear);
 
     Device* asGraphiteDevice() override { return this; }
 
@@ -64,16 +70,30 @@ public:
     // from the DrawContext as a RenderPassTask and records it in the Device's recorder.
     void flushPendingWorkToRecorder();
 
-    bool readPixels(Context*, Recorder*, const SkPixmap& dst, int x, int y);
+    TextureProxyView createCopy(const SkIRect* subset, Mipmapped);
+
+    void asyncRescaleAndReadPixels(const SkImageInfo& info,
+                                   SkIRect srcRect,
+                                   SkImage::RescaleGamma rescaleGamma,
+                                   SkImage::RescaleMode rescaleMode,
+                                   SkImage::ReadPixelsCallback callback,
+                                   SkImage::ReadPixelsContext context);
+
+    void asyncRescaleAndReadPixelsYUV420(SkYUVColorSpace yuvColorSpace,
+                                         sk_sp<SkColorSpace> dstColorSpace,
+                                         SkIRect srcRect,
+                                         SkISize dstSize,
+                                         SkImage::RescaleGamma rescaleGamma,
+                                         SkImage::RescaleMode,
+                                         SkImage::ReadPixelsCallback callback,
+                                         SkImage::ReadPixelsContext context);
 
     const Transform& localToDeviceTransform();
 
     SkStrikeDeviceInfo strikeDeviceInfo() const override;
 
-#if GRAPHITE_TEST_UTILS
-    TextureProxy* proxy();
-#endif
-    TextureProxyView readSurfaceView();
+    TextureProxy* target();
+    TextureProxyView readSurfaceView() const;
 
 private:
     class IntersectionTreeSet;
@@ -115,11 +135,6 @@ private:
     SkBaseDevice* onCreateDevice(const CreateInfo&, const SkPaint*) override;
 
     bool onReadPixels(const SkPixmap&, int x, int y) override;
-
-    /*
-     * TODO: These functions are not in scope to be implemented yet, but will need to be. Call them
-     * out explicitly so it's easy to keep tabs on how close feature-complete actually is.
-     */
 
     bool onWritePixels(const SkPixmap&, int x, int y) override;
 

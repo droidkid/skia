@@ -48,6 +48,10 @@ skgpu::v1::Device* SkSurface_Gpu::getDevice() {
     return fDevice.get();
 }
 
+SkImageInfo SkSurface_Gpu::imageInfo() const {
+    return fDevice->imageInfo();
+}
+
 static GrRenderTarget* prepare_rt_for_external_access(SkSurface_Gpu* surface,
                                                       SkSurface::BackendHandleAccess access) {
     auto dContext = surface->recordingContext()->asDirectContext();
@@ -159,7 +163,7 @@ void SkSurface_Gpu::onWritePixels(const SkPixmap& src, int x, int y) {
 }
 
 void SkSurface_Gpu::onAsyncRescaleAndReadPixels(const SkImageInfo& info,
-                                                const SkIRect& srcRect,
+                                                SkIRect srcRect,
                                                 RescaleGamma rescaleGamma,
                                                 RescaleMode rescaleMode,
                                                 ReadPixelsCallback callback,
@@ -174,8 +178,8 @@ void SkSurface_Gpu::onAsyncRescaleAndReadPixels(const SkImageInfo& info,
 
 void SkSurface_Gpu::onAsyncRescaleAndReadPixelsYUV420(SkYUVColorSpace yuvColorSpace,
                                                       sk_sp<SkColorSpace> dstColorSpace,
-                                                      const SkIRect& srcRect,
-                                                      const SkISize& dstSize,
+                                                      SkIRect srcRect,
+                                                      SkISize dstSize,
                                                       RescaleGamma rescaleGamma,
                                                       RescaleMode rescaleMode,
                                                       ReadPixelsCallback callback,
@@ -216,7 +220,7 @@ void SkSurface_Gpu::onDiscard() { fDevice->discard(); }
 void SkSurface_Gpu::onResolveMSAA() { fDevice->resolveMSAA(); }
 
 GrSemaphoresSubmitted SkSurface_Gpu::onFlush(BackendSurfaceAccess access, const GrFlushInfo& info,
-                                             const GrBackendSurfaceMutableState* newState) {
+                                             const skgpu::MutableTextureState* newState) {
 
     auto dContext = fDevice->recordingContext()->asDirectContext();
     if (!dContext) {

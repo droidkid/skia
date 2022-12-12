@@ -7,26 +7,33 @@
 
 #include "include/core/SkPath.h"
 
-#include "include/core/SkData.h"
-#include "include/core/SkMath.h"
 #include "include/core/SkPathBuilder.h"
 #include "include/core/SkRRect.h"
-#include "include/private/SkMacros.h"
+#include "include/core/SkStream.h"
+#include "include/core/SkString.h"
+#include "include/private/SkFloatBits.h"
+#include "include/private/SkFloatingPoint.h"
+#include "include/private/SkMalloc.h"
 #include "include/private/SkPathRef.h"
+#include "include/private/SkTArray.h"
+#include "include/private/SkTDArray.h"
 #include "include/private/SkTo.h"
-#include "src/core/SkBuffer.h"
+#include "include/private/SkVx.h"
 #include "src/core/SkCubicClipper.h"
+#include "src/core/SkEdgeClipper.h"
 #include "src/core/SkGeometry.h"
 #include "src/core/SkMatrixPriv.h"
 #include "src/core/SkPathMakers.h"
 #include "src/core/SkPathPriv.h"
 #include "src/core/SkPointPriv.h"
-#include "src/core/SkSafeMath.h"
+#include "src/core/SkStringUtils.h"
 #include "src/core/SkTLazy.h"
-// need SkDVector
 #include "src/pathops/SkPathOpsPoint.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <iterator>
 #include <utility>
 
 struct SkPath_Storage_Equivalent {
@@ -235,7 +242,7 @@ void SkPath::swap(SkPath& that) {
 
 bool SkPath::isInterpolatable(const SkPath& compare) const {
     // need the same structure (verbs, conicweights) and same point-count
-    return fPathRef->fPoints.count() == compare.fPathRef->fPoints.count() &&
+    return fPathRef->fPoints.size() == compare.fPathRef->fPoints.size() &&
            fPathRef->fVerbs == compare.fPathRef->fVerbs &&
            fPathRef->fConicWeights == compare.fPathRef->fConicWeights;
 }
@@ -359,7 +366,11 @@ uint32_t SkPath::getGenerationID() const {
 SkPath& SkPath::reset() {
     SkDEBUGCODE(this->validate();)
 
-    fPathRef.reset(SkPathRef::CreateEmpty());
+    if (fPathRef->unique()) {
+        fPathRef->reset();
+    } else {
+        fPathRef.reset(SkPathRef::CreateEmpty());
+    }
     this->resetFields();
     return *this;
 }
@@ -890,8 +901,6 @@ SkPath& SkPath::addPoly(const SkPoint pts[], int count, bool close) {
     SkDEBUGCODE(this->validate();)
     return *this;
 }
-
-#include "src/core/SkGeometry.h"
 
 static bool arc_is_lone_point(const SkRect& oval, SkScalar startAngle, SkScalar sweepAngle,
                               SkPoint* pt) {
@@ -1499,7 +1508,7 @@ SkPath& SkPath::addPath(const SkPath& srcPath, const SkMatrix& matrix, AddPathMo
 
 // ignore the last point of the 1st contour
 SkPath& SkPath::reversePathTo(const SkPath& path) {
-    if (path.fPathRef->fVerbs.count() == 0) {
+    if (path.fPathRef->fVerbs.empty()) {
         return *this;
     }
 
@@ -1909,10 +1918,6 @@ SkPath::Verb SkPath::RawIter::next(SkPoint pts[4]) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-
-#include "include/core/SkStream.h"
-#include "include/core/SkString.h"
-#include "src/core/SkStringUtils.h"
 
 static void append_params(SkString* str, const char label[], const SkPoint pts[],
                           int count, SkScalarAsStringType strType, SkScalar conicWeight = -12345) {
@@ -3083,7 +3088,7 @@ bool SkPath::contains(SkScalar x, SkScalar y) const {
     SkTDArray<SkVector> tangents;
     do {
         SkPoint pts[4];
-        int oldCount = tangents.count();
+        int oldCount = tangents.size();
         switch (iter.next(pts)) {
             case SkPath::kMove_Verb:
             case SkPath::kClose_Verb:
@@ -3104,8 +3109,8 @@ bool SkPath::contains(SkScalar x, SkScalar y) const {
                 done = true;
                 break;
        }
-       if (tangents.count() > oldCount) {
-            int last = tangents.count() - 1;
+       if (tangents.size() > oldCount) {
+            int last = tangents.size() - 1;
             const SkVector& tangent = tangents[last];
             if (SkScalarNearlyZero(SkPointPriv::LengthSqd(tangent))) {
                 tangents.remove(last);
@@ -3123,7 +3128,7 @@ bool SkPath::contains(SkScalar x, SkScalar y) const {
             }
         }
     } while (!done);
-    return SkToBool(tangents.count()) ^ isInverse;
+    return SkToBool(tangents.size()) ^ isInverse;
 }
 
 int SkPath::ConvertConicToQuads(const SkPoint& p0, const SkPoint& p1, const SkPoint& p2,
@@ -3458,9 +3463,10 @@ SkPath SkPath::Make(const SkPoint pts[], int pointCount,
         return SkPath();
     }
 
-    return SkPath(sk_sp<SkPathRef>(new SkPathRef(SkTDArray<SkPoint>(pts, info.points),
-                                                 SkTDArray<uint8_t>(vbs, verbCount),
-                                                 SkTDArray<SkScalar>(ws, info.weights),
+    return SkPath(sk_sp<SkPathRef>(new SkPathRef(
+                                       SkPathRef::PointsArray(pts, info.points),
+                                       SkPathRef::VerbsArray(vbs, verbCount),
+                                       SkPathRef::ConicWeightsArray(ws, info.weights),
                                                  info.segmentMask)),
                   ft, isVolatile, SkPathConvexity::kUnknown, SkPathFirstDirection::kUnknown);
 }
@@ -3681,8 +3687,6 @@ bool SkPathPriv::IsNestedFillRects(const SkPath& path, SkRect rects[2], SkPathDi
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-#include "src/core/SkEdgeClipper.h"
 
 struct SkHalfPlane {
     SkScalar fA, fB, fC;

@@ -8,6 +8,13 @@ struct sampler2D {
 };
 half4 sample(sampler2D i, float2 p, float b=0) { return i.tex.sample(i.smp, p, bias(b)); }
 half4 sample(sampler2D i, float3 p, float b=0) { return i.tex.sample(i.smp, p.xy / p.z, bias(b)); }
+half4 sampleLod(sampler2D i, float2 p, float lod) { return i.tex.sample(i.smp, p, level(lod)); }
+half4 sampleLod(sampler2D i, float3 p, float lod) {
+    return i.tex.sample(i.smp, p.xy / p.z, level(lod));
+}
+half4 sampleGrad(sampler2D i, float2 p, float2 dPdx, float2 dPdy) {
+    return i.tex.sample(i.smp, p, gradient2d(dPdx, dPdy));
+}
 
 struct Inputs {
     float2 vLocalCoord_Stage0  [[user(locn0)]];
@@ -40,7 +47,7 @@ half4 MatrixEffect_Stage1_c0_c0_h4h4f2(thread Globals& _globals, half4 _input, f
     float2 _3_clampedCoord;
     _3_clampedCoord = _2_subsetCoord;
     half4 _4_textureColor = sample(_globals.uTextureSampler_0_Stage1, _3_clampedCoord * _globals._anonInterface0->unorm_Stage1_c0_c0_c0.zw);
-    float _5_snappedX = floor(_1_inCoord.x + 0.0010000000474974513) + 0.5;
+    float _5_snappedX = floor(_1_inCoord.x + 0.001) + 0.5;
     if (_5_snappedX < _globals._anonInterface0->usubset_Stage1_c0_c0_c0.x || _5_snappedX > _globals._anonInterface0->usubset_Stage1_c0_c0_c0.z) {
         _4_textureColor = _globals._anonInterface0->uborder_Stage1_c0_c0_c0;
     }

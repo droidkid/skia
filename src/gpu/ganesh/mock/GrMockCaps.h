@@ -141,13 +141,13 @@ public:
                            ProgramDescOverrideFlags) const override;
 
 #if GR_TEST_UTILS
-    std::vector<GrCaps::TestFormatColorTypeCombination> getTestingCombinations() const override;
+    std::vector<GrTest::TestFormatColorTypeCombination> getTestingCombinations() const override;
 #endif
 
 private:
     bool onSurfaceSupportsWritePixels(const GrSurface*) const override { return true; }
-    bool onCanCopySurface(const GrSurfaceProxy* dst, const GrSurfaceProxy* src,
-                          const SkIRect& srcRect, const SkIPoint& dstPoint) const override {
+    bool onCanCopySurface(const GrSurfaceProxy* dst, const SkIRect& dstRect,
+                          const GrSurfaceProxy* src, const SkIRect& srcRect) const override {
         return true;
     }
     GrBackendFormat onGetDefaultBackendFormat(GrColorType ct) const override {

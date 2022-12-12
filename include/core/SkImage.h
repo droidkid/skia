@@ -21,7 +21,9 @@
 #if defined(SK_GRAPHITE_ENABLED)
 #include "include/gpu/graphite/GraphiteTypes.h"
 #endif
-#include <functional>  // std::function
+
+#include <memory>
+#include <functional>
 #include <optional>
 
 #if defined(SK_BUILD_FOR_ANDROID) && __ANDROID_API__ >= 26
@@ -52,8 +54,11 @@ enum class SkEncodedImageFormat;
 
 #if defined(SK_GRAPHITE_ENABLED)
 namespace skgpu::graphite {
+class BackendTexture;
 class Recorder;
-};
+class TextureInfo;
+enum class Volatile : bool;
+}
 #endif
 
 /** \class SkImage
@@ -368,8 +373,7 @@ public:
         When SkImage is no longer referenced, context releases texture memory
         asynchronously.
 
-        GrBackendTexture created from pixmap is uploaded to match SkSurface created with
-        dstColorSpace. SkColorSpace of SkImage is determined by pixmap.colorSpace().
+        SkColorSpace of SkImage is determined by pixmap.colorSpace().
 
         SkImage is returned referring to GPU back-end if context is not nullptr,
         format of data is recognized and supported, and if context supports moving
@@ -380,7 +384,6 @@ public:
         @param context                GPU context
         @param pixmap                 SkImageInfo, pixel address, and row bytes
         @param buildMips              create SkImage as mip map if true
-        @param dstColorSpace          range of colors of matching SkSurface on GPU
         @param limitToMaxTextureSize  downscale image to GPU maximum texture size, if necessary
         @return                       created SkImage, or nullptr
     */
@@ -940,6 +943,7 @@ public:
 
     enum class RescaleMode {
         kNearest,
+        kLinear,
         kRepeatedLinear,
         kRepeatedCubic,
     };
@@ -1147,6 +1151,96 @@ public:
 #endif
 
 #ifdef SK_GRAPHITE_ENABLED
+
+    // Passed to both fulfill and imageRelease
+    using GraphitePromiseImageContext = void*;
+    // Returned from fulfill and passed into textureRelease
+    using GraphitePromiseTextureReleaseContext = void*;
+
+    using GraphitePromiseImageFulfillProc =
+            std::tuple<skgpu::graphite::BackendTexture, GraphitePromiseTextureReleaseContext>
+            (*)(GraphitePromiseImageContext);
+    using GraphitePromiseImageReleaseProc = void (*)(GraphitePromiseImageContext);
+    using GraphitePromiseTextureReleaseProc = void (*)(GraphitePromiseTextureReleaseContext);
+
+    /** Create a new SkImage that is very similar to an SkImage created by
+        MakeGraphiteFromBackendTexture. The difference is that the caller need not have created the
+        backend texture nor populated it with data when creating the image. Instead of passing a
+        BackendTexture to the factory the client supplies a description of the texture consisting
+        of dimensions, TextureInfo, SkColorInfo and Volatility.
+
+        In general, 'fulfill' must return a BackendTexture that matches the properties
+        provided at SkImage creation time. The BackendTexture must refer to a valid existing
+        texture in the backend API context/device, and already be populated with data.
+        The texture cannot be deleted until 'textureRelease' is called. 'textureRelease' will
+        be called with the textureReleaseContext returned by 'fulfill'.
+
+        Wrt when and how often the fulfill, imageRelease, and textureRelease callbacks will
+        be called:
+
+        For non-volatile promise images, 'fulfill' will be called at Context::insertRecording
+        time. Regardless of whether 'fulfill' succeeded or failed, 'imageRelease' will always be
+        called only once - when Skia will no longer try calling 'fulfill' to get a backend
+        texture. If 'fulfill' failed (i.e., it didn't return a valid backend texture) then
+        'textureRelease' will never be called. If 'fulfill' was successful then
+        'textureRelease' will be called only once when the GPU is done with the contents of the
+        promise image. This will usually occur during a Context::submit call but it could occur
+        earlier due to error conditions. 'fulfill' can be called multiple times if the promise
+        image is used in multiple recordings. If 'fulfill' fails, the insertRecording itself will
+        fail. Subsequent insertRecording calls (with Recordings that use the promise image) will
+        keep calling 'fulfill' until it succeeds.
+
+        For volatile promise images, 'fulfill' will be called each time the Recording is inserted
+        into a Context. Regardless of whether 'fulfill' succeeded or failed, 'imageRelease'
+        will always be called only once just like the non-volatile case. If 'fulfill' fails at
+        insertRecording-time, 'textureRelease' will never be called. If 'fulfill' was successful
+        then a 'textureRelease' matching that 'fulfill' will be called when the GPU is done with
+        the contents of the promise image. This will usually occur during a Context::submit call
+        but it could occur earlier due to error conditions.
+
+        @param recorder       the recorder that will capture the commands creating the image
+        @param dimensions     width & height of promised gpu texture
+        @param textureInfo    structural information for the promised gpu texture
+        @param colorInfo      color type, alpha type and colorSpace information for the image
+        @param isVolatile     volatility of the promise image
+        @param fulfill        function called to get the actual backend texture
+        @param imageRelease   function called when any image-centric data can be deleted
+        @param textureRelease function called when the backend texture can be deleted
+        @param imageContext   state passed to fulfill and imageRelease
+        @return               created SkImage, or nullptr
+    */
+    static sk_sp<SkImage> MakeGraphitePromiseTexture(skgpu::graphite::Recorder*,
+                                                     SkISize dimensions,
+                                                     const skgpu::graphite::TextureInfo&,
+                                                     const SkColorInfo&,
+                                                     skgpu::graphite::Volatile,
+                                                     GraphitePromiseImageFulfillProc,
+                                                     GraphitePromiseImageReleaseProc,
+                                                     GraphitePromiseTextureReleaseProc,
+                                                     GraphitePromiseImageContext);
+
+    /** Creates an SkImage from a GPU texture associated with the recorder.
+
+        SkImage is returned if the format of backendTexture is recognized and supported.
+        Recognized formats vary by GPU back-end.
+
+        @param recorder            The recorder
+        @param backendTexture      texture residing on GPU
+        @param colorSpace          This describes the color space of this image's contents, as
+                                   seen after sampling. In general, if the format of the backend
+                                   texture is SRGB, some linear colorSpace should be supplied
+                                   (e.g., SkColorSpace::MakeSRGBLinear()). If the format of the
+                                   backend texture is linear, then the colorSpace should include
+                                   a description of the transfer function as
+                                   well (e.g., SkColorSpace::MakeSRGB()).
+        @return                    created SkImage, or nullptr
+    */
+    static sk_sp<SkImage> MakeGraphiteFromBackendTexture(skgpu::graphite::Recorder*,
+                                                         const skgpu::graphite::BackendTexture&,
+                                                         SkColorType colorType,
+                                                         SkAlphaType alphaType,
+                                                         sk_sp<SkColorSpace> colorSpace);
+
     struct RequiredImageProperties {
         skgpu::graphite::Mipmapped fMipmapped;
     };

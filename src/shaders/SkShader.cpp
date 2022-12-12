@@ -25,43 +25,21 @@
 #include "src/gpu/ganesh/GrFragmentProcessor.h"
 #endif
 
-#ifdef SK_ENABLE_SKSL
-#include "src/core/SkKeyHelpers.h"
-#include "src/core/SkPaintParamsKey.h"
+#ifdef SK_GRAPHITE_ENABLED
+#include "src/gpu/graphite/KeyHelpers.h"
+#include "src/gpu/graphite/PaintParamsKey.h"
 #endif
 
-SkShaderBase::SkShaderBase(const SkMatrix* localMatrix)
-    : fLocalMatrix(localMatrix ? *localMatrix : SkMatrix::I()) {
-    // Pre-cache so future calls to fLocalMatrix.getType() are threadsafe.
-    (void)fLocalMatrix.getType();
-}
+SkShaderBase::SkShaderBase() = default;
 
-SkShaderBase::~SkShaderBase() {}
+SkShaderBase::~SkShaderBase() = default;
 
-void SkShaderBase::flatten(SkWriteBuffer& buffer) const {
-    this->INHERITED::flatten(buffer);
-    bool hasLocalM = !fLocalMatrix.isIdentity();
-    buffer.writeBool(hasLocalM);
-    if (hasLocalM) {
-        buffer.writeMatrix(fLocalMatrix);
-    }
-}
-
-SkTCopyOnFirstWrite<SkMatrix>
-SkShaderBase::totalLocalMatrix(const SkMatrix* outerLocalMatrix) const {
-    SkTCopyOnFirstWrite<SkMatrix> m(fLocalMatrix);
-
-    if (outerLocalMatrix) {
-        *m.writable() = ConcatLocalMatrices(*outerLocalMatrix, *m);
-    }
-
-    return m;
-}
+void SkShaderBase::flatten(SkWriteBuffer& buffer) const { this->INHERITED::flatten(buffer); }
 
 bool SkShaderBase::computeTotalInverse(const SkMatrix& ctm,
-                                       const SkMatrix* outerLocalMatrix,
+                                       const SkMatrix* localMatrix,
                                        SkMatrix* totalInverse) const {
-    return SkMatrix::Concat(ctm, *this->totalLocalMatrix(outerLocalMatrix)).invert(totalInverse);
+    return (localMatrix ? SkMatrix::Concat(ctm, *localMatrix) : ctm).invert(totalInverse);
 }
 
 bool SkShaderBase::asLuminanceColor(SkColor* colorPtr) const {
@@ -79,9 +57,7 @@ bool SkShaderBase::asLuminanceColor(SkColor* colorPtr) const {
 SkShaderBase::Context* SkShaderBase::makeContext(const ContextRec& rec, SkArenaAlloc* alloc) const {
 #ifdef SK_ENABLE_LEGACY_SHADERCONTEXT
     // We always fall back to raster pipeline when perspective is present.
-    if (rec.fMatrix->hasPerspective() ||
-        fLocalMatrix.hasPerspective() ||
-        (rec.fLocalMatrix && rec.fLocalMatrix->hasPerspective()) ||
+    if (rec.fMatrix->hasPerspective() || (rec.fLocalMatrix && rec.fLocalMatrix->hasPerspective()) ||
         !this->computeTotalInverse(*rec.fMatrix, rec.fLocalMatrix, nullptr)) {
         return nullptr;
     }
@@ -98,7 +74,6 @@ SkShaderBase::Context::Context(const SkShaderBase& shader, const ContextRec& rec
     // We should never use a context with perspective.
     SkASSERT(!rec.fMatrix->hasPerspective());
     SkASSERT(!rec.fLocalMatrix || !rec.fLocalMatrix->hasPerspective());
-    SkASSERT(!shader.getLocalMatrix().hasPerspective());
 
     // Because the context parameters must be valid at this point, we know that the matrix is
     // invertible.
@@ -120,10 +95,6 @@ bool SkShaderBase::ContextRec::isLegacyCompatible(SkColorSpace* shaderColorSpace
 
 SkImage* SkShader::isAImage(SkMatrix* localMatrix, SkTileMode xy[2]) const {
     return as_SB(this)->onIsAImage(localMatrix, xy);
-}
-
-SkShader::GradientType SkShader::asAGradient(GradientInfo* info) const {
-    return kNone_GradientType;
 }
 
 #if SK_SUPPORT_GPU
@@ -148,11 +119,13 @@ SkUpdatableShader* SkShaderBase::onUpdatableShader(SkArenaAlloc* alloc) const {
     return nullptr;
 }
 
-#ifdef SK_ENABLE_SKSL
+#ifdef SK_GRAPHITE_ENABLED
 // TODO: add implementations for derived classes
-void SkShaderBase::addToKey(const SkKeyContext& keyContext,
-                            SkPaintParamsKeyBuilder* builder,
-                            SkPipelineDataGatherer* gatherer) const {
+void SkShaderBase::addToKey(const skgpu::graphite::KeyContext& keyContext,
+                            skgpu::graphite::PaintParamsKeyBuilder* builder,
+                            skgpu::graphite::PipelineDataGatherer* gatherer) const {
+    using namespace skgpu::graphite;
+
     SolidColorShaderBlock::BeginBlock(keyContext, builder, gatherer, {1, 0, 0, 1});
     builder->endBlock();
 }

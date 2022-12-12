@@ -180,15 +180,22 @@ static inline void transform_scanline_F32_premul(char* dst, const char* src, int
           skcms_PixelFormat_RGBA_16161616BE, skcms_AlphaFormat_Unpremul);
 }
 
-static inline sk_sp<SkData> icc_from_color_space(const SkImageInfo& info) {
+static inline sk_sp<SkData> icc_from_color_space(const SkImageInfo& info,
+                                                 const skcms_ICCProfile* profile,
+                                                 const char* profile_description) {
     SkColorSpace* cs = info.colorSpace();
     if (!cs) {
         return nullptr;
     }
 
-    skcms_TransferFunction fn;
+    if (profile) {
+        return SkWriteICCProfile(profile, profile_description);
+    }
+
     skcms_Matrix3x3 toXYZD50;
-    if (cs->isNumericalTransferFn(&fn) && cs->toXYZD50(&toXYZD50)) {
+    if (cs->toXYZD50(&toXYZD50)) {
+        skcms_TransferFunction fn;
+        cs->transferFn(&fn);
         return SkWriteICCProfile(fn, toXYZD50);
     }
     return nullptr;

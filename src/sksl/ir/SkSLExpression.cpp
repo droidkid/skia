@@ -9,9 +9,14 @@
 
 #include "include/private/SkSLDefines.h"
 #include "include/sksl/SkSLErrorReporter.h"
+#include "include/sksl/SkSLOperator.h"
 #include "src/sksl/SkSLContext.h"
 
 namespace SkSL {
+
+std::string Expression::description() const {
+    return this->description(OperatorPrecedence::kTopLevel);
+}
 
 bool Expression::isIncomplete(const Context& context) const {
     switch (this->kind()) {
@@ -36,7 +41,7 @@ bool Expression::isIncomplete(const Context& context) const {
 
 ExpressionArray ExpressionArray::clone() const {
     ExpressionArray cloned;
-    cloned.reserve_back(this->count());
+    cloned.reserve_back(this->size());
     for (const std::unique_ptr<Expression>& expr : *this) {
         cloned.push_back(expr ? expr->clone() : nullptr);
     }

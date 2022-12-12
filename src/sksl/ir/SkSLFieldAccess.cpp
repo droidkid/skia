@@ -12,6 +12,7 @@
 #include "include/private/SkSLSymbol.h"
 #include "include/private/SkTArray.h"
 #include "include/sksl/SkSLErrorReporter.h"
+#include "include/sksl/SkSLOperator.h"
 #include "src/sksl/SkSLAnalysis.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
 #include "src/sksl/SkSLConstantFolder.h"
@@ -35,7 +36,7 @@ std::unique_ptr<Expression> FieldAccess::Convert(const Context& context,
     if (baseType.isEffectChild()) {
         // Turn the field name into a free function name, prefixed with '$':
         std::string methodName = "$" + std::string(field);
-        const Symbol* result = symbolTable[methodName];
+        const Symbol* result = symbolTable.find(methodName);
         if (result && result->is<FunctionDeclaration>()) {
             return std::make_unique<MethodReference>(context, pos, std::move(base),
                                                      &result->as<FunctionDeclaration>());
@@ -66,7 +67,7 @@ static std::unique_ptr<Expression> extract_field(Position pos,
                                                  int fieldIndex) {
     // Confirm that the fields that are being removed are side-effect free.
     const ExpressionArray& args = ctor.arguments();
-    int numFields = args.count();
+    int numFields = args.size();
     for (int index = 0; index < numFields; ++index) {
         if (fieldIndex == index) {
             continue;
@@ -99,6 +100,14 @@ std::unique_ptr<Expression> FieldAccess::Make(const Context& context,
     }
 
     return std::make_unique<FieldAccess>(pos, std::move(base), fieldIndex, ownerKind);
+}
+
+std::string FieldAccess::description(OperatorPrecedence) const {
+    std::string f = this->base()->description(OperatorPrecedence::kPostfix);
+    if (!f.empty()) {
+        f.push_back('.');
+    }
+    return f + std::string(this->base()->type().fields()[this->fieldIndex()].fName);
 }
 
 }  // namespace SkSL

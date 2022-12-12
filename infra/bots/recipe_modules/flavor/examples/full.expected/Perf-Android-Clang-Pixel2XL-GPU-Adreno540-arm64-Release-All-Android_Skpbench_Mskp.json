@@ -20,7 +20,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -37,7 +36,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -171,7 +169,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -189,7 +186,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -519,7 +515,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -572,7 +567,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -678,7 +672,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -709,20 +702,18 @@
     "cmd": [
       "/opt/infra-android/tools/adb",
       "push",
-      "--sync",
       "[START_DIR]/mskp/bar.jpg",
       "[START_DIR]/mskp/foo.png",
       "/sdcard/revenge_of_the_skiabot/mskp"
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
     },
     "infra_step": true,
-    "name": "push --sync [START_DIR]/mskp/* /sdcard/revenge_of_the_skiabot/mskp"
+    "name": "push [START_DIR]/mskp/* /sdcard/revenge_of_the_skiabot/mskp"
   },
   {
     "cmd": [
@@ -733,7 +724,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -768,7 +758,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -784,7 +773,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -829,7 +817,6 @@
     ],
     "cwd": "[START_DIR]/skia",
     "env": {
-      "ADB_TRACE": "all",
       "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
       "CHROME_HEADLESS": "1",
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
@@ -930,21 +917,6 @@
       "@@@STEP_LOG_LINE@python.inline@  print(line)@@@",
       "@@@STEP_LOG_END@python.inline@@@"
     ]
-  },
-  {
-    "cmd": [
-      "/opt/infra-android/tools/adb",
-      "kill-server"
-    ],
-    "cwd": "[START_DIR]/skia",
-    "env": {
-      "ADB_TRACE": "all",
-      "ADB_VENDOR_KEYS": "/home/chrome-bot/.android/chrome_infrastructure_adbkey",
-      "CHROME_HEADLESS": "1",
-      "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
-    },
-    "infra_step": true,
-    "name": "kill adb server"
   },
   {
     "name": "$result"

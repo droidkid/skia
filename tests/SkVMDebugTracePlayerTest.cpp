@@ -5,15 +5,28 @@
  * found in the LICENSE file.
  */
 
-#include "include/core/SkM44.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkSpan.h"
+#include "include/private/SkSLProgramKind.h"
+#include "include/private/SkSLString.h"
+#include "src/core/SkVM.h"
 #include "src/sksl/SkSLCompiler.h"
+#include "src/sksl/SkSLProgramSettings.h"
 #include "src/sksl/SkSLUtil.h"
 #include "src/sksl/codegen/SkSLVMCodeGenerator.h"
+#include "src/sksl/ir/SkSLFunctionDeclaration.h"
 #include "src/sksl/ir/SkSLProgram.h"
+#include "src/sksl/tracing/SkSLDebugInfo.h"
 #include "src/sksl/tracing/SkVMDebugTrace.h"
 #include "src/sksl/tracing/SkVMDebugTracePlayer.h"
-
 #include "tests/Test.h"
+
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 using LineNumberMap = SkSL::SkVMDebugTracePlayer::LineNumberMap;
 
@@ -28,9 +41,9 @@ static sk_sp<SkSL::SkVMDebugTrace> make_trace(skiatest::Reporter* r, std::string
                                                                      src, settings);
     REPORTER_ASSERT(r, program);
 
-    const SkSL::FunctionDefinition* main = SkSL::Program_GetFunction(*program, "main");
+    const SkSL::FunctionDeclaration* main = program->getFunction("main");
     auto debugTrace = sk_make_sp<SkSL::SkVMDebugTrace>();
-    SkSL::ProgramToSkVM(*program, *main, &b, debugTrace.get(), /*uniforms=*/{});
+    SkSL::ProgramToSkVM(*program, *main->definition(), &b, debugTrace.get(), /*uniforms=*/{});
     skvm::Program p = b.done();
     REPORTER_ASSERT(r, p.nargs() == 1);
 
@@ -63,17 +76,16 @@ static std::string make_vars_string(
         const SkSL::SkVMDebugTrace& trace,
         const std::vector<SkSL::SkVMDebugTracePlayer::VariableData>& vars) {
     std::string text;
-    const char* separator = "";
+    auto separator = SkSL::String::Separator();
     for (const SkSL::SkVMDebugTracePlayer::VariableData& var : vars) {
-        text += separator;
-        separator = ", ";
+        text += separator();
 
         if (var.fSlotIndex < 0 || (size_t)var.fSlotIndex >= trace.fSlotInfo.size()) {
             text += "???";
             continue;
         }
 
-        const SkSL::SkVMSlotInfo& slot = trace.fSlotInfo[var.fSlotIndex];
+        const SkSL::SlotDebugInfo& slot = trace.fSlotInfo[var.fSlotIndex];
         text += var.fDirty ? "##": "";
         text += slot.name;
         text += trace.getSlotComponentSuffix(var.fSlotIndex);

@@ -6,6 +6,7 @@
  */
 
 #include "include/core/SkTypes.h"
+#include "include/private/SkSLIRNode.h"
 #include "include/private/SkSLModifiers.h"
 #include "include/sksl/SkSLOperator.h"
 #include "src/sksl/SkSLAnalysis.h"
@@ -25,7 +26,7 @@ bool Analysis::HasSideEffects(const Expression& expr) {
             switch (expr.kind()) {
                 case Expression::Kind::kFunctionCall: {
                     const FunctionCall& call = expr.as<FunctionCall>();
-                    if (call.function().modifiers().fFlags & Modifiers::kHasSideEffects_Flag) {
+                    if (!(call.function().modifiers().fFlags & Modifiers::kPure_Flag)) {
                         return true;
                     }
                     break;

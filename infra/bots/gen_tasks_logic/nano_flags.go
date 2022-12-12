@@ -65,7 +65,12 @@ func (b *taskBuilder) nanobenchFlags(doUpload bool) {
 			sampleCount = 4
 		} else if b.matchGpu("Intel") {
 			// MSAA doesn't work well on Intel GPUs chromium:527565, chromium:983926
-			sampleCount = 0
+			if b.gpu("IntelIrisXe") && b.matchOs("Win") && b.extraConfig("ANGLE") {
+				// Make an exception for newer GPUs + D3D
+				args = append(args, "--allowMSAAOnNewIntel", "true")
+			} else {
+				sampleCount = 0
+			}
 		} else if b.os("ChromeOS") {
 			glPrefix = "gles"
 		}
@@ -151,9 +156,9 @@ func (b *taskBuilder) nanobenchFlags(doUpload bool) {
 		}
 
 		if b.extraConfig("Graphite") {
-                        if (b.extraConfig("Metal")) {
-			        configs = []string{"grmtl"}
-                        }
+			if b.extraConfig("Metal") {
+				configs = []string{"grmtl"}
+			}
 		}
 
 		if b.os("ChromeOS") {
@@ -351,9 +356,8 @@ func (b *taskBuilder) nanobenchFlags(doUpload bool) {
 
 	if doUpload {
 		keysExclude := map[string]bool{
-			"configuration": true,
-			"role":          true,
-			"test_filter":   true,
+			"role":        true,
+			"test_filter": true,
 		}
 		keys := make([]string, 0, len(b.parts))
 		for k := range b.parts {
@@ -362,6 +366,12 @@ func (b *taskBuilder) nanobenchFlags(doUpload bool) {
 		sort.Strings(keys)
 		args = append(args, "--key")
 		for _, k := range keys {
+			// We had not been adding this to our traces for a long time. We then started doing
+			// performance data on an "OptimizeForSize" build. We didn't want to disrupt the
+			// existing traces, so we skip the configuration for Release builds.
+			if k == "configuration" && b.parts[k] == "Release" {
+				continue
+			}
 			if !keysExclude[k] {
 				args = append(args, k, b.parts[k])
 			}

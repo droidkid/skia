@@ -11,7 +11,6 @@
 #include "include/sksl/SkSLPosition.h"
 #include "src/sksl/SkSLCompiler.h"
 #include "src/sksl/SkSLModifiersPool.h"
-#include "src/sksl/SkSLParsedModule.h"
 #include "src/sksl/SkSLPool.h"
 #include "src/sksl/ir/SkSLExternalFunction.h"
 #include "src/sksl/ir/SkSLSymbolTable.h"
@@ -23,7 +22,7 @@ namespace SkSL {
 ThreadContext::ThreadContext(SkSL::Compiler* compiler,
                              SkSL::ProgramKind kind,
                              const SkSL::ProgramSettings& settings,
-                             SkSL::ParsedModule module,
+                             const SkSL::Module* module,
                              bool isModule)
         : fCompiler(compiler)
         , fOldConfig(fCompiler->fContext->fConfig)
@@ -45,8 +44,8 @@ ThreadContext::ThreadContext(SkSL::Compiler* compiler,
     fConfig->fIsBuiltinCode = isModule;
     fCompiler->fContext->fConfig = fConfig.get();
     fCompiler->fContext->fErrors = &fDefaultErrorReporter;
-    fCompiler->fContext->fBuiltins = module.fElements.get();
-    fCompiler->fSymbolTable = module.fSymbols;
+    fCompiler->fContext->fModule = module;
+    fCompiler->fSymbolTable = module->fSymbols;
     this->setupSymbolTable();
 }
 

@@ -5,14 +5,24 @@
 * found in the LICENSE file
 */
 
-#include "include/core/SkBitmap.h"
+#include "include/core/SkAlphaType.h"
 #include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkColorType.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkSurfaceProps.h"
+#include "include/core/SkTypes.h"
 #include "include/gpu/GrDirectContext.h"
+#include "include/gpu/GrTypes.h"
 #include "src/core/SkSpecialImage.h"
 #include "src/core/SkSpecialSurface.h"
-#include "src/gpu/ganesh/GrDirectContextPriv.h"
-#include "src/gpu/ganesh/SkGr.h"
+#include "tests/CtsEnforcement.h"
 #include "tests/Test.h"
+
+#include <initializer_list>
+struct GrContextOptions;
 
 static const int kSurfaceSize = 10;
 
@@ -77,7 +87,7 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(SpecialSurface_Gpu1,
 #include "src/gpu/graphite/Caps.h"
 #include "src/gpu/graphite/ContextPriv.h"
 
-DEF_GRAPHITE_TEST_FOR_CONTEXTS(SpecialSurface_Graphite, reporter, context) {
+DEF_GRAPHITE_TEST_FOR_RENDERING_CONTEXTS(SpecialSurface_Graphite, reporter, context) {
     using namespace skgpu::graphite;
 
     auto caps = context->priv().caps();
@@ -85,7 +95,7 @@ DEF_GRAPHITE_TEST_FOR_CONTEXTS(SpecialSurface_Graphite, reporter, context) {
 
     for (auto colorType : { kRGBA_8888_SkColorType, kRGBA_1010102_SkColorType }) {
         TextureInfo info = caps->getDefaultSampledTextureInfo(colorType,
-                                                              /*levelCount=*/ 1,
+                                                              /*mipmapped=*/ Mipmapped::kNo,
                                                               skgpu::Protected::kNo,
                                                               Renderable::kYes);
         if (!info.isValid()) {

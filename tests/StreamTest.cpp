@@ -5,28 +5,37 @@
  * found in the LICENSE file.
  */
 
-// Make sure SkUserConfig.h is included so #defines are available on
-// Android.
-#include "include/core/SkTypes.h"
-#ifdef SK_ENABLE_ANDROID_UTILS
-#include "client_utils/android/FrontBufferedStream.h"
-#endif
 #include "include/core/SkData.h"
+#include "include/core/SkRefCnt.h"
 #include "include/core/SkStream.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkTemplates.h"
 #include "include/private/SkTo.h"
 #include "include/utils/SkRandom.h"
 #include "src/core/SkAutoMalloc.h"
+#include "src/core/SkBuffer.h"
 #include "src/core/SkOSFile.h"
 #include "src/core/SkStreamPriv.h"
 #include "src/utils/SkOSPath.h"
 #include "tests/Test.h"
 #include "tools/Resources.h"
 
+#include <algorithm>
+#include <climits>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <functional>
 #include <limits>
+#include <memory>
+#include <string>
+
+#ifdef SK_ENABLE_ANDROID_UTILS
+#include "client_utils/android/FrontBufferedStream.h"
+#endif
 
 #ifndef SK_BUILD_FOR_WIN
-#include <unistd.h>
 #include <fcntl.h>
 #endif
 
@@ -405,6 +414,27 @@ DEF_TEST(StreamPeek_BlockMemoryStream, rep) {
     stream_peek_test(rep, asset.get(), expected.get());
 }
 
+DEF_TEST(StreamRemainingLengthIsBelow_MemoryStream, rep) {
+    SkMemoryStream stream(100);
+    REPORTER_ASSERT(rep, !StreamRemainingLengthIsBelow(&stream, 0));
+    REPORTER_ASSERT(rep, !StreamRemainingLengthIsBelow(&stream, 90));
+    REPORTER_ASSERT(rep, !StreamRemainingLengthIsBelow(&stream, 100));
+
+    REPORTER_ASSERT(rep, StreamRemainingLengthIsBelow(&stream, 101));
+    REPORTER_ASSERT(rep, StreamRemainingLengthIsBelow(&stream, ULONG_MAX));
+
+    uint8_t buff[75];
+    REPORTER_ASSERT(rep, stream.read(buff, 75) == 75);
+
+    REPORTER_ASSERT(rep, !StreamRemainingLengthIsBelow(&stream, 0));
+    REPORTER_ASSERT(rep, !StreamRemainingLengthIsBelow(&stream, 24));
+    REPORTER_ASSERT(rep, !StreamRemainingLengthIsBelow(&stream, 25));
+
+    REPORTER_ASSERT(rep, StreamRemainingLengthIsBelow(&stream, 26));
+    REPORTER_ASSERT(rep, StreamRemainingLengthIsBelow(&stream, 100));
+    REPORTER_ASSERT(rep, StreamRemainingLengthIsBelow(&stream, ULONG_MAX));
+}
+
 namespace {
 class DumbStream : public SkStream {
 public:
@@ -646,8 +676,6 @@ DEF_TEST(FILEStreamWithOffset, r) {
 
     test_all(&stream2, true);
 }
-
-#include "src/core/SkBuffer.h"
 
 DEF_TEST(RBuffer, reporter) {
     int32_t value = 0;

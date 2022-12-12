@@ -5,28 +5,60 @@
  * found in the LICENSE file.
  */
 
+#include "include/core/SkAlphaType.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkColor.h"
 #include "include/core/SkColorSpace.h"
-#include "include/core/SkSurface.h"
+#include "include/core/SkColorType.h"
+#include "include/core/SkData.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkPixmap.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkSamplingOptions.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypes.h"
+#include "include/gpu/GrBackendSurface.h"
+#include "include/gpu/GrContextOptions.h"
 #include "include/gpu/GrDirectContext.h"
+#include "include/gpu/GrTypes.h"
+#include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/core/SkAutoPixmapStorage.h"
-#include "src/core/SkCanvasPriv.h"
 #include "src/core/SkCompressedDataUtils.h"
+#include "src/gpu/Swizzle.h"
 #include "src/gpu/ganesh/GrBackendUtils.h"
+#include "src/gpu/ganesh/GrCaps.h"
+#include "src/gpu/ganesh/GrColorInfo.h"
+#include "src/gpu/ganesh/GrDataUtils.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
 #include "src/gpu/ganesh/GrGpu.h"
 #include "src/gpu/ganesh/GrImageInfo.h"
 #include "src/gpu/ganesh/GrProxyProvider.h"
 #include "src/gpu/ganesh/GrRenderTarget.h"
+#include "src/gpu/ganesh/GrResourceCache.h"
 #include "src/gpu/ganesh/GrResourceProvider.h"
+#include "src/gpu/ganesh/GrSamplerState.h"
+#include "src/gpu/ganesh/GrSurface.h"
+#include "src/gpu/ganesh/GrSurfaceProxy.h"
+#include "src/gpu/ganesh/GrSurfaceProxyView.h"
 #include "src/gpu/ganesh/GrTexture.h"
+#include "src/gpu/ganesh/GrTextureProxy.h"
 #include "src/gpu/ganesh/SkGr.h"
 #include "src/gpu/ganesh/SurfaceContext.h"
+#include "src/gpu/ganesh/TestFormatColorTypeCombination.h"
+#include "tests/CtsEnforcement.h"
 #include "tests/Test.h"
-#include "tests/TestUtils.h"
-#include "tools/gpu/BackendTextureImageFactory.h"
 #include "tools/gpu/ManagedBackendTexture.h"
 
-#include <set>
+#include <cstdint>
+#include <functional>
+#include <initializer_list>
+#include <memory>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 // Tests that GrSurface::asTexture(), GrSurface::asRenderTarget(), and static upcasting of texture
 // and render targets to GrSurface all work as expected.
@@ -140,10 +172,10 @@ DEF_GANESH_TEST_FOR_ALL_CONTEXTS(GrSurfaceRenderability,
 
     static constexpr SkISize kDims = {64, 64};
 
-    const std::vector<GrCaps::TestFormatColorTypeCombination>& combos =
+    const std::vector<GrTest::TestFormatColorTypeCombination>& combos =
             caps->getTestingCombinations();
 
-    for (const GrCaps::TestFormatColorTypeCombination& combo : combos) {
+    for (const GrTest::TestFormatColorTypeCombination& combo : combos) {
 
         SkASSERT(combo.fColorType != GrColorType::kUnknown);
         SkASSERT(combo.fFormat.isValid());
@@ -221,9 +253,6 @@ DEF_GANESH_TEST_FOR_ALL_CONTEXTS(GrSurfaceRenderability,
     }
 }
 
-#include "src/gpu/ganesh/GrDrawingManager.h"
-#include "src/gpu/ganesh/GrSurfaceProxy.h"
-
 // For each context, set it to always clear the textures and then run through all the
 // supported formats checking that the textures are actually cleared
 DEF_GANESH_TEST(InitialTextureClear, reporter, baseOptions, CtsEnforcement::kApiLevel_T) {
@@ -256,10 +285,10 @@ DEF_GANESH_TEST(InitialTextureClear, reporter, baseOptions, CtsEnforcement::kApi
         GrProxyProvider* proxyProvider = dContext->priv().proxyProvider();
         const GrCaps* caps = dContext->priv().caps();
 
-        const std::vector<GrCaps::TestFormatColorTypeCombination>& combos =
+        const std::vector<GrTest::TestFormatColorTypeCombination>& combos =
                 caps->getTestingCombinations();
 
-        for (const GrCaps::TestFormatColorTypeCombination& combo : combos) {
+        for (const GrTest::TestFormatColorTypeCombination& combo : combos) {
 
             SkASSERT(combo.fColorType != GrColorType::kUnknown);
             SkASSERT(combo.fFormat.isValid());
@@ -268,7 +297,7 @@ DEF_GANESH_TEST(InitialTextureClear, reporter, baseOptions, CtsEnforcement::kApi
                 continue;
             }
 
-            auto checkColor = [reporter](const GrCaps::TestFormatColorTypeCombination& combo,
+            auto checkColor = [reporter](const GrTest::TestFormatColorTypeCombination& combo,
                                          uint32_t readColor) {
                 // We expect that if there is no alpha in the src color type and we read it to a
                 // color type with alpha that we will get one for alpha rather than zero. We used to
@@ -460,8 +489,11 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(ReadOnlyTexture,
         // Try the low level copy.
         dContext->flushAndSubmit();
         auto gpuCopyResult = dContext->priv().getGpu()->copySurface(
-                proxy->peekSurface(), copySrc.proxy()->peekSurface(), SkIRect::MakeWH(kSize, kSize),
-                {0, 0});
+                proxy->peekSurface(),
+                SkIRect::MakeWH(kSize, kSize),
+                copySrc.proxy()->peekSurface(),
+                SkIRect::MakeWH(kSize, kSize),
+                GrSamplerState::Filter::kNearest);
         REPORTER_ASSERT(reporter, gpuCopyResult == (ioType == kRW_GrIOType));
 
         // Mip regen should not work with a read only texture.

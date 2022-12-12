@@ -85,7 +85,7 @@ void SkSurface_Base::onDraw(SkCanvas* canvas, SkScalar x, SkScalar y,
 }
 
 void SkSurface_Base::onAsyncRescaleAndReadPixels(const SkImageInfo& info,
-                                                 const SkIRect& origSrcRect,
+                                                 SkIRect origSrcRect,
                                                  SkSurface::RescaleGamma rescaleGamma,
                                                  RescaleMode rescaleMode,
                                                  SkSurface::ReadPixelsCallback callback,
@@ -110,8 +110,8 @@ void SkSurface_Base::onAsyncRescaleAndReadPixels(const SkImageInfo& info,
 }
 
 void SkSurface_Base::onAsyncRescaleAndReadPixelsYUV420(
-        SkYUVColorSpace yuvColorSpace, sk_sp<SkColorSpace> dstColorSpace, const SkIRect& srcRect,
-        const SkISize& dstSize, RescaleGamma rescaleGamma, RescaleMode,
+        SkYUVColorSpace yuvColorSpace, sk_sp<SkColorSpace> dstColorSpace, SkIRect srcRect,
+        SkISize dstSize, RescaleGamma rescaleGamma, RescaleMode,
         ReadPixelsCallback callback, ReadPixelsContext context) {
     // TODO: Call non-YUV asyncRescaleAndReadPixels and then make our callback convert to YUV and
     // call client's callback.
@@ -190,11 +190,6 @@ SkSurface::SkSurface(const SkImageInfo& info, const SkSurfaceProps* props)
     fGenerationID = 0;
 }
 
-SkImageInfo SkSurface::imageInfo() {
-    // TODO: do we need to go through canvas for this?
-    return this->getCanvas()->imageInfo();
-}
-
 uint32_t SkSurface::generationID() {
     if (0 == fGenerationID) {
         fGenerationID = asSB(this)->newGenerationID();
@@ -231,6 +226,29 @@ sk_sp<SkImage> SkSurface::makeImageSnapshot(const SkIRect& srcBounds) {
         return asSB(this)->onNewImageSnapshot(&bounds);
     }
 }
+
+#ifdef SK_GRAPHITE_ENABLED
+#include "src/gpu/graphite/Log.h"
+
+sk_sp<SkImage> SkSurface::asImage() {
+    if (asSB(this)->fCachedImage) {
+        SKGPU_LOG_W("Intermingling makeImageSnapshot and asImage calls may produce "
+                    "unexpected results. Please use either the old _or_ new API.");
+    }
+
+    return asSB(this)->onAsImage();
+}
+
+sk_sp<SkImage> SkSurface::makeImageCopy(const SkIRect* subset,
+                                        skgpu::graphite::Mipmapped mipmapped) {
+    if (asSB(this)->fCachedImage) {
+        SKGPU_LOG_W("Intermingling makeImageSnapshot and makeImageCopy calls may produce "
+                    "unexpected results. Please use either the old _or_ new API.");
+    }
+
+    return asSB(this)->onMakeImageCopy(subset, mipmapped);
+}
+#endif
 
 sk_sp<SkSurface> SkSurface::makeSurface(const SkImageInfo& info) {
     return asSB(this)->onNewSurface(info);
@@ -382,7 +400,7 @@ GrSemaphoresSubmitted SkSurface::flush(BackendSurfaceAccess access, const GrFlus
 }
 
 GrSemaphoresSubmitted SkSurface::flush(const GrFlushInfo& info,
-                                       const GrBackendSurfaceMutableState* newState) {
+                                       const skgpu::MutableTextureState* newState) {
     return asSB(this)->onFlush(BackendSurfaceAccess::kNoAccess, info, newState);
 }
 
@@ -423,6 +441,9 @@ protected:
         // Not really, but we have to return *something*
         return SkCapabilities::RasterBackend();
     }
+    SkImageInfo imageInfo() const override {
+        return SkImageInfo::MakeUnknown(this->width(), this->height());
+    }
 };
 
 sk_sp<SkSurface> SkSurface::MakeNull(int width, int height) {
@@ -433,6 +454,3 @@ sk_sp<SkSurface> SkSurface::MakeNull(int width, int height) {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
-
-
-

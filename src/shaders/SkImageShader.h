@@ -13,7 +13,9 @@
 #include "src/shaders/SkBitmapProcShader.h"
 #include "src/shaders/SkShaderBase.h"
 
-class SkKeyContext;
+namespace skgpu::graphite {
+class KeyContext;
+}
 
 class SkImageShader : public SkShaderBase {
 public:
@@ -40,29 +42,27 @@ public:
                                       const SkMatrix* localMatrix,
                                       bool clampAsIfUnpremul = false);
 
+    SkImageShader(sk_sp<SkImage>,
+                  const SkRect& subset,
+                  SkTileMode tmx, SkTileMode tmy,
+                  const SkSamplingOptions&,
+                  bool raw,
+                  bool clampAsIfUnpremul);
+
     bool isOpaque() const override;
 
 #if SK_SUPPORT_GPU
     std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(const GrFPArgs&) const override;
 #endif
-#ifdef SK_ENABLE_SKSL
-    void addToKey(const SkKeyContext&,
-                  SkPaintParamsKeyBuilder*,
-                  SkPipelineDataGatherer*) const override;
+#ifdef SK_GRAPHITE_ENABLED
+    void addToKey(const skgpu::graphite::KeyContext&,
+                  skgpu::graphite::PaintParamsKeyBuilder*,
+                  skgpu::graphite::PipelineDataGatherer*) const override;
 #endif
     static SkM44 CubicResamplerMatrix(float B, float C);
 
 private:
     SK_FLATTENABLE_HOOKS(SkImageShader)
-
-    SkImageShader(sk_sp<SkImage>,
-                  const SkRect& subset,
-                  SkTileMode tmx,
-                  SkTileMode tmy,
-                  const SkSamplingOptions&,
-                  const SkMatrix* localMatrix,
-                  bool raw,
-                  bool clampAsIfUnpremul);
 
     void flatten(SkWriteBuffer&) const override;
 #ifdef SK_ENABLE_LEGACY_SHADERCONTEXT

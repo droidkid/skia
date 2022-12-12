@@ -7,6 +7,7 @@
 
 #include "tests/Test.h"
 
+#include "include/core/SkBitmap.h"
 #include "include/gpu/graphite/Context.h"
 #include "include/gpu/graphite/Recording.h"
 #include "src/gpu/graphite/ContextPriv.h"
@@ -82,14 +83,7 @@ bool run_test(skiatest::Reporter* reporter,
     context->insertRecording(info);
     context->submit();
 
-    // For now, we cast and call directly into Surface. Once we have a better idea of
-    // what the public API for synchronous graphite readPixels we can update this call to use
-    // that instead.
-    if (!static_cast<skgpu::graphite::Surface*>(surface.get())->onReadPixels(context,
-                                                                             recorder,
-                                                                             pm0,
-                                                                             0,
-                                                                             0)) {
+    if (!surface->readPixels(pm0, 0, 0)) {
         ERRORF(reporter, "readPixels failed");
         return false;
     }
@@ -103,11 +97,7 @@ bool run_test(skiatest::Reporter* reporter,
     context->insertRecording(info);
     context->submit();
 
-    if (!static_cast<skgpu::graphite::Surface*>(surface.get())->onReadPixels(context,
-                                                                             recorder,
-                                                                             pm1,
-                                                                             0,
-                                                                             0)) {
+    if (!surface->readPixels(pm1, 0, 0)) {
         ERRORF(reporter, "readPixels failed");
         return false;
     }
@@ -131,7 +121,7 @@ bool run_test(skiatest::Reporter* reporter,
 
 // This test captures two recordings A and B, plays them back as A then B, and B then A,
 // and verifies that the result is the same.
-DEF_GRAPHITE_TEST_FOR_CONTEXTS(RecordingOrderTest_Graphite, reporter, context) {
+DEF_GRAPHITE_TEST_FOR_RENDERING_CONTEXTS(RecordingOrderTest_Graphite, reporter, context) {
     std::unique_ptr<Recorder> recorder = context->makeRecorder();
 
     (void) run_test(reporter, context, recorder.get());

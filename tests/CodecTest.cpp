@@ -5,18 +5,14 @@
  * found in the LICENSE file.
  */
 
-// Make sure SkUserConfig.h is included so #defines are available on
-// Android.
-#include "include/core/SkTypes.h"
-#ifdef SK_ENABLE_ANDROID_UTILS
-#include "client_utils/android/FrontBufferedStream.h"
-#endif
 #include "include/codec/SkAndroidCodec.h"
 #include "include/codec/SkCodec.h"
+#include "include/core/SkAlphaType.h"
 #include "include/core/SkBitmap.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
 #include "include/core/SkColorSpace.h"
+#include "include/core/SkColorType.h"
 #include "include/core/SkData.h"
 #include "include/core/SkEncodedImageFormat.h"
 #include "include/core/SkImage.h"
@@ -31,7 +27,6 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkString.h"
 #include "include/core/SkTypes.h"
-#include "include/core/SkUnPreMultiply.h"
 #include "include/encode/SkJpegEncoder.h"
 #include "include/encode/SkPngEncoder.h"
 #include "include/encode/SkWebpEncoder.h"
@@ -49,9 +44,16 @@
 #include "tools/Resources.h"
 #include "tools/ToolUtils.h"
 
-#include <png.h>
+#ifdef SK_ENABLE_ANDROID_UTILS
+#include "client_utils/android/FrontBufferedStream.h"
+#endif
 
+#include <png.h>
+#include <pngconf.h>
 #include <setjmp.h>
+
+#include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <initializer_list>
 #include <memory>
@@ -1480,11 +1482,24 @@ static void test_invalid_images(skiatest::Reporter* r, const char* path,
 }
 
 DEF_TEST(Codec_InvalidImages, r) {
-    // ASAN will complain if there is an issue.
-    test_invalid_images(r, "invalid_images/skbug5887.gif", SkCodec::kErrorInInput);
-    test_invalid_images(r, "invalid_images/many-progressive-scans.jpg", SkCodec::kInvalidInput);
     test_invalid_images(r, "invalid_images/b33251605.bmp", SkCodec::kIncompleteInput);
     test_invalid_images(r, "invalid_images/bad_palette.png", SkCodec::kInvalidInput);
+    test_invalid_images(r, "invalid_images/many-progressive-scans.jpg", SkCodec::kInvalidInput);
+
+    // An earlier revision of this test case passed kErrorInInput (instead of
+    // kSuccess) as the third argument (expectedResult). However, after
+    // https://skia-review.googlesource.com/c/skia/+/414417 `SkWuffsCodec:
+    // ignore too much pixel data` combined with
+    // https://github.com/google/wuffs/commit/e44920d3 `Let gif "ignore too
+    // much" quirk skip lzw errors`, the codec silently accepts skbug5887.gif
+    // (without the ASAN buffer-overflow violation that lead to that test case
+    // in the first place), even though it's technically an invalid GIF.
+    //
+    // Note that, in practice, real world GIF decoders already diverge (in
+    // different ways) from the GIF specification. For compatibility, (ad hoc)
+    // implementation often trumps specification.
+    // https://github.com/google/wuffs/blob/e44920d3/test/data/artificial-gif/frame-out-of-bounds.gif.make-artificial.txt#L30-L31
+    test_invalid_images(r, "invalid_images/skbug5887.gif", SkCodec::kSuccess);
 }
 
 static void test_invalid_header(skiatest::Reporter* r, const char* path) {

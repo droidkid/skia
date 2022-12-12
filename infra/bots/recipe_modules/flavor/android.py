@@ -71,6 +71,7 @@ class AndroidFlavor(default.DefaultFlavor):
       'Pixel': range(0, 2),
       'Pixel2XL': range(0, 4),
       'Pixel6': range(4,8), # Only use the 4 small cores.
+      'Pixel7': range(4,8),
     }
 
     self.gpu_scaling = {
@@ -89,9 +90,9 @@ class AndroidFlavor(default.DefaultFlavor):
 
     def wait_for_device(attempt):
       self.m.run(self.m.step,
-                 'adb reconnect after failure of \'%s\' (attempt %d)' % (
+                 'adb reconnect offline after failure of \'%s\' (attempt %d)' % (
                      title, attempt),
-                 cmd=[self.ADB_BINARY, 'reconnect'],
+                 cmd=[self.ADB_BINARY, 'reconnect', 'offline'],
                  infra_step=True, timeout=30, abort_on_failure=False,
                  fail_build_on_failure=False)
       self.m.run(self.m.step,
@@ -101,9 +102,15 @@ class AndroidFlavor(default.DefaultFlavor):
                  timeout=180, abort_on_failure=False,
                  fail_build_on_failure=False)
       self.m.run(self.m.step,
-                 'adb reconnect device after failure of \'%s\' (attempt %d)' % (
+                 'adb devices -l after failure of \'%s\' (attempt %d)' % (
                      title, attempt),
-                 cmd=[self.ADB_BINARY, 'reconnect', 'device'],
+                 cmd=[self.ADB_BINARY, 'devices', '-l'],
+                 infra_step=True, timeout=30, abort_on_failure=False,
+                 fail_build_on_failure=False)
+      self.m.run(self.m.step,
+                 'adb reboot device after failure of \'%s\' (attempt %d)' % (
+                     title, attempt),
+                 cmd=[self.ADB_BINARY, 'reboot'],
                  infra_step=True, timeout=30, abort_on_failure=False,
                  fail_build_on_failure=False)
       self.m.run(self.m.step,
@@ -112,11 +119,8 @@ class AndroidFlavor(default.DefaultFlavor):
                  cmd=[self.ADB_BINARY, 'wait-for-device'], infra_step=True,
                  timeout=180, abort_on_failure=False,
                  fail_build_on_failure=False)
-
     with self.m.context(cwd=self.m.path['start_dir'].join('skia')):
-      with self.m.env({'ADB_VENDOR_KEYS': self.ADB_PUB_KEY,
-        # https://developer.android.com/studio/command-line/variables#adb_trace
-                       'ADB_TRACE': 'all'}):
+      with self.m.env({'ADB_VENDOR_KEYS': self.ADB_PUB_KEY}):
         return self.m.run.with_retry(self.m.step, title, attempts,
                                      cmd=[self.ADB_BINARY]+list(cmd),
                                      between_attempts_fn=wait_for_device,
@@ -143,7 +147,7 @@ class AndroidFlavor(default.DefaultFlavor):
       # AndroidOne doesn't support ondemand governor. hotplug is similar.
       if device == 'AndroidOne':
         self._set_governor(i, 'hotplug')
-      elif device in ['Pixel3a', 'Pixel4', 'Pixel4a', 'Wembley', 'Pixel6']:
+      elif device in ['Pixel3a', 'Pixel4', 'Pixel4a', 'Wembley', 'Pixel6', 'Pixel7']:
         # Pixel3a/4/4a have userspace powersave performance schedutil.
         # performance seems like a reasonable choice.
         self._set_governor(i, 'performance')
@@ -156,9 +160,9 @@ class AndroidFlavor(default.DefaultFlavor):
       self.m.vars.internal_hardware_label):
       return
 
-    # Set to 'powersave' for Pixel6.
+    # Set to 'powersave' for Pixel6 and Pixel7.
     for i in self.cpus_to_scale.get(device, [0]):
-      if device in ['Pixel6']:
+      if device in ['Pixel6', 'Pixel7']:
         self._set_governor(i, 'powersave')
       else:
         self._set_governor(i, 'userspace')
@@ -529,8 +533,8 @@ time.sleep(60)
                              '/home/chrome-bot/%s.force_quarantine' % bot_id,
                              ' ')
 
-    if self._ever_ran_adb:
-      self._adb('kill adb server', 'kill-server')
+    # if self._ever_ran_adb:
+    #   self._adb('kill adb server', 'kill-server')
 
   def step(self, name, cmd):
     sh = '%s.sh' % cmd[0]
@@ -565,8 +569,8 @@ time.sleep(60)
     contents = self.m.file.glob_paths('ls %s/*' % host,
                                       host, '*',
                                       test_data=['foo.png', 'bar.jpg'])
-    args = ['--sync'] + contents + [device]
-    self._adb('push --sync %s/* %s' % (host, device), 'push', *args)
+    args = contents + [device]
+    self._adb('push %s/* %s' % (host, device), 'push', *args)
 
   def copy_directory_contents_to_host(self, device, host):
     # TODO(borenet): When all of our devices are on Android 6.0 and up, we can

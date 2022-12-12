@@ -8,10 +8,12 @@
 #include "src/gpu/graphite/vk/VulkanResourceProvider.h"
 
 #include "include/gpu/graphite/BackendTexture.h"
+#include "src/gpu/graphite/Buffer.h"
 #include "src/gpu/graphite/ComputePipeline.h"
 #include "src/gpu/graphite/GraphicsPipeline.h"
 #include "src/gpu/graphite/Sampler.h"
 #include "src/gpu/graphite/Texture.h"
+#include "src/gpu/graphite/vk/VulkanCommandBuffer.h"
 
 namespace skgpu::graphite {
 

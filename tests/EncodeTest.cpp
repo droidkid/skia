@@ -5,33 +5,42 @@
  * found in the LICENSE file.
  */
 
-#include "tests/Test.h"
-#include "tools/Resources.h"
-
 #include "include/codec/SkCodec.h"
+#include "include/core/SkAlphaType.h"
 #include "include/core/SkBitmap.h"
 #include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
 #include "include/core/SkColorPriv.h"
+#include "include/core/SkColorType.h"
+#include "include/core/SkData.h"
+#include "include/core/SkDataTable.h"
 #include "include/core/SkEncodedImageFormat.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkImageEncoder.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkPixmap.h"
+#include "include/core/SkRefCnt.h"
 #include "include/core/SkStream.h"
 #include "include/core/SkSurface.h"
+#include "include/core/SkTypes.h"
+#include "include/encode/SkEncoder.h"
 #include "include/encode/SkJpegEncoder.h"
 #include "include/encode/SkPngEncoder.h"
 #include "include/encode/SkWebpEncoder.h"
 #include "include/private/SkImageInfoPriv.h"
+#include "include/private/SkMalloc.h"
+#include "tests/Test.h"
+#include "tools/Resources.h"
 
 #include <png.h>
+#include <webp/decode.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <initializer_list>
+#include <memory>
 #include <string>
 #include <vector>
-
-// FIXME: Update the Google3 build's dependencies so it can run this test.
-#ifndef SK_BUILD_FOR_GOOGLE3
-#include "webp/decode.h"
-#endif
 
 static bool encode(SkEncodedImageFormat format, SkWStream* dst, const SkPixmap& src) {
     switch (format) {

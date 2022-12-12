@@ -21,6 +21,8 @@ class ShaderErrorHandler;
 
 namespace SkSL {
     class Compiler;
+    enum class ProgramKind : int8_t;
+    struct ProgramSettings;
 }
 
 namespace skgpu::graphite {
@@ -29,6 +31,7 @@ class MtlSharedContext;
 bool MtlFormatIsDepthOrStencil(MTLPixelFormat);
 bool MtlFormatIsDepth(MTLPixelFormat);
 bool MtlFormatIsStencil(MTLPixelFormat);
+bool MtlFormatIsCompressed(MTLPixelFormat);
 
 MTLPixelFormat MtlDepthStencilFlagsToFormat(SkEnumBitMask<DepthStencilFlags>);
 

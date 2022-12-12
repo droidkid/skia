@@ -20,9 +20,10 @@
 #include "src/core/SkWriteBuffer.h"
 #include "src/shaders/SkShaderBase.h"
 
-#ifdef SK_ENABLE_SKSL
-#include "src/core/SkKeyHelpers.h"
-#include "src/core/SkPaintParamsKey.h"
+#ifdef SK_GRAPHITE_ENABLED
+#include "src/gpu/Blend.h"
+#include "src/gpu/graphite/KeyHelpers.h"
+#include "src/gpu/graphite/PaintParamsKey.h"
 #endif
 
 namespace {
@@ -62,9 +63,9 @@ public:
 #endif
 
 #ifdef SK_GRAPHITE_ENABLED
-    void addToKey(const SkKeyContext&,
-                  SkPaintParamsKeyBuilder*,
-                  SkPipelineDataGatherer*) const override;
+    void addToKey(const skgpu::graphite::KeyContext&,
+                  skgpu::graphite::PaintParamsKeyBuilder*,
+                  skgpu::graphite::PipelineDataGatherer*) const override;
 #endif
 
 protected:
@@ -132,9 +133,7 @@ static float* append_two_shaders(const SkStageRec& rec, SkShader* s0, SkShader* 
     return storage->fRes0;
 }
 
-bool SkShader_Blend::onAppendStages(const SkStageRec& orig_rec) const {
-    const LocalMatrixStageRec rec(orig_rec, this->getLocalMatrix());
-
+bool SkShader_Blend::onAppendStages(const SkStageRec& rec) const {
     float* res0 = append_two_shaders(rec, fDst.get(), fSrc.get());
     if (!res0) {
         return false;
@@ -166,8 +165,7 @@ skvm::Color SkShader_Blend::onProgram(skvm::Builder* p,
 #include "src/gpu/ganesh/effects/GrBlendFragmentProcessor.h"
 
 std::unique_ptr<GrFragmentProcessor> SkShader_Blend::asFragmentProcessor(
-        const GrFPArgs& orig_args) const {
-    GrFPArgs::ConcatLocalMatrix args(orig_args, this->getLocalMatrix());
+        const GrFPArgs& args) const {
     auto fpA = as_SB(fDst)->asFragmentProcessor(args);
     auto fpB = as_SB(fSrc)->asFragmentProcessor(args);
     if (!fpA || !fpB) {
@@ -179,12 +177,11 @@ std::unique_ptr<GrFragmentProcessor> SkShader_Blend::asFragmentProcessor(
 #endif
 
 #ifdef SK_GRAPHITE_ENABLED
+void SkShader_Blend::addToKey(const skgpu::graphite::KeyContext& keyContext,
+                              skgpu::graphite::PaintParamsKeyBuilder* builder,
+                              skgpu::graphite::PipelineDataGatherer* gatherer) const {
+    using namespace skgpu::graphite;
 
-#include "src/gpu/Blend.h"
-
-void SkShader_Blend::addToKey(const SkKeyContext& keyContext,
-                              SkPaintParamsKeyBuilder* builder,
-                              SkPipelineDataGatherer* gatherer) const {
     SkSpan<const float> porterDuffConstants = skgpu::GetPorterDuffBlendConstants(fMode);
     if (!porterDuffConstants.empty()) {
         PorterDuffBlendShaderBlock::BeginBlock(keyContext, builder, gatherer,

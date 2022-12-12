@@ -30,6 +30,13 @@ public:
 #if SK_SUPPORT_GPU
     std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(const GrFPArgs&) const override;
 #endif
+#ifdef SK_GRAPHITE_ENABLED
+    void addToKey(const skgpu::graphite::KeyContext&,
+                  skgpu::graphite::PaintParamsKeyBuilder*,
+                  skgpu::graphite::PipelineDataGatherer*) const override;
+#endif
+
+    SkPictureShader(sk_sp<SkPicture>, SkTileMode, SkTileMode, SkFilterMode, const SkRect*);
 
 protected:
     SkPictureShader(SkReadBuffer&);
@@ -46,11 +53,10 @@ protected:
 private:
     SK_FLATTENABLE_HOOKS(SkPictureShader)
 
-    SkPictureShader(sk_sp<SkPicture>, SkTileMode, SkTileMode, SkFilterMode,
-                    const SkMatrix*, const SkRect*);
-
-    sk_sp<SkShader> rasterShader(const SkMatrix&, SkTCopyOnFirstWrite<SkMatrix>* localMatrix,
-                                 SkColorType dstColorType, SkColorSpace* dstColorSpace,
+    sk_sp<SkShader> rasterShader(const SkMatrix&,
+                                 SkMatrix* localMatrix,
+                                 SkColorType dstColorType,
+                                 SkColorSpace* dstColorSpace,
                                  const SkSurfaceProps& props) const;
 
     sk_sp<SkPicture>    fPicture;

@@ -231,7 +231,7 @@ static void init(Source* source, sk_sp<skottie::Animation> animation) {
 }
 #endif
 
-static void init(Source* source, const skiatest::Test& test) {
+static void init_cpu_test(Source* source, const skiatest::Test& test) {
     source->size  = {1,1};
     source->draw  = [test](SkCanvas* canvas) {
         struct Reporter : public skiatest::Reporter {
@@ -243,7 +243,7 @@ static void init(Source* source, const skiatest::Test& test) {
             }
         } reporter;
 
-        test.run(&reporter, GrContextOptions{});
+        test.cpu(&reporter);
 
         if (reporter.msg.isEmpty()) {
             canvas->clear(SK_ColorGREEN);
@@ -455,7 +455,7 @@ int main(int argc, char** argv) {
         }
 
         if (const skiatest::Test** test = tests.find(name)) {
-            init(source, **test);
+            init_cpu_test(source, **test);
             continue;
         }
 
@@ -574,7 +574,7 @@ int main(int argc, char** argv) {
                                           : SkColorSpace::MakeRGB(tf,gamut);
     const SkColorInfo color_info{ct,at,cs};
 
-    for (int i = 0; i < sources.count(); i += replicas)
+    for (int i = 0; i < sources.size(); i += replicas)
     SkTaskGroup{}.batch(replicas, [=](int replica) {
         Source source = sources[i+replica];
 
@@ -659,7 +659,7 @@ int main(int argc, char** argv) {
             if (!FLAGS_writePath.isEmpty()) {
                 SkString path = SkStringPrintf("%s/%s%s",
                                                FLAGS_writePath[0], source.name.c_str(), ext);
-                for (char* it = path.writable_str(); *it != '\0'; it++) {
+                for (char* it = path.data(); *it != '\0'; it++) {
                     if (*it == '/' || *it == '\\') {
                         char prev = std::exchange(*it, '\0');
                         sk_mkdir(path.c_str());

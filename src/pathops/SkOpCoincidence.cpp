@@ -17,7 +17,6 @@
 #include "src/pathops/SkPathOpsPoint.h"
 
 #include <algorithm>
-#include <utility>
 
 // returns true if coincident span's start and end are the same
 bool SkCoincidentSpans::collapsed(const SkOpPtT* test) const {
@@ -677,8 +676,8 @@ bool SkOpCoincidence::addOrOverlap(SkOpSegment* coinSeg, SkOpSegment* oppSeg,
             coinTe, oppTs, oppTe, &overlaps)) {
         return true;
     }
-    SkCoincidentSpans* overlap = overlaps.count() ? overlaps[0] : nullptr;
-    for (int index = 1; index < overlaps.count(); ++index) { // combine overlaps before continuing
+    SkCoincidentSpans* overlap = !overlaps.empty() ? overlaps[0] : nullptr;
+    for (int index = 1; index < overlaps.size(); ++index) { // combine overlaps before continuing
         SkCoincidentSpans* test = overlaps[index];
         if (overlap->coinPtTStart()->fT > test->coinPtTStart()->fT) {
             overlap->setCoinPtTStart(test->coinPtTStart());

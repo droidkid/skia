@@ -24,10 +24,39 @@
 
 namespace skgpu::graphite {
 
-sk_sp<MtlCommandBuffer> MtlCommandBuffer::Make(id<MTLCommandQueue> queue,
-                                               const MtlSharedContext* sharedContext,
-                                               MtlResourceProvider* resourceProvider) {
-    sk_cfp<id<MTLCommandBuffer>> cmdBuffer;
+std::unique_ptr<MtlCommandBuffer> MtlCommandBuffer::Make(id<MTLCommandQueue> queue,
+                                                         const MtlSharedContext* sharedContext,
+                                                         MtlResourceProvider* resourceProvider) {
+    auto commandBuffer = std::unique_ptr<MtlCommandBuffer>(
+            new MtlCommandBuffer(queue, sharedContext, resourceProvider));
+    if (!commandBuffer) {
+        return nullptr;
+    }
+    if (!commandBuffer->createNewMTLCommandBuffer()) {
+        return nullptr;
+    }
+    return commandBuffer;
+}
+
+MtlCommandBuffer::MtlCommandBuffer(id<MTLCommandQueue> queue,
+                                   const MtlSharedContext* sharedContext,
+                                   MtlResourceProvider* resourceProvider)
+        : fQueue(queue)
+        , fSharedContext(sharedContext)
+        , fResourceProvider(resourceProvider) {}
+
+MtlCommandBuffer::~MtlCommandBuffer() {
+    SkASSERT(!fActiveRenderCommandEncoder);
+    SkASSERT(!fActiveComputeCommandEncoder);
+    SkASSERT(!fActiveBlitCommandEncoder);
+}
+
+bool MtlCommandBuffer::setNewCommandBufferResources() {
+    return this->createNewMTLCommandBuffer();
+}
+
+bool MtlCommandBuffer::createNewMTLCommandBuffer() {
+    SkASSERT(fCommandBuffer == nil);
     if (@available(macOS 11.0, iOS 14.0, tvOS 14.0, *)) {
         sk_cfp<MTLCommandBufferDescriptor*> desc([[MTLCommandBufferDescriptor alloc] init]);
         (*desc).retainedReferences = NO;
@@ -35,31 +64,13 @@ sk_sp<MtlCommandBuffer> MtlCommandBuffer::Make(id<MTLCommandQueue> queue,
         (*desc).errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
 #endif
         // We add a retain here because the command buffer is set to autorelease (not alloc or copy)
-        cmdBuffer.reset([[queue commandBufferWithDescriptor:desc.get()] retain]);
+        fCommandBuffer.reset([[fQueue commandBufferWithDescriptor:desc.get()] retain]);
     } else {
         // We add a retain here because the command buffer is set to autorelease (not alloc or copy)
-        cmdBuffer.reset([[queue commandBufferWithUnretainedReferences] retain]);
+        fCommandBuffer.reset([[fQueue commandBufferWithUnretainedReferences] retain]);
     }
-    if (cmdBuffer == nil) {
-        return nullptr;
-    }
-
-#ifdef SK_ENABLE_MTL_DEBUG_INFO
-     (*cmdBuffer).label = @"MtlCommandBuffer::Make";
-#endif
-
-    return sk_sp<MtlCommandBuffer>(
-            new MtlCommandBuffer(std::move(cmdBuffer), sharedContext, resourceProvider));
+    return fCommandBuffer != nil;
 }
-
-MtlCommandBuffer::MtlCommandBuffer(sk_cfp<id<MTLCommandBuffer>> cmdBuffer,
-                                   const MtlSharedContext* sharedContext,
-                                   MtlResourceProvider* resourceProvider)
-        : fCommandBuffer(std::move(cmdBuffer))
-        , fSharedContext(sharedContext)
-        , fResourceProvider(resourceProvider) {}
-
-MtlCommandBuffer::~MtlCommandBuffer() {}
 
 bool MtlCommandBuffer::commit() {
     SkASSERT(!fActiveRenderCommandEncoder);
@@ -82,14 +93,26 @@ bool MtlCommandBuffer::commit() {
     return ((*fCommandBuffer).status != MTLCommandBufferStatusError);
 }
 
+void MtlCommandBuffer::onResetCommandBuffer() {
+    fCommandBuffer.reset();
+    fActiveRenderCommandEncoder.reset();
+    fActiveComputeCommandEncoder.reset();
+    fActiveBlitCommandEncoder.reset();
+    fCurrentIndexBuffer = nil;
+    fCurrentIndexBufferOffset = 0;
+}
+
 bool MtlCommandBuffer::onAddRenderPass(const RenderPassDesc& renderPassDesc,
                                        const Texture* colorTexture,
                                        const Texture* resolveTexture,
                                        const Texture* depthStencilTexture,
+                                       SkRect viewport,
                                        const std::vector<std::unique_ptr<DrawPass>>& drawPasses) {
     if (!this->beginRenderPass(renderPassDesc, colorTexture, resolveTexture, depthStencilTexture)) {
         return false;
     }
+
+    this->setViewport(viewport.x(), viewport.y(), viewport.width(), viewport.height(), 0, 1);
 
     for (size_t i = 0; i < drawPasses.size(); ++i) {
         this->addDrawPass(drawPasses[i].get());
@@ -105,8 +128,7 @@ bool MtlCommandBuffer::onAddComputePass(const ComputePassDesc& computePassDesc,
     this->beginComputePass();
     this->bindComputePipeline(pipeline);
     for (const ResourceBinding& binding : bindings) {
-        this->bindBuffer(
-                binding.fResource.fBuffer.get(), binding.fResource.fOffset, binding.fIndex);
+        this->bindBuffer(binding.fBuffer.fBuffer, binding.fBuffer.fOffset, binding.fIndex);
     }
     this->dispatchThreadgroups(computePassDesc.fGlobalDispatchSize,
                                computePassDesc.fLocalDispatchSize);
@@ -272,16 +294,6 @@ void MtlCommandBuffer::addDrawPass(const DrawPass* drawPass) {
                                                 drawPass->getSampler(bts->fSamplerIndices[j]),
                                                 j);
                 }
-                break;
-            }
-            case DrawPassCommands::Type::kSetViewport: {
-                auto sv = static_cast<DrawPassCommands::SetViewport*>(cmdPtr);
-                this->setViewport(sv->fViewport.fLeft,
-                                  sv->fViewport.fTop,
-                                  sv->fViewport.width(),
-                                  sv->fViewport.height(),
-                                  sv->fMinDepth,
-                                  sv->fMaxDepth);
                 break;
             }
             case DrawPassCommands::Type::kSetScissor: {
@@ -588,6 +600,32 @@ static bool check_max_blit_width(int widthInPixels) {
     return true;
 }
 
+bool MtlCommandBuffer::onCopyBufferToBuffer(const Buffer* srcBuffer,
+                                            size_t srcOffset,
+                                            const Buffer* dstBuffer,
+                                            size_t dstOffset,
+                                            size_t size) {
+    SkASSERT(!fActiveRenderCommandEncoder);
+    SkASSERT(!fActiveComputeCommandEncoder);
+
+    id<MTLBuffer> mtlSrcBuffer = static_cast<const MtlBuffer*>(srcBuffer)->mtlBuffer();
+    id<MTLBuffer> mtlDstBuffer = static_cast<const MtlBuffer*>(dstBuffer)->mtlBuffer();
+
+    MtlBlitCommandEncoder* blitCmdEncoder = this->getBlitCommandEncoder();
+    if (!blitCmdEncoder) {
+        return false;
+    }
+
+#ifdef SK_ENABLE_MTL_DEBUG_INFO
+    blitCmdEncoder->pushDebugGroup(@"copyBufferToBuffer");
+#endif
+    blitCmdEncoder->copyBufferToBuffer(mtlSrcBuffer, srcOffset, mtlDstBuffer, dstOffset, size);
+#ifdef SK_ENABLE_MTL_DEBUG_INFO
+    blitCmdEncoder->popDebugGroup();
+#endif
+    return true;
+}
+
 bool MtlCommandBuffer::onCopyTextureToBuffer(const Texture* texture,
                                              SkIRect srcRect,
                                              const Buffer* buffer,
@@ -609,7 +647,7 @@ bool MtlCommandBuffer::onCopyTextureToBuffer(const Texture* texture,
     }
 
 #ifdef SK_ENABLE_MTL_DEBUG_INFO
-    blitCmdEncoder->pushDebugGroup(@"readOrTransferPixels");
+    blitCmdEncoder->pushDebugGroup(@"copyTextureToBuffer");
 #endif
     blitCmdEncoder->copyFromTexture(mtlTexture, srcRect, mtlBuffer, bufferOffset, bufferRowBytes);
 #ifdef SK_ENABLE_MTL_DEBUG_INFO
@@ -634,7 +672,7 @@ bool MtlCommandBuffer::onCopyBufferToTexture(const Buffer* buffer,
     }
 
 #ifdef SK_ENABLE_MTL_DEBUG_INFO
-    blitCmdEncoder->pushDebugGroup(@"uploadToTexture");
+    blitCmdEncoder->pushDebugGroup(@"copyBufferToTexture");
 #endif
     for (int i = 0; i < count; ++i) {
         if (!check_max_blit_width(copyData[i].fRect.width())) {
@@ -648,6 +686,33 @@ bool MtlCommandBuffer::onCopyBufferToTexture(const Buffer* buffer,
                                        copyData[i].fRect,
                                        copyData[i].fMipLevel);
     }
+
+#ifdef SK_ENABLE_MTL_DEBUG_INFO
+    blitCmdEncoder->popDebugGroup();
+#endif
+    return true;
+}
+
+bool MtlCommandBuffer::onCopyTextureToTexture(const Texture* src,
+                                              SkIRect srcRect,
+                                              const Texture* dst,
+                                              SkIPoint dstPoint) {
+    SkASSERT(!fActiveRenderCommandEncoder);
+    SkASSERT(!fActiveComputeCommandEncoder);
+
+    id<MTLTexture> srcMtlTexture = static_cast<const MtlTexture*>(src)->mtlTexture();
+    id<MTLTexture> dstMtlTexture = static_cast<const MtlTexture*>(dst)->mtlTexture();
+
+    MtlBlitCommandEncoder* blitCmdEncoder = this->getBlitCommandEncoder();
+    if (!blitCmdEncoder) {
+        return false;
+    }
+
+#ifdef SK_ENABLE_MTL_DEBUG_INFO
+    blitCmdEncoder->pushDebugGroup(@"copyTextureToTexture");
+#endif
+
+    blitCmdEncoder->copyTextureToTexture(srcMtlTexture, srcRect, dstMtlTexture, dstPoint);
 
 #ifdef SK_ENABLE_MTL_DEBUG_INFO
     blitCmdEncoder->popDebugGroup();

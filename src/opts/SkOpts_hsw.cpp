@@ -7,6 +7,8 @@
 
 #include "src/core/SkOpts.h"
 
+#if !defined(SK_ENABLE_OPTIMIZE_SIZE)
+
 #define SK_OPTS_NS hsw
 #include "src/core/SkCubicSolver.h"
 #include "src/opts/SkBitmapProcState_opts.h"
@@ -34,6 +36,9 @@ namespace SkOpts {
         inverted_CMYK_to_RGB1 = SK_OPTS_NS::inverted_CMYK_to_RGB1;
         inverted_CMYK_to_BGR1 = SK_OPTS_NS::inverted_CMYK_to_BGR1;
 
+        raster_pipeline_lowp_stride  = SK_OPTS_NS::raster_pipeline_lowp_stride();
+        raster_pipeline_highp_stride = SK_OPTS_NS::raster_pipeline_highp_stride();
+
     #define M(st) stages_highp[SkRasterPipeline::st] = (StageFn)SK_OPTS_NS::st;
         SK_RASTER_PIPELINE_STAGES_ALL(M)
         just_return_highp = (StageFn)SK_OPTS_NS::just_return;
@@ -49,3 +54,5 @@ namespace SkOpts {
         interpret_skvm = SK_OPTS_NS::interpret_skvm;
     }
 }  // namespace SkOpts
+
+#endif // SK_ENABLE_OPTIMIZE_SIZE

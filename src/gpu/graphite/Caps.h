@@ -30,6 +30,7 @@ class GraphicsPipelineDesc;
 class GraphiteResourceKey;
 struct RenderPassDesc;
 class TextureInfo;
+class TextureProxy;
 
 class Caps {
 public:
@@ -40,7 +41,7 @@ public:
     sk_sp<SkCapabilities> capabilities() const;
 
     virtual TextureInfo getDefaultSampledTextureInfo(SkColorType,
-                                                     uint32_t levelCount,
+                                                     Mipmapped mipmapped,
                                                      Protected,
                                                      Renderable) const = 0;
 
@@ -76,11 +77,59 @@ public:
     // to a draw.
     size_t requiredStorageBufferAlignment() const { return fRequiredStorageBufferAlignment; }
 
+    // Returns the required data layout rules for the contents of a uniform buffer.
+    Layout uniformBufferLayout() const { return fUniformBufferLayout; }
+
+    // Returns the required data layout rules for the contents of a storage buffer.
+    Layout storageBufferLayout() const { return fStorageBufferLayout; }
+
     // Returns the alignment in bytes for the offset into a Buffer when using it
     // to transfer to or from a Texture with the given bytes per pixel.
     virtual size_t getTransferBufferAlignment(size_t bytesPerPixel) const = 0;
 
+    // Returns the aligned rowBytes when transfering to or from a Texture
+    size_t getAlignedTextureDataRowBytes(size_t rowBytes) const {
+        return SkAlignTo(rowBytes, fTextureDataRowBytesAlignment);
+    }
+
+    /**
+     * Backends may have restrictions on what types of textures support Device::writePixels().
+     * If this returns false then the caller should implement a fallback where a temporary texture
+     * is created, pixels are written to it, and then that is copied or drawn into the the surface.
+     */
+    virtual bool supportsWritePixels(const TextureInfo& textureInfo) const = 0;
+
+    /**
+     * Backends may have restrictions on what types of textures support Device::readPixels().
+     * If this returns false then the caller should implement a fallback where a temporary texture
+     * is created, the original texture is copied or drawn into it, and then pixels read from
+     * the temporary texture.
+     */
+    virtual bool supportsReadPixels(const TextureInfo& textureInfo) const = 0;
+
+    /**
+     * Given a dst pixel config and a src color type what color type must the caller coax the
+     * the data into in order to use writePixels.
+     */
+    virtual SkColorType supportedWritePixelsColorType(SkColorType dstColorType,
+                                                      const TextureInfo& dstTextureInfo,
+                                                      SkColorType srcColorType) const = 0;
+
+    /**
+     * Given a src surface's color type and its texture info as well as a color type the caller
+     * would like read into, this provides a legal color type that the caller can use for
+     * readPixels. The returned color type may differ from the passed dstColorType, in
+     * which case the caller must convert the read pixel data (see GrConvertPixels). When converting
+     * to dstColorType the swizzle in the returned struct should be applied. The caller must check
+     * the returned color type for kUnknown.
+     */
+    virtual SkColorType supportedReadPixelsColorType(SkColorType srcColorType,
+                                                     const TextureInfo& srcTextureInfo,
+                                                     SkColorType dstColorType) const = 0;
+
     bool clampToBorderSupport() const { return fClampToBorderSupport; }
+
+    bool protectedSupport() const { return fProtectedSupport; }
 
     // Returns whether storage buffers are supported.
     bool storageBufferSupport() const { return fStorageBufferSupport; }
@@ -88,6 +137,9 @@ public:
     // Returns whether storage buffers are preferred over uniform buffers, when both will yield
     // correct results.
     bool storageBufferPreferred() const { return fStorageBufferPreferred; }
+
+    // Returns whether a draw buffer can be mapped.
+    bool drawBufferCanBeMapped() const { return fDrawBufferCanBeMapped; }
 
     // Returns the skgpu::Swizzle to use when sampling or reading back from a texture with the
     // passed in SkColorType and TextureInfo.
@@ -119,10 +171,30 @@ protected:
     // TODO: This value should be set by some context option. For now just making it 4.
     uint32_t defaultMSAASamples() const { return 4; }
 
+    // There are only a few possible valid sample counts (1, 2, 4, 8, 16). So we can key on those 5
+    // options instead of the actual sample value.
+    static inline uint32_t SamplesToKey(uint32_t numSamples) {
+        switch (numSamples) {
+            case 1:
+                return 0;
+            case 2:
+                return 1;
+            case 4:
+                return 2;
+            case 8:
+                return 3;
+            case 16:
+                return 4;
+            default:
+                SkUNREACHABLE;
+        }
+    }
+
     // ColorTypeInfo for a specific format.
     // Used in format tables.
     struct ColorTypeInfo {
         SkColorType fColorType = kUnknown_SkColorType;
+        SkColorType fTransferColorType = kUnknown_SkColorType;
         enum {
             kUploadData_Flag = 0x1,
             // Does Graphite itself support rendering to this colorType & format pair. Renderability
@@ -138,13 +210,17 @@ protected:
     int fMaxTextureSize = 0;
     size_t fRequiredUniformBufferAlignment = 0;
     size_t fRequiredStorageBufferAlignment = 0;
+    size_t fTextureDataRowBytesAlignment = 1;
+    Layout fUniformBufferLayout = Layout::kInvalid;
+    Layout fStorageBufferLayout = Layout::kInvalid;
 
     std::unique_ptr<SkSL::ShaderCaps> fShaderCaps;
 
     bool fClampToBorderSupport = true;
-
+    bool fProtectedSupport = false;
     bool fStorageBufferSupport = false;
     bool fStorageBufferPreferred = false;
+    bool fDrawBufferCanBeMapped = true;
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Client-provided Caps

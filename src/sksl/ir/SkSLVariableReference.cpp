@@ -12,13 +12,13 @@
 namespace SkSL {
 
 VariableReference::VariableReference(Position pos, const Variable* variable, RefKind refKind)
-    : INHERITED(pos, kExpressionKind, &variable->type())
+    : INHERITED(pos, kIRNodeKind, &variable->type())
     , fVariable(variable)
     , fRefKind(refKind) {
     SkASSERT(this->variable());
 }
 
-std::string VariableReference::description() const {
+std::string VariableReference::description(OperatorPrecedence) const {
     return std::string(this->variable()->name());
 }
 

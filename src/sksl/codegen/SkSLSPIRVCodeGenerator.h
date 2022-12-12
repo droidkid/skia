@@ -11,7 +11,6 @@
 #include "include/private/SkSLDefines.h"
 #include "include/private/SkSLLayout.h"
 #include "include/private/SkSLModifiers.h"
-#include "include/private/SkSLProgramKind.h"
 #include "include/private/SkTArray.h"
 #include "include/private/SkTHash.h"
 #include "src/sksl/SkSLMemoryLayout.h"
@@ -25,7 +24,6 @@
 #include "src/sksl/ir/SkSLVariable.h"
 #include "src/sksl/spirv.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string_view>
@@ -64,6 +62,7 @@ class SwitchStatement;
 class TernaryExpression;
 class VarDeclaration;
 class VariableReference;
+enum class ProgramKind : int8_t;
 enum IntrinsicKind : int8_t;
 struct IndexExpression;
 struct Program;
@@ -134,6 +133,8 @@ private:
         kStep_SpecialIntrinsic,
         kSubpassLoad_SpecialIntrinsic,
         kTexture_SpecialIntrinsic,
+        kTextureGrad_SpecialIntrinsic,
+        kTextureLod_SpecialIntrinsic,
     };
 
     enum class Precision {
@@ -160,6 +161,8 @@ private:
     SpvId getType(const Type& type, const MemoryLayout& layout);
 
     SpvId getFunctionType(const FunctionDeclaration& function);
+
+    SpvId getFunctionParameterType(const Type& parameterType);
 
     SpvId getPointerType(const Type& type, SpvStorageClass_ storageClass);
 
@@ -408,8 +411,8 @@ private:
     struct Word;
     // 8 Words is enough for nearly all instructions (except variable-length instructions like
     // OpAccessChain or OpConstantComposite).
-    using Words = SkSTArray<8, Word>;
-    SpvId writeInstruction(SpvOp_ opCode, const SkTArray<Word>& words, OutputStream& out);
+    using Words = SkSTArray<8, Word, true>;
+    SpvId writeInstruction(SpvOp_ opCode, const SkTArray<Word, true>& words, OutputStream& out);
 
     struct Instruction {
         SpvId                  fOp;
@@ -420,7 +423,7 @@ private:
         struct Hash;
     };
 
-    static Instruction BuildInstructionKey(SpvOp_ opCode, const SkTArray<Word>& words);
+    static Instruction BuildInstructionKey(SpvOp_ opCode, const SkTArray<Word, true>& words);
 
     // The writeOpXxxxx calls will simplify and deduplicate ops where possible.
     SpvId writeOpConstantTrue(const Type& type);
@@ -444,8 +447,8 @@ private:
     SpvId toComponent(SpvId id, int component);
 
     struct ConditionalOpCounts {
-        size_t numReachableOps;
-        size_t numStoreOps;
+        int numReachableOps;
+        int numStoreOps;
     };
     ConditionalOpCounts getConditionalOpCounts();
     void pruneConditionalOps(ConditionalOpCounts ops);
@@ -482,6 +485,7 @@ private:
 
     bool isDead(const Variable& var) const;
 
+    MemoryLayout memoryLayoutForStorageClass(SpvStorageClass_ storageClass);
     MemoryLayout memoryLayoutForVariable(const Variable&) const;
 
     struct EntrypointAdapter {

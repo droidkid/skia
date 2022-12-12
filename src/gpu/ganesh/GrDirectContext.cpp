@@ -12,6 +12,7 @@
 #include "include/gpu/GrBackendSemaphore.h"
 #include "include/gpu/GrContextThreadSafeProxy.h"
 #include "src/core/SkAutoMalloc.h"
+#include "src/core/SkCompressedDataUtils.h"
 #include "src/core/SkTaskGroup.h"
 #include "src/core/SkTraceEvent.h"
 #include "src/gpu/ganesh/GrBackendUtils.h"
@@ -26,22 +27,11 @@
 #include "src/gpu/ganesh/SurfaceContext.h"
 #include "src/gpu/ganesh/effects/GrSkSLFP.h"
 #include "src/gpu/ganesh/mock/GrMockGpu.h"
+#include "src/gpu/ganesh/ops/SmallPathAtlasMgr.h"
 #include "src/gpu/ganesh/text/GrAtlasManager.h"
 #include "src/image/SkImage_GpuBase.h"
 #include "src/text/gpu/StrikeCache.h"
 #include "src/utils/SkShaderUtils.h"
-#if SK_GPU_V1
-#include "src/gpu/ganesh/ops/SmallPathAtlasMgr.h"
-#else
-// A vestigial definition for v2 that will never be instantiated
-namespace skgpu::v1 {
-class SmallPathAtlasMgr {
-public:
-    SmallPathAtlasMgr() { SkASSERT(0); }
-    void reset() { SkASSERT(0); }
-};
-}
-#endif
 #ifdef SK_GL
 #include "src/gpu/ganesh/gl/GrGLGpu.h"
 #endif
@@ -129,11 +119,10 @@ void GrDirectContext::abandonContext() {
     }
 
     if (fInsideReleaseProcCnt) {
-        SkDEBUGFAIL("Calling GrDirectContext::abandonContext() while inside a ReleaseProc is not"
+        SkDEBUGFAIL("Calling GrDirectContext::abandonContext() while inside a ReleaseProc is not "
                     "allowed");
         return;
     }
-
 
     INHERITED::abandonContext();
 
@@ -151,12 +140,11 @@ void GrDirectContext::abandonContext() {
 
     fGpu->disconnect(GrGpu::DisconnectType::kAbandon);
 
-    // Must be after GrResourceCache::abandonAll().
-    fMappedBufferManager.reset();
-
+#if !defined(SK_ENABLE_OPTIMIZE_SIZE)
     if (fSmallPathAtlasMgr) {
         fSmallPathAtlasMgr->reset();
     }
+#endif
     fAtlasManager->freeAll();
 }
 
@@ -193,9 +181,11 @@ void GrDirectContext::releaseResourcesAndAbandonContext() {
     fMappedBufferManager.reset();
 
     fGpu->disconnect(GrGpu::DisconnectType::kCleanup);
+#if !defined(SK_ENABLE_OPTIMIZE_SIZE)
     if (fSmallPathAtlasMgr) {
         fSmallPathAtlasMgr->reset();
     }
+#endif
     fAtlasManager->freeAll();
 }
 
@@ -207,9 +197,11 @@ void GrDirectContext::freeGpuResources() {
     }
 
     this->flushAndSubmit();
+#if !defined(SK_ENABLE_OPTIMIZE_SIZE)
     if (fSmallPathAtlasMgr) {
         fSmallPathAtlasMgr->reset();
     }
+#endif
     fAtlasManager->freeAll();
 
     // TODO: the glyph cache doesn't hold any GpuResources so this call should not be needed here.
@@ -391,8 +383,8 @@ bool GrDirectContext::wait(int numSemaphores, const GrBackendSemaphore waitSemap
     return true;
 }
 
+#if !defined(SK_ENABLE_OPTIMIZE_SIZE)
 skgpu::v1::SmallPathAtlasMgr* GrDirectContext::onGetSmallPathAtlasMgr() {
-#if SK_GPU_V1
     if (!fSmallPathAtlasMgr) {
         fSmallPathAtlasMgr = std::make_unique<skgpu::v1::SmallPathAtlasMgr>();
 
@@ -402,10 +394,10 @@ skgpu::v1::SmallPathAtlasMgr* GrDirectContext::onGetSmallPathAtlasMgr() {
     if (!fSmallPathAtlasMgr->initAtlas(this->proxyProvider(), this->caps())) {
         return nullptr;
     }
-#endif
 
     return fSmallPathAtlasMgr.get();
 }
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -931,8 +923,8 @@ bool GrDirectContext::updateCompressedBackendTexture(const GrBackendTexture& bac
 //////////////////////////////////////////////////////////////////////////////
 
 bool GrDirectContext::setBackendTextureState(const GrBackendTexture& backendTexture,
-                                             const GrBackendSurfaceMutableState& state,
-                                             GrBackendSurfaceMutableState* previousState,
+                                             const skgpu::MutableTextureState& state,
+                                             skgpu::MutableTextureState* previousState,
                                              GrGpuFinishedProc finishedProc,
                                              GrGpuFinishedContext finishedContext) {
     auto callback = skgpu::RefCntedCallback::Make(finishedProc, finishedContext);
@@ -946,8 +938,8 @@ bool GrDirectContext::setBackendTextureState(const GrBackendTexture& backendText
 
 
 bool GrDirectContext::setBackendRenderTargetState(const GrBackendRenderTarget& backendRenderTarget,
-                                                  const GrBackendSurfaceMutableState& state,
-                                                  GrBackendSurfaceMutableState* previousState,
+                                                  const skgpu::MutableTextureState& state,
+                                                  skgpu::MutableTextureState* previousState,
                                                   GrGpuFinishedProc finishedProc,
                                                   GrGpuFinishedContext finishedContext) {
     auto callback = skgpu::RefCntedCallback::Make(finishedProc, finishedContext);
@@ -1005,7 +997,7 @@ SkString GrDirectContext::dump() const {
 
     // Allocate a string big enough to hold all the data, then copy out of the stream
     SkString result(stream.bytesWritten());
-    stream.copyToAndReset(result.writable_str());
+    stream.copyToAndReset(result.data());
     return result;
 }
 #endif

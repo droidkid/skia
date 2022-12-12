@@ -12,6 +12,7 @@
 #include "src/core/SkTraceEvent.h"
 #include "src/gpu/graphite/mtl/MtlSharedContext.h"
 #include "src/sksl/SkSLCompiler.h"
+#include "src/sksl/SkSLProgramSettings.h"
 #include "src/utils/SkShaderUtils.h"
 
 #ifdef SK_BUILD_FOR_IOS
@@ -137,6 +138,19 @@ sk_cfp<id<MTLLibrary>> MtlCompileShaderLibrary(const MtlSharedContext* sharedCon
     }
 
     return compiledLibrary;
+}
+
+bool MtlFormatIsCompressed(MTLPixelFormat mtlFormat) {
+    switch (mtlFormat) {
+        case MTLPixelFormatETC2_RGB8:
+            return true;
+#ifdef SK_BUILD_FOR_MAC
+        case MTLPixelFormatBC1_RGBA:
+            return true;
+#endif
+        default:
+            return false;
+    }
 }
 
 #ifdef SK_BUILD_FOR_IOS

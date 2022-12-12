@@ -71,6 +71,7 @@
 
 #ifdef ENABLE_GPU
 #include "include/gpu/GrDirectContext.h"
+#include "src/gpu/ganesh/GrCaps.h"
 #endif // ENABLE_GPU
 
 #ifdef CK_ENABLE_WEBGL
@@ -435,9 +436,7 @@ SkPathOrNull MakeAsWinding(const SkPath& self) {
 #endif
 
 JSString ToSVGString(const SkPath& path) {
-    SkString s;
-    SkParsePath::ToSVGString(path, &s);
-    return emscripten::val(s.c_str());
+    return emscripten::val(SkParsePath::ToSVGString(path).c_str());
 }
 
 SkPathOrNull MakePathFromSVGString(std::string str) {
@@ -914,6 +913,7 @@ EMSCRIPTEN_BINDINGS(Skia) {
 #endif // ENABLE_GPU
 
 #ifdef CK_ENABLE_WEBGL
+    constant("webgl", true);
     function("_MakeOnScreenGLSurface", &MakeOnScreenGLSurface);
     function("_MakeRenderTargetWH", select_overload<sk_sp<SkSurface>(sk_sp<GrDirectContext>, int, int)>(&MakeRenderTarget));
     function("_MakeRenderTargetII", select_overload<sk_sp<SkSurface>(sk_sp<GrDirectContext>, SimpleImageInfo)>(&MakeRenderTarget));
@@ -985,23 +985,23 @@ EMSCRIPTEN_BINDINGS(Skia) {
 #ifdef ENABLE_GPU
     class_<GrDirectContext>("GrDirectContext")
         .smart_ptr<sk_sp<GrDirectContext>>("sk_sp<GrDirectContext>")
-        .function("getResourceCacheLimitBytes",
+        .function("_getResourceCacheLimitBytes",
                 optional_override([](GrDirectContext& self)->size_t {
             int maxResources = 0;// ignored
             size_t currMax = 0;
             self.getResourceCacheLimits(&maxResources, &currMax);
             return currMax;
         }))
-        .function("getResourceCacheUsageBytes",
+        .function("_getResourceCacheUsageBytes",
                 optional_override([](GrDirectContext& self)->size_t {
             int usedResources = 0;// ignored
             size_t currUsage = 0;
             self.getResourceCacheUsage(&usedResources, &currUsage);
             return currUsage;
         }))
-        .function("releaseResourcesAndAbandonContext",
+        .function("_releaseResourcesAndAbandonContext",
                 &GrDirectContext::releaseResourcesAndAbandonContext)
-        .function("setResourceCacheLimitBytes",
+        .function("_setResourceCacheLimitBytes",
                 optional_override([](GrDirectContext& self, size_t maxResourceBytes)->void {
             int maxResources = 0;
             size_t currMax = 0; // ignored
