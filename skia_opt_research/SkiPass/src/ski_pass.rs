@@ -22,7 +22,7 @@ use crate::protos::{
 pub fn optimize(record: SkRecord) -> SkiPassRunResult {
     let mut expr = RecExpr::default();
     let blankSurface = expr.add(SkiLang::Blank);
-    let id = build_expr(&mut record.records.iter(), blankSurface, &mut expr);
+    let id = build_expr(&mut record.records.iter(), blankSurface, 0, &mut expr);
 
     let mut skiPassRunResult = SkiPassRunResult::default();
     let mut skiRunInfo = SkiPassRunInfo::default();
@@ -80,7 +80,7 @@ struct SkiLangExpr {
     pub id: Id,
 }
 
-fn build_expr<'a, I>(skRecordsIter: &mut I, dst: Id, expr: &mut RecExpr<SkiLang>) -> Id
+fn build_expr<'a, I>(skRecordsIter: &mut I, dst: Id, matrixOpCount: i32, expr: &mut RecExpr<SkiLang>) -> Id
 where
     I: Iterator<Item = &'a SkRecords> + 'a,
 {
@@ -88,34 +88,41 @@ where
         Some(skRecords) => {
             match &skRecords.command {
                 Some(Command::DrawCommand(draw_command)) => {
-                    let src = match draw_command.name.as_str() {
-                        "ClipRect" | "Concat44" => {
+                    match draw_command.name.as_str() {
+                        "ClipPath" | "ClipRRect" | "ClipRect" | "Concat44" => {
                             // Reference to clipRect command in input SKP.
                             let matrixOpCommand = expr.add(SkiLang::DrawCommand(skRecords.index));
 
                             // Construct surface on which matrixOp should be applied.
                             let newLayerDst = expr.add(SkiLang::Blank);
-                            let surfaceToApplyMatrixOp = build_expr(skRecordsIter, newLayerDst, expr);
+                            let surfaceToApplyMatrixOp = build_expr(skRecordsIter, newLayerDst, matrixOpCount + 1, expr);
 
-                            expr.add(SkiLang::MatrixOp([surfaceToApplyMatrixOp, matrixOpCommand]))
+                            let src = expr.add(SkiLang::MatrixOp([surfaceToApplyMatrixOp, matrixOpCommand]));
+                            let nextDst = expr.add(SkiLang::SrcOver([dst, src]));
+
+                            if matrixOpCount == 0 {
+                                build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
+                            } else {
+                                nextDst // Need to unwind a bit more
+                            }
+                            
                         }
                         _ => {
-                            expr.add(SkiLang::DrawCommand(skRecords.index))
+                            let src = expr.add(SkiLang::DrawCommand(skRecords.index));
+                            let nextDst = expr.add(SkiLang::SrcOver([dst, src]));
+                            build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                         }
-                    };
-                    let nextDst = expr.add(SkiLang::SrcOver([dst, src]));
-                    build_expr(skRecordsIter, nextDst, expr)
+                    }
                 },
                 Some(Command::Save(save)) => {
-                    // For now, ignored.
-                    // We depend on MatrixOp to decide where to put Save commands.
-                    build_expr(skRecordsIter, dst, expr)
+                    // Ignore, MatrixOp is used to decide where to put Save commands.
+                    build_expr(skRecordsIter, dst, 0, expr)
                 },
                 Some(Command::SaveLayer(save_layer)) => {
                     let blank = expr.add(SkiLang::Blank);
-                    let src = build_expr(skRecordsIter, blank, expr);
+                    let src = build_expr(skRecordsIter, blank, 0, expr);
                     let nextDst = expr.add(SkiLang::SrcOver([dst, src]));
-                    build_expr(skRecordsIter, nextDst, expr)
+                    build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                 },
                 Some(Command::Restore(restore)) => {
                     dst
