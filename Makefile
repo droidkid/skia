@@ -1,6 +1,7 @@
 PROTOC=/usr/bin/protoc
 
-BUILD_DIR := $(realpath ./out/Nightly)
+WORKING_DIR := $(realpath .)
+BUILD_DIR := ${WORKING_DIR}/out/Nightly
 NIGHTLY_DIR:=./skia_opt_research/out
 REPORT_TIMESTAMP := $(shell date +'%Y-%m-%d_%H-%M-%S')
 NIGHTLY_REPORT_DIR:=${NIGHTLY_DIR}/${REPORT_TIMESTAMP}
@@ -42,6 +43,7 @@ clean: clean-skp
 	cargo clean --manifest-path=$(SKI_PASS_DIR)/Cargo.toml --release
 
 gen-nightly:
+	mkdir -p $(BUILD_DIR)
 	python3 ./tools/git-sync-deps
 	./bin/gn gen $(BUILD_DIR) --args='is_official_build=false skia_enable_malloc_logging=true'
 
