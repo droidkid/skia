@@ -89,7 +89,6 @@ void benchmark_optimization(
     bitmap.allocN32Pixels(w, h);
     SkCanvas canvas(bitmap);
 
-
     // Record the analysis onto a canvas and log file.
     std::string optimization_log_fname = 
         outDir + "/" +
@@ -125,6 +124,24 @@ void benchmark_optimization(
             getFileName(skpName) + ".png";
         SkFILEWStream file(path.c_str());
         SkEncodeImage(&file, bitmap, SkEncodedImageFormat::kPNG, 100);
+
+        std::string skp_path = 
+            outDir + 
+            "/" + 
+            getFileName(skpName) + ".skp";
+
+        SkPictureRecorder recorder;
+        SkCanvas* skpCanvas = recorder.beginRecording({0, 0, SkScalar(w), SkScalar(h)});
+        FILE *fp2 = fopen("/dev/null", "w");
+        SkpAnalyzer analyzer2(skpCanvas, record->count(), fp2);
+        for (int i = 0; i < record->count(); i++) {
+            record->visit(i, analyzer2);
+        }
+        fclose(fp2);
+        sk_sp<SkPicture> picture = recorder.finishRecordingAsPicture();
+        sk_sp<SkData> skData = picture->serialize();
+        SkFILEWStream skpOut(skp_path.c_str());
+        (void)skpOut.write(skData->data(), skData->size());
     }
 }
 
