@@ -22,7 +22,7 @@
             </tr>
             {% for skp in skp_membench_results %}
             <tr>
-                <td> {{ skp['name'] }} </td>
+                <td> {{ skp['name'] }} <br/> <a href="{{ skp['json'] }}"> JSON </a></td>
                 <td> <img src="{{ skp['ref_img_url'] }}" width="300" height="300"/> </td>
                 {% for opt in skp_membench_opts %}
                     <td> 
