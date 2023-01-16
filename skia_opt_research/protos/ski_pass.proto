@@ -10,13 +10,31 @@ package ski_pass_proto;
     SkRecord is a collection of SkRecords.
 */
 
+message Bounds {
+    double left = 1;
+    double top = 2;
+    double right = 3;
+    double bottom = 4;
+}
+
+
 message SkRecords  {
     // Index of this record in the SkRecords.
     // This is used to make parsing easier.
     // SkRecord will hold SkRecords in order.
     int32 index = 1;;
 
-    message SaveLayer {};
+    message SaveLayer {
+        int32 alpha_u8 = 1;
+        Bounds suggested_bounds = 2;
+
+        message Filters {}
+        Filters filter_info = 3;
+
+        message Backdrop {}
+        Backdrop backdrop = 4;
+    };
+
     message Save {};
     message Restore {};
     message DrawCommand {
@@ -60,7 +78,11 @@ message SkiPassInstruction {
     message SkiPassCopyRecord {
         int32 index = 1;
     }
-    message SaveLayer {}
+    message SaveLayer {
+        int32 alpha_u8 = 1;
+        Bounds suggested_bounds = 2;
+    }
+
     message Save {}
     message Restore {}
     oneof instruction {

@@ -335,7 +335,29 @@ class SkiPassRecordBuilder {
         void operator()(const SkRecords::SaveLayer& command) {
             ski_pass_proto::SkRecords *records = skipass_record->add_records();
             records->set_index(count++);
-            records->mutable_save_layer();
+
+            ski_pass_proto::SkRecords_SaveLayer *saveLayer = records->mutable_save_layer();
+            saveLayer->set_alpha_u8(255);
+
+            if (command.bounds != nullptr) {
+                ski_pass_proto::Bounds *suggested_bounds = saveLayer->mutable_suggested_bounds();
+                suggested_bounds->set_left(command.bounds->left());
+                suggested_bounds->set_top(command.bounds->top());
+                suggested_bounds->set_right(command.bounds->right());
+                suggested_bounds->set_bottom(command.bounds->bottom());
+            }
+            if (command.paint != nullptr) {
+                saveLayer->set_alpha_u8(command.paint->getAlpha());
+
+                if(command.paint->getImageFilter() != nullptr ||
+                    command.paint->getColorFilter() != nullptr ||
+                    command.paint->getBlender() != nullptr) {
+                        saveLayer->mutable_filter_info();
+                } 
+            }
+            if (command.backdrop != nullptr) {
+                saveLayer->mutable_backdrop();
+            }
         }
 
         void operator()(const SkRecords::Save& command) {
