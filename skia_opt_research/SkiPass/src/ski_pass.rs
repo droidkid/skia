@@ -127,6 +127,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     build_expr(skRecordsIter, dst, 0, expr)
                 },
                 Some(Command::SaveLayer(save_layer)) => {
+                    println!("{:?}", save_layer);
                     let blank = expr.add(SkiLang::Blank);
                     let src = build_expr(skRecordsIter, blank, 0, expr);
                     let saveLayerCommand = expr.add(SkiLang::DrawCommand(skRecords.index));
