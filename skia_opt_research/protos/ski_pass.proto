@@ -79,12 +79,15 @@ message SkiPassInstruction {
         int32 index = 1;
     }
     message SaveLayer {
-        int32 alpha_u8 = 1;
-        Bounds suggested_bounds = 2;
+        int32 suggested_bounds_reference = 1;
+        int32 image_filters_reference = 1;
     }
 
     message Save {}
     message Restore {}
+    message ApplyAlpha {
+	int32 alpha_u8 = 1;
+    }
     oneof instruction {
         SkiPassCopyRecord copy_record = 1;
         SaveLayer save_layer = 2;

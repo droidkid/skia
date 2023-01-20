@@ -40,11 +40,13 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
 
 define_language! {
     enum SkiLang {
+        AlphaChannel(u8),
         "noOp" = NoOp,
         DrawCommand(i32), // skRecords index
         "matrixOp" = MatrixOp([Id; 2]), // layer to apply matrixOp, command referring original drawCommand
         "blank" = Blank,
-        "srcOver" = SrcOver([Id; 3]), // dst, src, command referring to drawCommand to use to merge src onto dst.
+        "srcOver" = SrcOver([Id; 4]), // dst, src, bounds (if any or NoOp), filters (if any or NoOp)
+        "applyAlpha" = ApplyAlpha([Id; 2]), // alphaChannel, layer
     }
 }
 
@@ -130,8 +132,21 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     println!("{:?}", save_layer);
                     let blank = expr.add(SkiLang::Blank);
                     let src = build_expr(skRecordsIter, blank, 0, expr);
-                    let saveLayerCommand = expr.add(SkiLang::DrawCommand(skRecords.index));
-                    let nextDst = expr.add(SkiLang::SrcOver([dst, src, saveLayerCommand]));
+
+                    let bounds = match (save_layer.suggested_bounds) {
+                        Some(suggested_bounds) => expr.add(SkiLang::DrawCommand(skRecords.index)),
+                        None => expr.add(SkiLang::NoOp),
+                    }
+
+                    let filters = match (save_layer.suggested_bounds) {
+                        Some(suggested_bounds) => expr.add(SkiLang::DrawCommand(skRecords.index)),
+                        None => expr.add(SkiLang::NoOp),
+                    }
+
+                    let alphaChannel = expr.add(SkiLang::AlphaChannel(save_layer.alpha_u8));
+                    let applyAlphaSrc = expr.add(SkiLang::ApplyAlpha(alphaChannel, src));
+
+                    let nextDst = expr.add(SkiLang::SrcOver([dst, applyAlphaSrc, bounds, filters]));
                     build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                 },
                 Some(Command::Restore(restore)) => {
@@ -192,6 +207,9 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 surface_type: SkiPassSurfaceType::Abstract,
             }
         },
+        SkiLang::ApplyAlpha(ids) => {
+            // TODO: Add a ApplyAlpha command
+        },
         SkiLang::MatrixOp(ids) => {
             let mut targetSurface = build_program(&expr, ids[0]);
             let mut matrixOpCommand = build_program(&expr, ids[1]);
@@ -210,11 +228,20 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         SkiLang::SrcOver(ids) => {
             let mut dst = build_program(&expr, ids[0]);
             let mut src = build_program(&expr, ids[1]);
-            // mOp for mergeOp, any src being merged onto dst must use mOp.
-            let mut mOp = build_program(&expr, ids[2]);
+
+            // TODO: Check if there are bounds
+            match expr[ids[2]] {
+                SkiLang::NoOp => {}
+                SkiLang::DrawCommand(index) => {}
+            }
+
+            // TODO: Check if there are filters
+            match expr[ids[3]] {
+                SkiLang::NoOp => {}
+                SkiLang::DrawCommand(index) => {}
+            }
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
-
             match dst.surface_type {
                 SkiPassSurfaceType::Abstract => {
                     instructions.append(&mut dst.instructions);
