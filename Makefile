@@ -62,7 +62,7 @@ build-nightly: build-skipass gen-nightly gen-proto
 gen-skps: build-nightly
 	mkdir -p $(SKP_DIR)
 	$(BUILD_DIR)/skia_opt_gen_skps
-	cp ${WEBPAGE_SKPS_DIR}/* ${SKP_DIR}/
+	# cp ${WEBPAGE_SKPS_DIR}/* ${SKP_DIR}/
 
 local-nightly: clean-skp gen-skps build-nightly
 	mkdir -p $(NIGHTLY_REPORT_DIR)

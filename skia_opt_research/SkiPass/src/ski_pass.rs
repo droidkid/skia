@@ -16,6 +16,7 @@ use crate::protos::{
     ski_pass_instruction::SaveLayer,
     ski_pass_instruction::Save,
     ski_pass_instruction::Restore,
+    ski_pass_instruction::Alpha,
     sk_records::Command, 
 };
 
@@ -32,6 +33,7 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
             let mut program = SkiPassProgram::default();
             program.instructions = build_program(&optExpr.expr, optExpr.id).instructions;
             skiPassRunResult.program = Some(program);
+            println!("{:?}", skiPassRunResult.program);
         }
         Err(e) => {}
     }
@@ -40,13 +42,17 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
 
 define_language! {
     enum SkiLang {
-        AlphaChannel(u8),
         "noOp" = NoOp,
+        // TODO: Do something about these i32s 
+        AlphaChannel(i32),
         DrawCommand(i32), // skRecords index
         "matrixOp" = MatrixOp([Id; 2]), // layer to apply matrixOp, command referring original drawCommand
         "blank" = Blank,
-        "srcOver" = SrcOver([Id; 4]), // dst, src, bounds (if any or NoOp), filters (if any or NoOp)
-        "applyAlpha" = ApplyAlpha([Id; 2]), // alphaChannel, layer
+        // dst, src, original saveLayer 
+        // original saveLayer filled if saveLayer has bounds to apply or filters to apply
+        // TODO: BOUNDS ARE NOT ENFORCED ON SAVELAYER! HANDLE THEM SEPERATELY.
+        "srcOver" = SrcOver([Id; 3]),
+        "alpha" = Alpha([Id; 2]), // alphaChannel, layer
     }
 }
 
@@ -55,6 +61,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
         rewrite!("remove-blank-dst-savelayers"; "(srcOver ?a blank noOp)" => "?a"),
         rewrite!("remove-blank-src-savelayers"; "(srcOver blank ?a noOp)" => "?a"),
         rewrite!("merge-noOp-saveLayer"; "(srcOver ?b (srcOver blank ?a ?c) noOp)" => "(srcOver ?b ?a ?c)"),
+        rewrite!("remove-noOp-alpha"; "(alpha 255 ?a)" => "?a"),
     ]
 }
 
@@ -70,7 +77,7 @@ fn run_eqsat_and_extract(
     let extractor = Extractor::new(&runner.egraph, AstSize);
     let (cost, mut optimized) = extractor.find_best(root);
 
-    // println!("Opt: {}", optimized);
+    println!("Opt: {}", optimized);
 
     // Figure out how to walk a RecExpr without the ID.
     // Until then, use this roundabout way to get the optimized recexpr id.
@@ -133,21 +140,21 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     let blank = expr.add(SkiLang::Blank);
                     let src = build_expr(skRecordsIter, blank, 0, expr);
 
-                    let bounds = match (save_layer.suggested_bounds) {
-                        Some(suggested_bounds) => expr.add(SkiLang::DrawCommand(skRecords.index)),
-                        None => expr.add(SkiLang::NoOp),
+                    let has_bounds = save_layer.suggested_bounds.is_some();
+                    let has_filters = save_layer.filter_info.is_some();
+                    let has_backdrop = save_layer.backdrop.is_some();
+
+                    if has_bounds || has_filters || has_backdrop {
+                        let mergeOp = expr.add(SkiLang::DrawCommand(skRecords.index));
+                        let nextDst = expr.add(SkiLang::SrcOver([dst, src, mergeOp]));
+                        build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
+                    } else {
+                        let mergeOp = expr.add(SkiLang::NoOp);
+                        let alphaChannel = expr.add(SkiLang::AlphaChannel(save_layer.alpha_u8));
+                        let applyAlphaSrc = expr.add(SkiLang::Alpha([alphaChannel, src]));
+                        let nextDst = expr.add(SkiLang::SrcOver([dst, applyAlphaSrc, mergeOp]));
+                        build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                     }
-
-                    let filters = match (save_layer.suggested_bounds) {
-                        Some(suggested_bounds) => expr.add(SkiLang::DrawCommand(skRecords.index)),
-                        None => expr.add(SkiLang::NoOp),
-                    }
-
-                    let alphaChannel = expr.add(SkiLang::AlphaChannel(save_layer.alpha_u8));
-                    let applyAlphaSrc = expr.add(SkiLang::ApplyAlpha(alphaChannel, src));
-
-                    let nextDst = expr.add(SkiLang::SrcOver([dst, applyAlphaSrc, bounds, filters]));
-                    build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                 },
                 Some(Command::Restore(restore)) => {
                     dst
@@ -184,7 +191,6 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             SkiPassSurface {
                 instructions: vec![],
                 surface_type: SkiPassSurfaceType::Abstract,
-
             }
         },
         SkiLang::NoOp => {
@@ -207,8 +213,23 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 surface_type: SkiPassSurfaceType::Abstract,
             }
         },
-        SkiLang::ApplyAlpha(ids) => {
-            // TODO: Add a ApplyAlpha command
+        SkiLang::Alpha(ids) => {
+            let mut targetSurface = build_program(&expr, ids[1]);
+            let alpha_u8 = 128; // TODO: Fetch the actual alpha value.
+
+            let mut instructions: Vec<SkiPassInstruction> = vec![];
+            instructions.push(SkiPassInstruction {
+                instruction: Some(Instruction::ApplyAlpha(Alpha{ alpha_u8 }))
+            });
+            instructions.append(&mut targetSurface.instructions);
+            instructions.push(SkiPassInstruction {
+                instruction: Some(Instruction::PopAlpha(Alpha{ alpha_u8 }))
+            });
+
+            SkiPassSurface {
+                instructions,
+                surface_type: targetSurface.surface_type
+            }
         },
         SkiLang::MatrixOp(ids) => {
             let mut targetSurface = build_program(&expr, ids[0]);
@@ -228,18 +249,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         SkiLang::SrcOver(ids) => {
             let mut dst = build_program(&expr, ids[0]);
             let mut src = build_program(&expr, ids[1]);
-
-            // TODO: Check if there are bounds
-            match expr[ids[2]] {
-                SkiLang::NoOp => {}
-                SkiLang::DrawCommand(index) => {}
-            }
-
-            // TODO: Check if there are filters
-            match expr[ids[3]] {
-                SkiLang::NoOp => {}
-                SkiLang::DrawCommand(index) => {}
-            }
+            let mut mOp = build_program(&expr, ids[2]); // mOp for mergeOp
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
             match dst.surface_type {

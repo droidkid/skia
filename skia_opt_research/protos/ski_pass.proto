@@ -79,13 +79,12 @@ message SkiPassInstruction {
         int32 index = 1;
     }
     message SaveLayer {
-        int32 suggested_bounds_reference = 1;
-        int32 image_filters_reference = 1;
+	
     }
 
     message Save {}
     message Restore {}
-    message ApplyAlpha {
+    message Alpha {
 	int32 alpha_u8 = 1;
     }
     oneof instruction {
@@ -93,6 +92,8 @@ message SkiPassInstruction {
         SaveLayer save_layer = 2;
         Save save = 3;
         Restore restore = 4;
+	Alpha apply_alpha = 5;
+	Alpha pop_alpha = 6;
     }
 }
 
