@@ -389,14 +389,36 @@ class SkiPassRecordBuilder {
 class SkRecordApplier {
 public:
     SkRecordApplier(SkCanvas *canvas):
-        fDraw(canvas, nullptr, nullptr, 0, nullptr) {}
+        fDraw(canvas, nullptr, nullptr, 0, nullptr) {
+	    cur_alpha = 255;
+	}
 
     template <typename T>
     void operator()(const T& command) {
         fDraw(command);
     }
+
+    void operator()(const SkRecords::DrawRect& command) {
+	if (cur_alpha == 255) {
+            fDraw(command);
+	} else {
+	    SkRecords::DrawRect clonedCommand = command;
+	    // Let's not worry about rounding errors for now.
+	    clonedCommand.paint.setAlpha((clonedCommand.paint.getAlpha() * cur_alpha) / 255);
+	    fDraw(clonedCommand);
+	}
+    }
+
+    void apply_alpha(int alpha) {
+	    cur_alpha = (cur_alpha * alpha) / 255;
+    }
+
+    void pop_alpha(int alpha) {
+	    cur_alpha = (cur_alpha * 255) / alpha;
+    }
 private:
     SkRecords::Draw fDraw;
+    int cur_alpha;
 };
 
 void SkiPassOptimize(SkRecord* record, SkCanvas *canvas) {
@@ -420,6 +442,12 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas) {
         if (instruction.has_copy_record()) {
             record->visit((int)(instruction.copy_record().index()), copier);
         }
+        if (instruction.has_apply_alpha()) {
+	    copier.apply_alpha(instruction.apply_alpha().alpha_u8());
+        }
+	if (instruction.has_pop_alpha()) {
+	    copier.pop_alpha(instruction.pop_alpha().alpha_u8());
+	}
         if (instruction.has_save()) {
             canvas->save();
         }

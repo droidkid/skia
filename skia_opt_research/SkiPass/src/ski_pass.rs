@@ -43,8 +43,12 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
 define_language! {
     enum SkiLang {
         "noOp" = NoOp,
-        // TODO: Do something about these i32s 
-        AlphaChannel(i32),
+        // TODO: Do something about this hack
+        // You don't want both AlphaChannel(i32) and DrawCommand(i32).
+        // Ideally you want Int(i32), and AlphaChannel([Id]) and DrawCommand([Id]).
+        // This depends on the order, all ints get parsed as AlphaChannel, and then as DrawCommands
+        // it's a hack that will blow up, fix ASAP.
+        Int(i32),
         DrawCommand(i32), // skRecords index
         "matrixOp" = MatrixOp([Id; 2]), // layer to apply matrixOp, command referring original drawCommand
         "blank" = Blank,
@@ -150,7 +154,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                         build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                     } else {
                         let mergeOp = expr.add(SkiLang::NoOp);
-                        let alphaChannel = expr.add(SkiLang::AlphaChannel(save_layer.alpha_u8));
+                        let alphaChannel = expr.add(SkiLang::Int(save_layer.alpha_u8));
                         let applyAlphaSrc = expr.add(SkiLang::Alpha([alphaChannel, src]));
                         let nextDst = expr.add(SkiLang::SrcOver([dst, applyAlphaSrc, mergeOp]));
                         build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
@@ -215,7 +219,10 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         },
         SkiLang::Alpha(ids) => {
             let mut targetSurface = build_program(&expr, ids[1]);
-            let alpha_u8 = 128; // TODO: Fetch the actual alpha value.
+            let alpha_u8 = match &expr[ids[0]] {
+                SkiLang::Int(value) => *value,
+                _ => panic!()
+            };
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
             instructions.push(SkiPassInstruction {
