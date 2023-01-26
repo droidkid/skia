@@ -42,16 +42,11 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
 
 define_language! {
     enum SkiLang {
+        Num(i32),
         "noOp" = NoOp,
-        // TODO: Do something about this hack
-        // You don't want both AlphaChannel(i32) and DrawCommand(i32).
-        // Ideally you want Int(i32), and AlphaChannel([Id]) and DrawCommand([Id]).
-        // This depends on the order, all ints get parsed as AlphaChannel, and then as DrawCommands
-        // it's a hack that will blow up, fix ASAP.
-        Int(i32),
-        DrawCommand(i32), // skRecords index
-        "matrixOp" = MatrixOp([Id; 2]), // layer to apply matrixOp, command referring original drawCommand
         "blank" = Blank,
+        "drawCommand" = DrawCommand([Id; 1]), // skRecords index
+        "matrixOp" = MatrixOp([Id; 2]), // layer to apply matrixOp, command referring original drawCommand
         // dst, src, original saveLayer 
         // original saveLayer filled if saveLayer has bounds to apply or filters to apply
         // TODO: BOUNDS ARE NOT ENFORCED ON SAVELAYER! HANDLE THEM SEPERATELY.
@@ -110,7 +105,8 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     match draw_command.name.as_str() {
                         "ClipPath" | "ClipRRect" | "ClipRect" | "Concat44" => {
                             // Reference to clipRect command in input SKP.
-                            let matrixOpCommand = expr.add(SkiLang::DrawCommand(skRecords.index));
+                            let matrixOpIndex = expr.add(SkiLang::Num(skRecords.index));
+                            let matrixOpCommand = expr.add(SkiLang::DrawCommand([matrixOpIndex]));
 
                             // Construct surface on which matrixOp should be applied.
                             let newLayerDst = expr.add(SkiLang::Blank);
@@ -128,7 +124,8 @@ I: Iterator<Item = &'a SkRecords> + 'a,
 
                         }
                         _ => {
-                            let src = expr.add(SkiLang::DrawCommand(skRecords.index));
+                            let drawCommandIndex = expr.add(SkiLang::Num(skRecords.index));
+                            let src = expr.add(SkiLang::DrawCommand([drawCommandIndex]));
                             let noOp = expr.add(SkiLang::NoOp);
                             let nextDst = expr.add(SkiLang::SrcOver([dst, src, noOp]));
                             build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
@@ -149,12 +146,13 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     let has_backdrop = save_layer.backdrop.is_some();
 
                     if has_bounds || has_filters || has_backdrop {
-                        let mergeOp = expr.add(SkiLang::DrawCommand(skRecords.index));
+                        let mergeOpIndex = expr.add(SkiLang::Num(skRecords.index));
+                        let mergeOp = expr.add(SkiLang::DrawCommand([mergeOpIndex]));
                         let nextDst = expr.add(SkiLang::SrcOver([dst, src, mergeOp]));
                         build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                     } else {
                         let mergeOp = expr.add(SkiLang::NoOp);
-                        let alphaChannel = expr.add(SkiLang::Int(save_layer.alpha_u8));
+                        let alphaChannel = expr.add(SkiLang::Num(save_layer.alpha_u8));
                         let applyAlphaSrc = expr.add(SkiLang::Alpha([alphaChannel, src]));
                         let nextDst = expr.add(SkiLang::SrcOver([dst, applyAlphaSrc, mergeOp]));
                         build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
@@ -203,12 +201,16 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 surface_type: SkiPassSurfaceType::Abstract,
             }
         },
-        SkiLang::DrawCommand(index) => {
+        SkiLang::DrawCommand(ids) => {
+            let index = match &expr[ids[0]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
             let instruction = SkiPassInstruction {
                 // oneof -> Option of a Enum
                 instruction: Some(Instruction::CopyRecord(
                     SkiPassCopyRecord {
-                        index: *index
+                        index
                     }
                 ))
             };
@@ -220,7 +222,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         SkiLang::Alpha(ids) => {
             let mut targetSurface = build_program(&expr, ids[1]);
             let alpha_u8 = match &expr[ids[0]] {
-                SkiLang::Int(value) => *value,
+                SkiLang::Num(value) => *value,
                 _ => panic!()
             };
 
