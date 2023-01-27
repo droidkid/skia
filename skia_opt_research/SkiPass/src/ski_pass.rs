@@ -67,8 +67,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     vec![
         rewrite!("remove-noOp-concat-1"; "(concat blank ?a)" => "?a"),
         rewrite!("remove-noOp-concat-2"; "(concat ?a blank)" => "?a"),
-        // The reverse is NOT always true -> because of alpha and blend.
-        rewrite!("remove-noOp-merge"; "(merge blank ?layer 255 noOp)" => "?layer"),
+        rewrite!("remove-noOp-merge"; "(merge ?dst ?src 255 noOp)" => "(concat ?dst ?src)"),
         rewrite!("remove-merge-blank"; "(merge ?layer blank ?alpha ?blend)" => "?layer"),
         rewrite!("remove-noOp-alpha"; "(alpha 255 ?a)" => "?a"),
         rewrite!("remove-blank-matrixOp"; "(matrixOp blank ?a)" => "blank"),
