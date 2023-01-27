@@ -79,7 +79,7 @@ message SkiPassInstruction {
         int32 index = 1;
     }
     message SaveLayer {
-	
+	int32 alpha_u8 = 1;
     }
 
     message Save {}

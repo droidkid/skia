@@ -45,22 +45,34 @@ define_language! {
         Num(i32),
         "noOp" = NoOp,
         "blank" = Blank,
-        "drawCommand" = DrawCommand([Id; 1]), // skRecords index
-        "matrixOp" = MatrixOp([Id; 2]), // layer to apply matrixOp, command referring original drawCommand
-        // dst, src, original saveLayer 
-        // original saveLayer filled if saveLayer has bounds to apply or filters to apply
-        // TODO: BOUNDS ARE NOT ENFORCED ON SAVELAYER! HANDLE THEM SEPERATELY.
-        "srcOver" = SrcOver([Id; 3]),
+        // drawCommand(num) -> A Reference to a drawCommand in source SKP.
+        "drawCommand" = DrawCommand([Id; 1]),
+        // matrixOp(layer, transform) -> return layer after applying transform on layer 
+        "matrixOp" = MatrixOp([Id; 2]),
+        // concat(layer1, layer2) -> return layer resulting from sequential execution of
+        // instructions(layer1), instructions(layer2)
+        "concat" = Concat([Id; 2]),
+        // merge(layer1, layer2, alpha, blend) -> using blend, combine layer1 and alpha(layer2).
+        // This translates directly to saveLayer command in Skia.
+        "merge" = Merge([Id; 4]),
+        // EGRAPH INTERNAL COMMANDS FOLLOW
+        // Below commands have no literal equivalent in Skia, and are only used for EGraph
+        // Extraction
+        // alpha(layer, value) -> apply transparency of value on layer
         "alpha" = Alpha([Id; 2]), // alphaChannel, layer
     }
 }
 
 fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     vec![
-        rewrite!("remove-blank-dst-savelayers"; "(srcOver ?a blank noOp)" => "?a"),
-        rewrite!("remove-blank-src-savelayers"; "(srcOver blank ?a noOp)" => "?a"),
-        rewrite!("merge-noOp-saveLayer"; "(srcOver ?b (srcOver blank ?a ?c) noOp)" => "(srcOver ?b ?a ?c)"),
+        rewrite!("remove-noOp-concat-1"; "(concat blank ?a)" => "?a"),
+        rewrite!("remove-noOp-concat-2"; "(concat ?a blank)" => "?a"),
+        // The reverse is NOT always true -> because of alpha and blend.
+        rewrite!("remove-noOp-merge"; "(merge blank ?layer 255 noOp)" => "?layer"),
+        rewrite!("remove-merge-blank"; "(merge ?layer blank ?alpha ?blend)" => "?layer"),
         rewrite!("remove-noOp-alpha"; "(alpha 255 ?a)" => "?a"),
+        rewrite!("remove-blank-matrixOp"; "(matrixOp blank ?a)" => "blank"),
+        rewrite!("remove-noOp-matrixOp"; "(matrixOp ?layer blank)" => "?layer"),
     ]
 }
 
@@ -104,7 +116,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                 Some(Command::DrawCommand(draw_command)) => {
                     match draw_command.name.as_str() {
                         "ClipPath" | "ClipRRect" | "ClipRect" | "Concat44" => {
-                            // Reference to clipRect command in input SKP.
+                            // Reference to matrixOp command in input SKP.
                             let matrixOpIndex = expr.add(SkiLang::Num(skRecords.index));
                             let matrixOpCommand = expr.add(SkiLang::DrawCommand([matrixOpIndex]));
 
@@ -113,9 +125,10 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                             let surfaceToApplyMatrixOp = build_expr(skRecordsIter, newLayerDst, matrixOpCount + 1, expr);
 
                             let src = expr.add(SkiLang::MatrixOp([surfaceToApplyMatrixOp, matrixOpCommand]));
-                            let noOp = expr.add(SkiLang::NoOp);
-                            let nextDst = expr.add(SkiLang::SrcOver([dst, src, noOp]));
+                            let nextDst = expr.add(SkiLang::Concat([dst, src]));
 
+                            // We do this to find the matching Restore
+                            // You could have a Save ClipRect Concat44 Draw Restore
                             if matrixOpCount == 0 {
                                 build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                             } else {
@@ -126,8 +139,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                         _ => {
                             let drawCommandIndex = expr.add(SkiLang::Num(skRecords.index));
                             let src = expr.add(SkiLang::DrawCommand([drawCommandIndex]));
-                            let noOp = expr.add(SkiLang::NoOp);
-                            let nextDst = expr.add(SkiLang::SrcOver([dst, src, noOp]));
+                            let nextDst = expr.add(SkiLang::Concat([dst, src]));
                             build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                         }
                     }
@@ -138,27 +150,28 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                 },
                 Some(Command::SaveLayer(save_layer)) => {
                     println!("{:?}", save_layer);
+                    // Build the layer over a blank canvas.
                     let blank = expr.add(SkiLang::Blank);
                     let src = build_expr(skRecordsIter, blank, 0, expr);
 
                     let has_bounds = save_layer.suggested_bounds.is_some();
                     let has_filters = save_layer.filter_info.is_some();
                     let has_backdrop = save_layer.backdrop.is_some();
+                    let alpha = expr.add(SkiLang::Num(save_layer.alpha_u8));
 
-                    if has_bounds || has_filters || has_backdrop {
-                        let mergeOpIndex = expr.add(SkiLang::Num(skRecords.index));
-                        let mergeOp = expr.add(SkiLang::DrawCommand([mergeOpIndex]));
-                        let nextDst = expr.add(SkiLang::SrcOver([dst, src, mergeOp]));
-                        build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
+                    let blendOp = if has_bounds || has_filters || has_backdrop {
+                        let blendOpIndex = expr.add(SkiLang::Num(skRecords.index));
+                        expr.add(SkiLang::DrawCommand([blendOpIndex]))
                     } else {
-                        let mergeOp = expr.add(SkiLang::NoOp);
-                        let alphaChannel = expr.add(SkiLang::Num(save_layer.alpha_u8));
-                        let applyAlphaSrc = expr.add(SkiLang::Alpha([alphaChannel, src]));
-                        let nextDst = expr.add(SkiLang::SrcOver([dst, applyAlphaSrc, mergeOp]));
-                        build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
-                    }
+                        expr.add(SkiLang::NoOp)
+                    };
+
+                    let nextDst = expr.add(SkiLang::Merge([dst, src, alpha, blendOp]));
+                    build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                 },
                 Some(Command::Restore(restore)) => {
+                    // Either SaveLayer or the first MatrixOp that matches this will
+                    // continue building the program.
                     dst
                 },
                 _ => {
@@ -174,32 +187,16 @@ I: Iterator<Item = &'a SkRecords> + 'a,
 }
 
 #[derive(Debug)]
-enum SkiPassSurfaceType {
-    Abstract,
-    AbstractWithState,
-    Allocated,
-}
-
-#[derive(Debug)]
 struct SkiPassSurface {
     instructions: Vec<SkiPassInstruction>,
-    surface_type: SkiPassSurfaceType,
+    modified_matrix: bool,
 }
 
-fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
+fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
     let node = &expr[id];
     match node {
-        SkiLang::Blank => {
-            SkiPassSurface {
-                instructions: vec![],
-                surface_type: SkiPassSurfaceType::Abstract,
-            }
-        },
         SkiLang::NoOp => {
-            SkiPassSurface {
-                instructions: vec![],
-                surface_type: SkiPassSurfaceType::Abstract,
-            }
+            vec![]
         },
         SkiLang::DrawCommand(ids) => {
             let index = match &expr[ids[0]] {
@@ -214,105 +211,132 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                     }
                 ))
             };
+            vec![instruction]
+        },
+        _ => {
+            panic!("Not a instruction, this is a Surface!");
+        }
+    }
+}
+
+fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
+    let node = &expr[id];
+    match node {
+        SkiLang::Blank => {
             SkiPassSurface {
-                instructions: vec![instruction],
-                surface_type: SkiPassSurfaceType::Abstract,
+                instructions: vec![],
+                modified_matrix: false,
             }
         },
-        SkiLang::Alpha(ids) => {
-            let mut targetSurface = build_program(&expr, ids[1]);
-            let alpha_u8 = match &expr[ids[0]] {
+        SkiLang::DrawCommand(ids) => {
+            SkiPassSurface {
+                instructions: to_instructions(&expr, id), // NOTE: id, not ids[0].
+                modified_matrix: false,
+            }
+        },
+        SkiLang::MatrixOp(ids) => {
+            let mut targetSurface = build_program(&expr, ids[0]);
+            let mut matrixOpInstructions = to_instructions(&expr, ids[1]);
+
+            let mut instructions: Vec<SkiPassInstruction> = vec![];
+            instructions.append(&mut matrixOpInstructions);
+            instructions.append(&mut targetSurface.instructions);
+
+            SkiPassSurface {
+                instructions,
+                modified_matrix: true,
+            }
+        },
+        SkiLang::Concat(ids) => {
+            let mut p1 = build_program(&expr, ids[0]);
+            let mut p2 = build_program(&expr, ids[1]);
+
+            let mut instructions: Vec<SkiPassInstruction> = vec![];
+
+            if p1.modified_matrix {
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Save(Save{}))
+                });
+                instructions.append(&mut p1.instructions);
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Restore(Restore{}))
+                });
+            } else {
+                instructions.append(&mut p1.instructions);
+            }
+
+            if p2.modified_matrix {
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Save(Save{}))
+                });
+                instructions.append(&mut p2.instructions);
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Restore(Restore{}))
+                });
+            } else {
+                instructions.append(&mut p2.instructions);
+            }
+
+            SkiPassSurface {
+                instructions,
+                modified_matrix: false
+            }
+        },
+        SkiLang::Merge(ids) => {
+            let mut dst = build_program(&expr, ids[0]);
+            let mut src = build_program(&expr, ids[1]);
+
+            let alpha_u8  = match &expr[ids[2]] {
                 SkiLang::Num(value) => *value,
                 _ => panic!()
             };
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
-            instructions.push(SkiPassInstruction {
-                instruction: Some(Instruction::ApplyAlpha(Alpha{ alpha_u8 }))
-            });
-            instructions.append(&mut targetSurface.instructions);
-            instructions.push(SkiPassInstruction {
-                instruction: Some(Instruction::PopAlpha(Alpha{ alpha_u8 }))
-            });
-
-            SkiPassSurface {
-                instructions,
-                surface_type: targetSurface.surface_type
+            if dst.modified_matrix {
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Save(Save{}))
+                });
+                instructions.append(&mut dst.instructions);
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Restore(Restore{}))
+                });
+            } else {
+                instructions.append(&mut dst.instructions);
             }
-        },
-        SkiLang::MatrixOp(ids) => {
-            let mut targetSurface = build_program(&expr, ids[0]);
-            let mut matrixOpCommand = build_program(&expr, ids[1]);
 
-            let mut instructions: Vec<SkiPassInstruction> = vec![];
-            let mut surface_type: SkiPassSurfaceType = SkiPassSurfaceType::AbstractWithState;
+            let mut blendInstructions = to_instructions(&expr, ids[3]);
 
-            instructions.append(&mut matrixOpCommand.instructions);
-            instructions.append(&mut targetSurface.instructions);
-
-            SkiPassSurface {
-                instructions,
-                surface_type,
-            }
-        },
-        SkiLang::SrcOver(ids) => {
-            let mut dst = build_program(&expr, ids[0]);
-            let mut src = build_program(&expr, ids[1]);
-            let mut mOp = build_program(&expr, ids[2]); // mOp for mergeOp
-
-            let mut instructions: Vec<SkiPassInstruction> = vec![];
-            match dst.surface_type {
-                SkiPassSurfaceType::Abstract => {
-                    instructions.append(&mut dst.instructions);
-                },
-                SkiPassSurfaceType::AbstractWithState => {
-                    instructions.push(SkiPassInstruction {
-                        instruction: Some(Instruction::Save(Save{}))
-                    });
-                    instructions.append(&mut dst.instructions);
-                    instructions.push(SkiPassInstruction {
-                        instruction: Some(Instruction::Restore(Restore{}))
-                    });
-                },
-                SkiPassSurfaceType::Allocated => {
-                    instructions.append(&mut dst.instructions);
-                },
-            };
-
-            let len = mOp.instructions.len();
-            // This is a saveLayer with a paint parameter. So wrap the src in a saveLayer.
-            if (len > 0) {
-                instructions.append(&mut mOp.instructions);
+            if blendInstructions.len() > 0 {
+                // Not enough is known about the blend operation, use original saveLayer command.
+                // NOTE: This assumption is only valid as long as our rewrite rules don't touch
+                // Merges with a blend operation.
+                // TODO: Eventually capture the blend parameters and reconstruct the SaveLayer.
+                // and stop relying on referencing the original saveLayer.
+                instructions.append(&mut blendInstructions);
                 instructions.append(&mut src.instructions);
-                for _ in 0..len {
-                    instructions.push(SkiPassInstruction {
-                        instruction: Some(Instruction::Restore(Restore{}))
-                    });
-                }
-            } 
-            else {
-                match src.surface_type {
-                    // It's just a sequence of draw calls, so let's just append.
-                    SkiPassSurfaceType::Abstract | SkiPassSurfaceType::Allocated => {
-                        instructions.append(&mut src.instructions);
-                    },
-                    // Else if there's a matrix state, wrap it in a save, restore pair
-                    _ => {
-                        instructions.push(SkiPassInstruction {
-                            instruction: Some(Instruction::Save(Save{}))
-                        });
-                        instructions.append(&mut src.instructions);
-                        instructions.push(SkiPassInstruction {
-                            instruction: Some(Instruction::Restore(Restore{}))
-                        });
-                    }
-                };
-            } 
-
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Restore(Restore{}))
+                });
+            } else {
+                // Construct a new SaveLayer.
+                // We only have a alpha parameter to worry about.
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::SaveLayer(SaveLayer{alpha_u8}))
+                });
+                instructions.append(&mut src.instructions);
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Restore(Restore{}))
+                });
+            };
+            
             SkiPassSurface {
                 instructions,
-                surface_type: SkiPassSurfaceType::Allocated,
+                modified_matrix: false
             }
+
+        },
+        SkiLang::Alpha(ids) => {
+            panic!("An Alpha survived extraction! THIS SHOULD NOT HAPPEN");
         },
         _ => {
             panic!("Badly constructed Recexpr");
