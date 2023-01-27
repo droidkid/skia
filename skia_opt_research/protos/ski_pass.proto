@@ -67,6 +67,10 @@ message SkiPassRunInfo {
         string error_message = 1;
     }
     SkiPassRunError error = 3;
+
+    // Debug info
+    string skilang_expr = 4;
+    string extracted_skilang_expr = 5;
 }
 
 /*

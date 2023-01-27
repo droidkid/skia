@@ -400,7 +400,7 @@ private:
     SkRecords::Draw fDraw;
 };
 
-void SkiPassOptimize(SkRecord* record, SkCanvas *canvas) {
+void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_fname) {
     ski_pass_proto::SkRecord skipass_record;
     SkiPassRecordBuilder builder(&skipass_record);
     for (int i=0; i < record->count(); i++) {
@@ -415,6 +415,12 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas) {
     std::string result_data((const char *)result_ptr.ptr, result_ptr.len);
     ski_pass_proto::SkiPassRunResult result;
     result.ParseFromString(result_data);
+
+    // WRITE RESULTS TO LOG.
+    // TODO: This flow can be cleaner.
+    FILE *fp = fopen(log_fname.c_str(), "w");
+    fprintf(fp, "%s", result.DebugString().c_str());
+    fclose(fp);
 
     SkRecordApplier copier(canvas);
     for (auto instruction: result.program().instructions()) {

@@ -29,6 +29,6 @@ void SkRecordMergeSvgOpacityAndFilterLayers(SkRecord*);
 // Experimental optimizers
 void SkRecordOptimize2(SkRecord*);
 
-void SkiPassOptimize(SkRecord*, SkCanvas *);
+void SkiPassOptimize(SkRecord* , SkCanvas *, const std::string &);
 
 #endif//SkRecordOpts_DEFINED

@@ -2,6 +2,7 @@ use egg::*;
 use std::error::Error;
 use std::fmt;
 use prost::Message;
+use std::fmt::Write;
 
 use crate::protos;
 use crate::protos::{
@@ -33,7 +34,7 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
             let mut program = SkiPassProgram::default();
             program.instructions = build_program(&optExpr.expr, optExpr.id).instructions;
             skiPassRunResult.program = Some(program);
-            println!("{:?}", skiPassRunResult.program);
+            skiPassRunResult.run_info = Some(skiRunInfo);
         }
         Err(e) => {}
     }
@@ -82,12 +83,12 @@ fn run_eqsat_and_extract(
     let mut runner = Runner::default().with_expr(expr).run(&make_rules());
     let root = runner.roots[0];
 
-    // println!("Exp: {}", expr);
+    writeln!(&mut run_info.skilang_expr, "{:#}", expr);
 
     let extractor = Extractor::new(&runner.egraph, AstSize);
     let (cost, mut optimized) = extractor.find_best(root);
 
-    println!("Opt: {}", optimized);
+    writeln!(&mut run_info.extracted_skilang_expr, "{:#}", optimized);
 
     // Figure out how to walk a RecExpr without the ID.
     // Until then, use this roundabout way to get the optimized recexpr id.
@@ -148,7 +149,6 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     build_expr(skRecordsIter, dst, 0, expr)
                 },
                 Some(Command::SaveLayer(save_layer)) => {
-                    println!("{:?}", save_layer);
                     // Build the layer over a blank canvas.
                     let blank = expr.add(SkiLang::Blank);
                     let src = build_expr(skRecordsIter, blank, 0, expr);

@@ -42,6 +42,7 @@ for skp_benchmark in benchmark.skp_benchmark_runs:
     skp_membench_result['name'] = skp_name
     skp_membench_result['json'] = ('json/%s.json' % skp_name)
     skp_membench_result['ref_img_url'] = ("renders/%s.png" % skp_name)
+    skp_membench_result['skipass_log'] = ('./%s_SKI_PASS_SkiPassRunResult.txt' % (skp_name))
     for opt_benchmark in skp_benchmark.optimization_benchmark_runs:
         opt = SkiaOptMetrics.Optimization.Name(opt_benchmark.optimization_type)
         skp_membench_result[opt] = {}

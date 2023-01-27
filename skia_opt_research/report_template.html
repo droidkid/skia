@@ -29,6 +29,12 @@
                         <a href = "{{skp[opt]['link']}}">
                         {{skp[opt]['value']}} 
                         </a>
+			<br/>
+			{% if opt == 'SKI_PASS' %}
+                        <a href = "{{skp['skipass_log']}}">
+				SkiPass Debug Log
+                        </a>
+			{% endif %}
                     </td>
                 {% endfor %}
 
