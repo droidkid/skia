@@ -79,4 +79,4 @@ local-nightly: clean-skp gen-skps build-nightly
 	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE)
 
 nightly: clean local-nightly
-	scp -r -C $(NIGHTLY_REPORT_DIR) uwplse.org:/var/www/skia/
+	nightly-results publish $(NIGHTLY_REPORT_DIR)
