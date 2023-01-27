@@ -25,6 +25,7 @@ PROTOS = $(wildcard ./skia_opt_research/protos/*.proto)
 # These variables must be relative to ${NIGHTLY_DIR} so that the 
 # diff tool generates the correct relative paths.
 SKP_RENDERS = ${REPORT_TIMESTAMP}/renders
+SKP_JSON_RENDERS = ${REPORT_TIMESTAMP}/json
 SKI_PASS_SKP_RENDERS = $(REPORT_TIMESTAMP)/skipass_renders
 DIFF_REPORT_DIR = $(REPORT_TIMESTAMP)/diff
 
@@ -68,6 +69,10 @@ local-nightly: clean-skp gen-skps build-nightly
 	mkdir -p ${NIGHTLY_DIR}/$(SKP_RENDERS)
 	mkdir -p ${NIGHTLY_DIR}/$(SKI_PASS_SKP_RENDERS)
 	mkdir -p ${NIGHTLY_DIR}/$(DIFF_REPORT_DIR)
+	mkdir -p ${NIGHTLY_DIR}/${SKP_JSON_RENDERS}
+	for SKP in $(SKPS); do\
+	   	$(BUILD_DIR)/skp_parser $$SKP > $(NIGHTLY_DIR)/$(SKP_JSON_RENDERS)/$$(basename $$SKP).json; \
+	done
 	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR)
 	cd $(NIGHTLY_DIR) && \
 		$(BUILD_DIR)/skdiff ${SKP_RENDERS} ${SKI_PASS_SKP_RENDERS} ${DIFF_REPORT_DIR}
