@@ -173,6 +173,20 @@ void draw_007_saveLayer(SkCanvas *canvas) {
     canvas->restore();
 }
 
+void draw_008_noOpSaveLayerRemove(SkCanvas *canvas) {
+    SkPaint pSolidBlue;
+    pSolidBlue.setColor(SK_ColorBLUE);
+
+    // SkRecordOpts optimizes this...
+    canvas->saveLayer(nullptr, nullptr);
+    canvas->drawRect(SkRect::MakeLTRB(90, 90, 110, 130), pSolidBlue);
+    canvas->restore();
+
+    // ...but not this!!??
+    canvas->saveLayer(nullptr, nullptr);
+    canvas->restore();
+}
+
 
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
@@ -186,4 +200,5 @@ int main(int argc, char **argv) {
     raster(512, 512, draw_005_clipRect, FLAGS_dir[0], "005_clipRect.skp");
     raster(512, 512, draw_006_clipRect2, FLAGS_dir[0], "006_clipRect2.skp");
     raster(512, 512, draw_007_saveLayer, FLAGS_dir[0], "007_saveLayer.skp");
+    raster(512, 512, draw_008_noOpSaveLayerRemove, FLAGS_dir[0], "008_noOpSave.skp");
 }

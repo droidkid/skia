@@ -66,7 +66,8 @@ sk_sp<SkPicture> SkPictureRecorder::finishRecordingAsPicture() {
     }
 
     // TODO: delay as much of this work until just before first playback?
-    SkRecordOptimize(fRecord.get());
+    // Disabled, we manually run the optimizers for benchmarking purposes.
+    // SkRecordOptimize(fRecord.get());
 
     SkDrawableList* drawableList = fRecorder->getDrawableList();
     std::unique_ptr<SkBigPicture::SnapshotArray> pictList{
