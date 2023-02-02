@@ -185,6 +185,12 @@ void draw_008_noOpSaveLayerRemove(SkCanvas *canvas) {
     // ...but not this!!??
     canvas->saveLayer(nullptr, nullptr);
     canvas->restore();
+
+    SkPaint alpha;
+    alpha.setAlphaf(0.3);
+    canvas->saveLayer(nullptr, &alpha);
+    canvas->drawRect(SkRect::MakeLTRB(190, 190, 110, 130), pSolidBlue);
+    canvas->restore();
 }
 
 

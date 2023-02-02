@@ -81,6 +81,7 @@ message SkiPassInstruction {
     // Copy over the SkRecord in the original SKP.
     message SkiPassCopyRecord {
         int32 index = 1;
+	int32 alpha = 2;
     }
     message SaveLayer {
 	int32 alpha_u8 = 1;
@@ -88,16 +89,11 @@ message SkiPassInstruction {
 
     message Save {}
     message Restore {}
-    message Alpha {
-	int32 alpha_u8 = 1;
-    }
     oneof instruction {
         SkiPassCopyRecord copy_record = 1;
         SaveLayer save_layer = 2;
         Save save = 3;
         Restore restore = 4;
-	Alpha apply_alpha = 5;
-	Alpha pop_alpha = 6;
     }
 }
 

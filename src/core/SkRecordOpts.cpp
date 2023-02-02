@@ -391,13 +391,41 @@ public:
     SkRecordApplier(SkCanvas *canvas):
         fDraw(canvas, nullptr, nullptr, 0, nullptr) {}
 
+    // src/core/SkRecordPattern::IsDraw used as reference for the 
+
     template <typename T>
-    void operator()(const T& command) {
-        fDraw(command);
+    std::enable_if_t<(T::kTags & kDrawWithPaint_Tag) == kDrawWithPaint_Tag, void>
+    operator()(T* draw) {
+	SkPaint *paint = AsPtr(draw->paint);
+	if (paint != nullptr && alpha != 255) {
+            paint->setAlpha(SkMulDiv255Round(paint->getAlpha(), this->alpha));
+	}
+	// if paint is nullptr, assume there is nothing to draw.
+	fDraw(*draw);
+	return;
+    }
+
+    template <typename T>
+    std::enable_if_t<(T::kTags & kDrawWithPaint_Tag) == kDraw_Tag, void> operator()(T* draw) {
+	fDraw(*draw);
+    }
+
+    template <typename T>
+    std::enable_if_t<!(T::kTags & kDraw_Tag), void> operator()(T* draw) {
+	fDraw(*draw);
+    }
+
+    void setAlpha(int alpha) {
+    	this->alpha = alpha;
     }
 
 private:
     SkRecords::Draw fDraw;
+    int alpha;
+
+    // Abstracts away whether the paint is always part of the command or optional.
+    template <typename T> static T* AsPtr(SkRecords::Optional<T>& x) { return x; }
+    template <typename T> static T* AsPtr(T& x) { return &x; }
 };
 
 void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_fname) {
@@ -422,10 +450,11 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
     fprintf(fp, "%s", result.DebugString().c_str());
     fclose(fp);
 
-    SkRecordApplier copier(canvas);
+    SkRecordApplier applier(canvas);
     for (auto instruction: result.program().instructions()) {
         if (instruction.has_copy_record()) {
-            record->visit((int)(instruction.copy_record().index()), copier);
+	    applier.setAlpha(instruction.copy_record().alpha());
+            record->mutate((int)(instruction.copy_record().index()), applier);
         }
         if (instruction.has_save()) {
             canvas->save();

@@ -17,7 +17,6 @@ use crate::protos::{
     ski_pass_instruction::SaveLayer,
     ski_pass_instruction::Save,
     ski_pass_instruction::Restore,
-    ski_pass_instruction::Alpha,
     sk_records::Command, 
 };
 
@@ -46,9 +45,12 @@ define_language! {
         Num(i32),
         "noOp" = NoOp,
         "blank" = Blank,
-        // drawCommand(num) -> A Reference to a drawCommand in source SKP.
-        "drawCommand" = DrawCommand([Id; 1]),
-        // matrixOp(layer, transform) -> return layer after applying transform on layer 
+        // TODO: Consider not using Num as a drawCommand index and make a new type for that?
+        // drawCommand(num, alpha), where
+        //  num: index of drawCommand referenced in source SKP
+        //  alpha: Alpha to apply on top of original drawCommand paint
+        "drawCommand" = DrawCommand([Id; 2]),
+        // matrixOp(layer, num) -> return layer after applying transform on layer 
         "matrixOp" = MatrixOp([Id; 2]),
         // concat(layer1, layer2) -> return layer resulting from sequential execution of
         // instructions(layer1), instructions(layer2)
@@ -68,13 +70,38 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     vec![
         rewrite!("remove-noOp-concat-1"; "(concat blank ?a)" => "?a"),
         rewrite!("remove-noOp-concat-2"; "(concat ?a blank)" => "?a"),
-        rewrite!("remove-noOp-merge"; "(merge ?dst ?src 255 noOp)" => "(concat ?dst ?src)"),
+        rewrite!("kill-merge"; "(merge ?dst ?src 255 noOp)" => "(concat ?dst ?src)"),
+        rewrite!("apply-alpha-on-src"; "(merge ?dst ?src ?a noOp)" => "(merge ?dst (alpha ?a ?src) 255 noOp)"),
+        // TODO: For now we assume merge alpha is 255, eventually we probably want to multiply
+        // alphas.
+        rewrite!("lift-alpha"; "(merge ?dst (alpha ?a ?src) 255 noOp)" => "(merge ?dst ?src ?a noOp)"),
         rewrite!("remove-merge-blank"; "(merge ?layer blank ?alpha ?blend)" => "?layer"),
-        rewrite!("remove-noOp-alpha"; "(alpha 255 ?a)" => "?a"),
+        rewrite!("remove-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
+        // TODO: Again, we assume merge alpha is 255, eventually we probably want to multiply
+        // alphas.
+        rewrite!("apply-alpha-on-draw"; "(alpha ?a (drawCommand ?x 255))" => "(drawCommand ?x ?a)"),
         rewrite!("remove-blank-matrixOp"; "(matrixOp blank ?a)" => "blank"),
-        rewrite!("remove-noOp-matrixOp"; "(matrixOp ?layer blank)" => "?layer"),
+        rewrite!("remove-noOp-matrixOp"; "(matrixOp ?layer noOp)" => "?layer"),
     ]
 }
+
+// This CostFn exists to prevent internal SkiLang functions (such as alpha) to never be extracted.
+struct SkiLangCostFn;
+impl CostFunction<SkiLang> for SkiLangCostFn {
+    type Cost=f64;
+    fn cost<C>(&mut self, enode: &SkiLang, mut costs: C) -> Self::Cost
+        where
+            C: FnMut(Id) -> Self::Cost
+    {
+        let op_cost = match enode {
+            SkiLang::Alpha(ids) => 100000000.0,
+            SkiLang::Merge(ids) => 1.0,
+            _ => 0.0
+        };
+        enode.fold(op_cost, |sum, id| sum + costs(id))
+    }
+}
+
 
 fn run_eqsat_and_extract(
     expr: &RecExpr<SkiLang>,
@@ -85,7 +112,7 @@ fn run_eqsat_and_extract(
 
     writeln!(&mut run_info.skilang_expr, "{:#}", expr);
 
-    let extractor = Extractor::new(&runner.egraph, AstSize);
+    let extractor = Extractor::new(&runner.egraph, SkiLangCostFn);
     let (cost, mut optimized) = extractor.find_best(root);
 
     writeln!(&mut run_info.extracted_skilang_expr, "{:#}", optimized);
@@ -118,9 +145,10 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                         "ClipPath" | "ClipRRect" | "ClipRect" | "Concat44" => {
                             // Reference to matrixOp command in input SKP.
                             let matrixOpIndex = expr.add(SkiLang::Num(skRecords.index));
-                            let matrixOpCommand = expr.add(SkiLang::DrawCommand([matrixOpIndex]));
-
+                            let matrixOpAlpha = expr.add(SkiLang::Num(255));
+                            let matrixOpCommand = expr.add(SkiLang::DrawCommand([matrixOpIndex, matrixOpAlpha]));
                             // Construct surface on which matrixOp should be applied.
+                            //
                             let newLayerDst = expr.add(SkiLang::Blank);
                             let surfaceToApplyMatrixOp = build_expr(skRecordsIter, newLayerDst, matrixOpCount + 1, expr);
 
@@ -138,7 +166,8 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                         }
                         _ => {
                             let drawCommandIndex = expr.add(SkiLang::Num(skRecords.index));
-                            let src = expr.add(SkiLang::DrawCommand([drawCommandIndex]));
+                            let drawCommandAlpha = expr.add(SkiLang::Num(255));
+                            let src = expr.add(SkiLang::DrawCommand([drawCommandIndex, drawCommandAlpha]));
                             let nextDst = expr.add(SkiLang::Concat([dst, src]));
                             build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                         }
@@ -160,7 +189,8 @@ I: Iterator<Item = &'a SkRecords> + 'a,
 
                     let blendOp = if has_bounds || has_filters || has_backdrop {
                         let blendOpIndex = expr.add(SkiLang::Num(skRecords.index));
-                        expr.add(SkiLang::DrawCommand([blendOpIndex]))
+                        let blendOpAlpha = expr.add(SkiLang::Num(255));
+                        expr.add(SkiLang::DrawCommand([blendOpIndex, blendOpAlpha]))
                     } else {
                         expr.add(SkiLang::NoOp)
                     };
@@ -202,11 +232,16 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
                 SkiLang::Num(value) => *value,
                 _ => panic!()
             };
+            let alpha = match &expr[ids[1]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
             let instruction = SkiPassInstruction {
                 // oneof -> Option of a Enum
                 instruction: Some(Instruction::CopyRecord(
                     SkiPassCopyRecord {
-                        index
+                        index,
+                        alpha
                     }
                 ))
             };
@@ -229,7 +264,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         },
         SkiLang::DrawCommand(ids) => {
             SkiPassSurface {
-                instructions: to_instructions(&expr, id), // NOTE: id, not ids[0].
+                instructions: to_instructions(&expr, id),  // NOTE: id, not ids[0] -> we are parsing the command, not its args
                 modified_matrix: false,
             }
         },
