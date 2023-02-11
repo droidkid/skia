@@ -6,6 +6,8 @@ use std::fmt::Write;
 
 use crate::protos;
 use crate::protos::{
+    SkPaint,
+    SkColor,
     SkRecord, 
     SkRecords, 
     SkiPassInstruction,
@@ -45,6 +47,7 @@ define_language! {
         Num(i32),
         "noOp" = NoOp,
         "blank" = Blank,
+        "color" = Color([Id; 4]),
         // TODO: Consider not using Num as a drawCommand index and make a new type for that?
         // drawCommand(num, alpha), where
         //  num: index of drawCommand referenced in source SKP
@@ -55,7 +58,7 @@ define_language! {
         // concat(layer1, layer2) -> return layer resulting from sequential execution of
         // instructions(layer1), instructions(layer2)
         "concat" = Concat([Id; 2]),
-        // merge(layer1, layer2, alpha, blend) -> using blend, combine layer1 and alpha(layer2).
+        // merge(layer1, layer2, color, blendOrFilter)
         // This translates directly to saveLayer command in Skia.
         "merge" = Merge([Id; 4]),
         // EGRAPH INTERNAL COMMANDS FOLLOW
@@ -70,12 +73,16 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     vec![
         rewrite!("remove-noOp-concat-1"; "(concat blank ?a)" => "?a"),
         rewrite!("remove-noOp-concat-2"; "(concat ?a blank)" => "?a"),
-        rewrite!("kill-merge"; "(merge ?dst ?src 255 noOp)" => "(concat ?dst ?src)"),
-        rewrite!("apply-alpha-on-src"; "(merge ?dst ?src ?a noOp)" => "(merge ?dst (alpha ?a ?src) 255 noOp)"),
+        rewrite!("kill-merge"; "(merge ?dst ?src (color 255 0 0 0) noOp)" => "(concat ?dst ?src)"),
+        rewrite!("apply-alpha-on-src"; 
+                 "(merge ?dst ?src (color ?a ?r ?g ?b) noOp)" 
+                 => "(merge ?dst (alpha ?a ?src) (color 255 ?r ?g ?b) noOp)"),
         // TODO: For now we assume merge alpha is 255, eventually we probably want to multiply
         // alphas.
-        rewrite!("lift-alpha"; "(merge ?dst (alpha ?a ?src) 255 noOp)" => "(merge ?dst ?src ?a noOp)"),
-        rewrite!("remove-merge-blank"; "(merge ?layer blank ?alpha ?blend)" => "?layer"),
+        rewrite!("lift-alpha"; 
+                 "(merge ?dst (alpha ?a ?src) (color 255 ?r ?g ?b) noOp)" 
+                 => "(merge ?dst ?src (color ?a ?r ?g ?b) noOp)"),
+        rewrite!("remove-merge-blank"; "(merge ?layer blank ?color ?blend)" => "?layer"),
         rewrite!("remove-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
         // TODO: Again, we assume merge alpha is 255, eventually we probably want to multiply
         // alphas.
@@ -183,9 +190,26 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     let src = build_expr(skRecordsIter, blank, 0, expr);
 
                     let has_bounds = save_layer.suggested_bounds.is_some();
-                    let has_filters = save_layer.filter_info.is_some();
                     let has_backdrop = save_layer.backdrop.is_some();
-                    let alpha = expr.add(SkiLang::Num(save_layer.alpha_u8));
+                    let mut has_filters = false;
+                    let mut color = color_expr(expr, 255, 0, 0, 0);
+
+                    match &save_layer.paint {
+                        Some(skPaint) => {
+                            match &skPaint.color {
+                                Some(skColor) => {
+                                   color = color_expr(expr, 
+                                                    skColor.alpha_u8,
+                                                    skColor.red_u8,
+                                                    skColor.green_u8,
+                                                    skColor.blue_u8);
+                                }
+                                None => {}
+                            };
+                            has_filters = skPaint.filter_info.is_some();
+                        },
+                        None => {}
+                    };
 
                     let blendOp = if has_bounds || has_filters || has_backdrop {
                         let blendOpIndex = expr.add(SkiLang::Num(skRecords.index));
@@ -195,7 +219,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                         expr.add(SkiLang::NoOp)
                     };
 
-                    let nextDst = expr.add(SkiLang::Merge([dst, src, alpha, blendOp]));
+                    let nextDst = expr.add(SkiLang::Merge([dst, src, color, blendOp]));
                     build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                 },
                 Some(Command::Restore(restore)) => {
@@ -320,11 +344,6 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             let mut dst = build_program(&expr, ids[0]);
             let mut src = build_program(&expr, ids[1]);
 
-            let alpha_u8  = match &expr[ids[2]] {
-                SkiLang::Num(value) => *value,
-                _ => panic!()
-            };
-
             let mut instructions: Vec<SkiPassInstruction> = vec![];
             if dst.modified_matrix {
                 instructions.push(SkiPassInstruction {
@@ -355,7 +374,14 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 // Construct a new SaveLayer.
                 // We only have a alpha parameter to worry about.
                 instructions.push(SkiPassInstruction {
-                    instruction: Some(Instruction::SaveLayer(SaveLayer{alpha_u8}))
+                    instruction: Some(Instruction::SaveLayer(
+                                         SaveLayer{
+                                             paint: Some(SkPaint{
+                                                 color: Some(color_proto_from_expr(expr, ids[2])), 
+                                                 filter_info: None,
+                                             }),
+                                             suggested_bounds: None
+                                         }))
                 });
                 instructions.append(&mut src.instructions);
                 instructions.push(SkiPassInstruction {
@@ -374,6 +400,49 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         },
         _ => {
             panic!("Badly constructed Recexpr");
+        }
+    }
+}
+
+fn color_expr(expr: &mut RecExpr<SkiLang>, aVal:i32, rVal:i32, gVal:i32, bVal:i32) -> Id {
+    let a = expr.add(SkiLang::Num(aVal));
+    let r = expr.add(SkiLang::Num(rVal));
+    let g = expr.add(SkiLang::Num(gVal));
+    let b = expr.add(SkiLang::Num(bVal));
+    expr.add(SkiLang::Color([a, r, g, b]))
+}
+
+
+fn color_proto_from_expr(expr: &RecExpr<SkiLang>, id: Id) -> SkColor {
+    let node = &expr[id];
+    match node {
+        SkiLang::Color(ids) => {
+            let alpha_u8  = match &expr[ids[0]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
+            let red_u8  = match &expr[ids[1]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
+            let green_u8  = match &expr[ids[2]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
+            let blue_u8  = match &expr[ids[3]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
+    
+            SkColor {
+              alpha_u8,
+              red_u8,
+              green_u8,
+              blue_u8
+            }
+        },
+        _ => {
+            panic!("Not a Color!");
         }
     }
 }

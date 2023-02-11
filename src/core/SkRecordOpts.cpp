@@ -337,7 +337,6 @@ class SkiPassRecordBuilder {
             records->set_index(count++);
 
             ski_pass_proto::SkRecords_SaveLayer *saveLayer = records->mutable_save_layer();
-            saveLayer->set_alpha_u8(255);
 
             if (command.bounds != nullptr) {
                 ski_pass_proto::Bounds *suggested_bounds = saveLayer->mutable_suggested_bounds();
@@ -347,12 +346,19 @@ class SkiPassRecordBuilder {
                 suggested_bounds->set_bottom(command.bounds->bottom());
             }
             if (command.paint != nullptr) {
-                saveLayer->set_alpha_u8(command.paint->getAlpha());
+                SkColor skcolor = command.paint->getColor();
+
+                ski_pass_proto::SkPaint *paint = saveLayer->mutable_paint();
+                ski_pass_proto::SkColor *color = paint->mutable_color();
+                color->set_alpha_u8(SkColorGetA(skcolor));
+                color->set_red_u8(SkColorGetR(skcolor));
+                color->set_green_u8(SkColorGetG(skcolor));
+                color->set_blue_u8(SkColorGetB(skcolor));
 
                 if(command.paint->getImageFilter() != nullptr ||
                     command.paint->getColorFilter() != nullptr ||
                     command.paint->getBlender() != nullptr) {
-                        saveLayer->mutable_filter_info();
+                        paint->mutable_filter_info();
                 } 
             }
             if (command.backdrop != nullptr) {
@@ -460,8 +466,13 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
             canvas->save();
         }
         if (instruction.has_save_layer()) {
-	    SkPaint paint;
-	    paint.setAlpha(instruction.save_layer().alpha_u8());
+	        SkPaint paint;
+	        paint.setARGB(
+                instruction.save_layer().paint().color().alpha_u8(),
+                instruction.save_layer().paint().color().red_u8(),
+                instruction.save_layer().paint().color().green_u8(),
+                instruction.save_layer().paint().color().blue_u8()
+            );
             canvas->saveLayer(nullptr, &paint);
         }
         if (instruction.has_restore()) {

@@ -10,6 +10,20 @@ package ski_pass_proto;
     SkRecord is a collection of SkRecords.
 */
 
+message SkColor {
+    int32 alpha_u8 = 1;
+    int32 red_u8 = 2;
+    int32 green_u8 = 3;
+    int32 blue_u8 = 4;
+}
+
+message SkPaint {
+    SkColor color = 1;
+    
+    message Filters {}
+    Filters filter_info = 2;
+}
+
 message Bounds {
     double left = 1;
     double top = 2;
@@ -25,14 +39,11 @@ message SkRecords  {
     int32 index = 1;;
 
     message SaveLayer {
-        int32 alpha_u8 = 1;
-        Bounds suggested_bounds = 2;
-
-        message Filters {}
-        Filters filter_info = 3;
+        Bounds suggested_bounds = 1;
+        SkPaint paint = 2;
 
         message Backdrop {}
-        Backdrop backdrop = 4;
+        Backdrop backdrop = 3;
     };
 
     message Save {};
@@ -81,10 +92,12 @@ message SkiPassInstruction {
     // Copy over the SkRecord in the original SKP.
     message SkiPassCopyRecord {
         int32 index = 1;
-	int32 alpha = 2;
+        // Copy the command but fold the alpha into the command's paint.
+	    int32 alpha = 2;
     }
     message SaveLayer {
-	int32 alpha_u8 = 1;
+        SkPaint paint = 1;
+        Bounds suggested_bounds = 2;
     }
 
     message Save {}
