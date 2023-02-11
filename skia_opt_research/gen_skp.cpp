@@ -193,6 +193,103 @@ void draw_008_noOpSaveLayerRemove(SkCanvas *canvas) {
     canvas->restore();
 }
 
+void recordOptsTest_SingleNoopSaveRestore(SkCanvas *canvas) {
+    // This is effectively a NoOp. 
+    canvas->save();
+    canvas->clipRect(SkRect::MakeWH(200, 200));
+    canvas->restore();
+}
+
+void recordOptsTest_NoopSaveRestores(SkCanvas *canvas) {
+    canvas->save();
+
+        canvas->save();
+        canvas->restore();
+
+        // This is a noOp. 
+        canvas->save();
+            canvas->clipRect(SkRect::MakeWH(200, 200));
+            canvas->clipRect(SkRect::MakeWH(100, 100));
+        canvas->restore();
+
+    canvas->restore();
+}
+
+void recordOptsTest_SaveSaveLayerRestoreRestore(SkCanvas *canvas) {
+    canvas->save();
+        canvas->saveLayer(nullptr, nullptr);
+        canvas->restore();
+    canvas->restore();
+}
+
+void recordOptsTest_NoopSaveLayerDrawRestore(SkCanvas *canvas) {
+	// Copied from RecordOptsTest.cpp
+    SkRect bounds = SkRect::MakeWH(100, 200);
+    SkRect   draw = SkRect::MakeWH(50, 60);
+
+    SkPaint alphaOnlyLayerPaint, translucentLayerPaint, xfermodeLayerPaint;
+    alphaOnlyLayerPaint.setColor(0x03000000);  // Only alpha.
+    translucentLayerPaint.setColor(0x03040506);  // Not only alpha.
+    xfermodeLayerPaint.setBlendMode(SkBlendMode::kDstIn);  // Any effect will do.
+
+    SkPaint opaqueDrawPaint, translucentDrawPaint;
+    opaqueDrawPaint.setColor(0xFF020202);  // Opaque.
+    translucentDrawPaint.setColor(0x0F020202);  // Not opaque.
+
+    // Can be killed.
+    canvas->saveLayer(nullptr, nullptr);
+        canvas->drawRect(draw, opaqueDrawPaint);
+    canvas->restore();
+
+    // Can be killed.
+    canvas->saveLayer(&bounds, nullptr);
+        canvas->drawRect(draw, opaqueDrawPaint);
+    canvas->restore();
+
+    // Should NOT BE killed! See NotOnlyAlphaPaintSaveLayer case.
+    canvas->saveLayer(nullptr, &translucentLayerPaint);
+        canvas->drawRect(draw, opaqueDrawPaint);
+    canvas->restore();
+
+    // Should NOT BE killed!
+    canvas->saveLayer(nullptr, &xfermodeLayerPaint);
+        canvas->drawRect(draw, opaqueDrawPaint);
+    canvas->restore();
+
+    // Can be killed.
+    // SaveLayer/Restore removed: we can fold in the alpha!
+    canvas->saveLayer(nullptr, &alphaOnlyLayerPaint);
+        canvas->drawRect(draw, translucentDrawPaint);
+    canvas->restore();
+
+    // Can be killed.
+    // SaveLayer/Restore removed: we can fold in the alpha!
+    canvas->saveLayer(nullptr, &alphaOnlyLayerPaint);
+        canvas->drawRect(draw, opaqueDrawPaint);
+    canvas->restore();
+}
+
+void recordOptsTest_NotOnlyAlphaPaintSaveLayer(SkCanvas *canvas) {
+	// Copied from RecordOptsTest.cpp
+    SkRect   draw1 = SkRect::MakeWH(50, 60);
+    SkRect   draw2 = SkRect::MakeWH(150, 60);
+
+
+    SkPaint translucentLayerPaint;
+    translucentLayerPaint.setColor(0x80808080);  // Not only alpha.
+
+    SkPaint opaqueDrawPaint2;
+    opaqueDrawPaint2.setColor(0xFF800000);  // Opaque.
+                                           //
+    SkPaint opaqueDrawPaint1;
+    opaqueDrawPaint1.setColor(0xFF102030);  // Opaque.
+
+    canvas->drawRect(draw1, opaqueDrawPaint1);
+    // Can NOT be killed, you get a diff.
+    canvas->saveLayer(nullptr, &translucentLayerPaint);
+        canvas->drawRect(draw2, opaqueDrawPaint2);
+    canvas->restore();
+}
 
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
@@ -207,4 +304,11 @@ int main(int argc, char **argv) {
     raster(512, 512, draw_006_clipRect2, FLAGS_dir[0], "006_clipRect2.skp");
     raster(512, 512, draw_007_saveLayer, FLAGS_dir[0], "007_saveLayer.skp");
     raster(512, 512, draw_008_noOpSaveLayerRemove, FLAGS_dir[0], "008_noOpSave.skp");
+
+    // Some tests from RecordOptsTest.cpp
+    raster(512, 512, recordOptsTest_SingleNoopSaveRestore, FLAGS_dir[0], "SingleNoopSaveRestore.skp");
+    raster(512, 512, recordOptsTest_NoopSaveRestores, FLAGS_dir[0], "NoopSaveRestores.skp");
+    raster(512, 512, recordOptsTest_SaveSaveLayerRestoreRestore, FLAGS_dir[0], "SaveSaveLayerRestoreRestore.skp");
+    raster(512, 512, recordOptsTest_NoopSaveLayerDrawRestore, FLAGS_dir[0], "NoopSaveLayerDrawRestore.skp");
+    raster(512, 512, recordOptsTest_NotOnlyAlphaPaintSaveLayer, FLAGS_dir[0], "NotOnlyAlphaPaintSaveLayer.skp");
 }
