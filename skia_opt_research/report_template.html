@@ -10,41 +10,35 @@
         </style>
     </head>
     <body>
-        <h2><a href="./diff/index.html"> Diff Report </a></h2>
+        <h2><a href="./diff/report/index.html"> Diff Report </a></h2>
         <h2> SkiOpt BenchMark </h2>
         <table>
             <tr>
                 <th>Skp Name</th>
-                <th>Image (From skp_no_opt)</th>
+                <th> Debug Logs </th>
             {% for opt in skp_membench_opts %}
                     <th> {{ opt }} </th>
             {% endfor %}
             </tr>
             {% for skp in skp_membench_results %}
             <tr>
-                <td> {{ skp['name'] }} <br/> <a href="{{ skp['json'] }}"> JSON </a></td>
-                <td> <img src="{{ skp['ref_img_url'] }}" width="300" height="300"/> </td>
+                <td> <a href="{{ skp['ref_img_url']}}"> {{ skp['name'] }} </a> </td>
+                <td>
+                    <a href="{{ skp['json'] }}"> NO_OPT Json </a> <br/>
+                    <a href = "{{skp['skipass_log']}}">	SkiPass Debug Log </a>
+                </td>
                 {% for opt in skp_membench_opts %}
                     <td> 
                         <a href = "{{skp[opt]['link']}}">
-                        {{skp[opt]['value']}} 
+                             {{skp[opt]['value']}} 
                         </a>
-			<br/>
-			{% if opt == 'SKI_PASS' %}
-                        <a href = "{{skp['skipass_log']}}">
-				SkiPass Debug Log
-                        </a>
-			{% endif %}
                     </td>
                 {% endfor %}
-
             </tr>
             {% endfor %}
             
         </table>
 
-<h2> Membench Stats </h2>
-<pre>{{ski_pass_summary}}</pre>
     </body>
 </html>
 

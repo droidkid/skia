@@ -22,12 +22,12 @@ PROTO_CPP_GEN_DIR=./skia_opt_research/
 PROTO_PY_GEN_DIR=./skia_opt_research/
 PROTOS = $(wildcard ./skia_opt_research/protos/*.proto)
 
-# These variables must be relative to ${NIGHTLY_DIR} so that the 
+# These variables must be relative to ${NIGHTLY_REPORT_DIR} so that the 
 # diff tool generates the correct relative paths.
-SKP_RENDERS = ${REPORT_TIMESTAMP}/renders
-SKP_JSON_RENDERS = ${REPORT_TIMESTAMP}/json
-SKI_PASS_SKP_RENDERS = $(REPORT_TIMESTAMP)/skipass_renders
-DIFF_REPORT_DIR = $(REPORT_TIMESTAMP)/diff
+SKP_RENDERS = renders
+SKP_JSON_RENDERS = json
+SKI_PASS_SKP_RENDERS = skipass_renders
+DIFF_REPORT_DIR = diff
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = python
 export SKI_PASS_LIB_DIR = $(realpath ${SKI_PASS_BUILD_DIR})
@@ -66,16 +66,19 @@ gen-skps: build-nightly
 
 local-nightly: clean-skp gen-skps build-nightly
 	mkdir -p $(NIGHTLY_REPORT_DIR)
-	mkdir -p ${NIGHTLY_DIR}/$(SKP_RENDERS)
-	mkdir -p ${NIGHTLY_DIR}/$(SKI_PASS_SKP_RENDERS)
-	mkdir -p ${NIGHTLY_DIR}/$(DIFF_REPORT_DIR)
-	mkdir -p ${NIGHTLY_DIR}/${SKP_JSON_RENDERS}
+	mkdir -p ${NIGHTLY_REPORT_DIR}/$(SKP_RENDERS)
+	mkdir -p ${NIGHTLY_REPORT_DIR}/$(SKI_PASS_SKP_RENDERS)
+	mkdir -p ${NIGHTLY_REPORT_DIR}/$(DIFF_REPORT_DIR)
+	mkdir -p ${NIGHTLY_REPORT_DIR}/${SKP_JSON_RENDERS}
 	for SKP in $(SKPS); do\
-	   	$(BUILD_DIR)/skp_parser $$SKP > $(NIGHTLY_DIR)/$(SKP_JSON_RENDERS)/$$(basename $$SKP).json; \
+	   	$(BUILD_DIR)/skp_parser $$SKP > $(NIGHTLY_REPORT_DIR)/$(SKP_JSON_RENDERS)/$$(basename $$SKP).json; \
 	done
 	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR)
-	cd $(NIGHTLY_DIR) && \
-		$(BUILD_DIR)/skdiff ${SKP_RENDERS} ${SKI_PASS_SKP_RENDERS} ${DIFF_REPORT_DIR}
+	# Generating diff report
+	mv ${NIGHTLY_REPORT_DIR}/${SKP_RENDERS} ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/renders
+	mv ${NIGHTLY_REPORT_DIR}/${SKI_PASS_SKP_RENDERS} ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/skipass_renders
+	cd ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR} && \
+		$(BUILD_DIR)/skdiff renders skipass_renders report
 	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE)
 
 nightly: clean local-nightly
