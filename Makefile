@@ -75,8 +75,8 @@ local-nightly: clean-skp gen-skps build-nightly
 	done
 	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR)
 	# Generating diff report
-	mv ${NIGHTLY_REPORT_DIR}/${SKP_RENDERS} ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/renders
-	mv ${NIGHTLY_REPORT_DIR}/${SKI_PASS_SKP_RENDERS} ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/skipass_renders
+	cp -r ${NIGHTLY_REPORT_DIR}/${SKP_RENDERS} ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/renders
+	cp -r ${NIGHTLY_REPORT_DIR}/${SKI_PASS_SKP_RENDERS} ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/skipass_renders
 	cd ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR} && \
 		$(BUILD_DIR)/skdiff renders skipass_renders report
 	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE)
