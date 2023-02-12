@@ -73,7 +73,11 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     vec![
         rewrite!("remove-noOp-concat-1"; "(concat blank ?a)" => "?a"),
         rewrite!("remove-noOp-concat-2"; "(concat ?a blank)" => "?a"),
-        rewrite!("kill-merge"; "(merge ?dst ?src (color 255 0 0 0) noOp)" => "(concat ?dst ?src)"),
+        // Kill if only a single drawCommand, and saveLayer is noOp.
+        // SaveLayer alpha might have been merged into single drawCommand.
+        rewrite!("kill-merge"; 
+                 "(merge ?dst (drawCommand ?x ?a) (color 255 0 0 0) noOp)" 
+                 => "(concat ?dst (drawCommand ?x ?a))"),
         rewrite!("apply-alpha-on-src"; 
                  "(merge ?dst ?src (color ?a ?r ?g ?b) noOp)" 
                  => "(merge ?dst (alpha ?a ?src) (color 255 ?r ?g ?b) noOp)"),

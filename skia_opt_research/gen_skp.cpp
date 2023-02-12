@@ -215,13 +215,6 @@ void recordOptsTest_NoopSaveRestores(SkCanvas *canvas) {
     canvas->restore();
 }
 
-void recordOptsTest_SaveSaveLayerRestoreRestore(SkCanvas *canvas) {
-    canvas->save();
-        canvas->saveLayer(nullptr, nullptr);
-        canvas->restore();
-    canvas->restore();
-}
-
 void recordOptsTest_NoopSaveLayerDrawRestore(SkCanvas *canvas) {
 	// Copied from RecordOptsTest.cpp
     SkRect bounds = SkRect::MakeWH(100, 200);
@@ -308,7 +301,6 @@ int main(int argc, char **argv) {
     // Some tests from RecordOptsTest.cpp
     raster(512, 512, recordOptsTest_SingleNoopSaveRestore, FLAGS_dir[0], "SingleNoopSaveRestore.skp");
     raster(512, 512, recordOptsTest_NoopSaveRestores, FLAGS_dir[0], "NoopSaveRestores.skp");
-    raster(512, 512, recordOptsTest_SaveSaveLayerRestoreRestore, FLAGS_dir[0], "SaveSaveLayerRestoreRestore.skp");
     raster(512, 512, recordOptsTest_NoopSaveLayerDrawRestore, FLAGS_dir[0], "NoopSaveLayerDrawRestore.skp");
     raster(512, 512, recordOptsTest_NotOnlyAlphaPaintSaveLayer, FLAGS_dir[0], "NotOnlyAlphaPaintSaveLayer.skp");
 }
