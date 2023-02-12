@@ -15,23 +15,32 @@
         <table>
             <tr>
                 <th>Skp Name</th>
-                <th> Debug Logs </th>
+                <th>SKI_PASS </th>
             {% for opt in skp_membench_opts %}
-                    <th> {{ opt }} </th>
+                <th> {{ opt }} </th>
+                <th>  SkiPass % vs <br/> {{opt}} </th>
             {% endfor %}
             </tr>
+
             {% for skp in skp_membench_results %}
             <tr>
-                <td> <a href="{{ skp['ref_img_url']}}"> {{ skp['name'] }} </a> </td>
-                <td>
+                <td> <a href="{{ skp['ref_img_url']}}"> {{ skp['name'] }} </a> <br/>
                     <a href="{{ skp['json'] }}"> NO_OPT Json </a> <br/>
                     <a href = "{{skp['skipass_log']}}">	SkiPass Debug Log </a>
+                </td>
+                <td>
+                        <a href = "{{skp['skipass_link']}}">
+                             {{skp['skipass_value']}} 
+                        </a>
                 </td>
                 {% for opt in skp_membench_opts %}
                     <td> 
                         <a href = "{{skp[opt]['link']}}">
                              {{skp[opt]['value']}} 
                         </a>
+                    </td>
+                    <td>
+                             {{skp[opt]['comp']}} 
                     </td>
                 {% endfor %}
             </tr>
