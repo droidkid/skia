@@ -473,7 +473,17 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
                 instruction.save_layer().paint().color().green_u8(),
                 instruction.save_layer().paint().color().blue_u8()
             );
-            canvas->saveLayer(nullptr, &paint);
+            if (instruction.save_layer().has_suggested_bounds()) {
+                SkRect bounds = SkRect::MakeLTRB(
+                        instruction.save_layer().suggested_bounds().left(),
+                        instruction.save_layer().suggested_bounds().top(),
+                        instruction.save_layer().suggested_bounds().right(),
+                        instruction.save_layer().suggested_bounds().bottom()
+                 );
+                canvas->saveLayer(&bounds, &paint);
+            } else {
+                canvas->saveLayer(nullptr, &paint);
+            }
         }
         if (instruction.has_restore()) {
             canvas->restore();
