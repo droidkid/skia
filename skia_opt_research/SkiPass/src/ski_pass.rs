@@ -6,7 +6,6 @@ use std::fmt::Write;
 
 use crate::protos;
 use crate::protos::{
-    Bounds,
     SkPaint,
     SkColor,
     SkRecord, 
@@ -25,11 +24,8 @@ use crate::protos::{
 
 pub fn optimize(record: SkRecord) -> SkiPassRunResult {
     let mut expr = RecExpr::default();
-    let mut boundsStore: Vec<&Bounds> = vec![];
-
     let blankSurface = expr.add(SkiLang::Blank);
-
-    let id = build_expr(&mut record.records.iter(), blankSurface, 0, &mut boundsStore, &mut expr);
+    let id = build_expr(&mut record.records.iter(), blankSurface, 0, &mut expr);
 
     let mut skiPassRunResult = SkiPassRunResult::default();
     let mut skiRunInfo = SkiPassRunInfo::default();
@@ -37,7 +33,7 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
     match run_eqsat_and_extract(&expr, &mut skiRunInfo) {
         Ok(optExpr) => {
             let mut program = SkiPassProgram::default();
-            program.instructions = build_program(&optExpr.expr, optExpr.id, &boundsStore).instructions;
+            program.instructions = build_program(&optExpr.expr, optExpr.id).instructions;
             skiPassRunResult.program = Some(program);
             skiPassRunResult.run_info = Some(skiRunInfo);
         }
@@ -52,9 +48,6 @@ define_language! {
         "noOp" = NoOp,
         "blank" = Blank,
         "color" = Color([Id; 4]),
-        // For now, bounds refer to an index in the boundsStore, or it's a noOp.
-        // Eventually we might want to store the actual bounds to do analysis.
-        "bounds" = Bounds([Id; 1]),
         // TODO: Consider not using Num as a drawCommand index and make a new type for that?
         // drawCommand(num, alpha), where
         //  num: index of drawCommand referenced in source SKP
@@ -65,9 +58,9 @@ define_language! {
         // concat(layer1, layer2) -> return layer resulting from sequential execution of
         // instructions(layer1), instructions(layer2)
         "concat" = Concat([Id; 2]),
-        // merge(layer1, layer2, color, bounds, blendOrFilter)
+        // merge(layer1, layer2, color, blendOrFilter)
         // This translates directly to saveLayer command in Skia.
-        "merge" = Merge([Id; 5]),
+        "merge" = Merge([Id; 4]),
         // EGRAPH INTERNAL COMMANDS FOLLOW
         // Below commands have no literal equivalent in Skia, and are only used for EGraph
         // Extraction
@@ -83,17 +76,17 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
         // Kill if only a single drawCommand, and saveLayer is noOp.
         // SaveLayer alpha might have been merged into single drawCommand.
         rewrite!("kill-merge"; 
-                 "(merge ?dst (drawCommand ?x ?a) (color 255 0 0 0) ?bounds noOp)" 
+                 "(merge ?dst (drawCommand ?x ?a) (color 255 0 0 0) noOp)" 
                  => "(concat ?dst (drawCommand ?x ?a))"),
         rewrite!("apply-alpha-on-src"; 
-                 "(merge ?dst ?src (color ?a ?r ?g ?b) ?bounds noOp)" 
-                 => "(merge ?dst (alpha ?a ?src) (color 255 ?r ?g ?b) ?bounds noOp)"),
+                 "(merge ?dst ?src (color ?a ?r ?g ?b) noOp)" 
+                 => "(merge ?dst (alpha ?a ?src) (color 255 ?r ?g ?b) noOp)"),
         // TODO: For now we assume merge alpha is 255, eventually we probably want to multiply
         // alphas.
         rewrite!("lift-alpha"; 
-                 "(merge ?dst (alpha ?a ?src) (color 255 ?r ?g ?b) ?bounds noOp)" 
-                 => "(merge ?dst ?src (color ?a ?r ?g ?b) ?bounds noOp)"),
-        rewrite!("remove-merge-blank"; "(merge ?layer blank ?color ?bounds ?blend)" => "?layer"),
+                 "(merge ?dst (alpha ?a ?src) (color 255 ?r ?g ?b) noOp)" 
+                 => "(merge ?dst ?src (color ?a ?r ?g ?b) noOp)"),
+        rewrite!("remove-merge-blank"; "(merge ?layer blank ?color ?blend)" => "?layer"),
         rewrite!("remove-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
         // TODO: Again, we assume merge alpha is 255, eventually we probably want to multiply
         // alphas.
@@ -151,13 +144,7 @@ struct SkiLangExpr {
     pub id: Id,
 }
 
-fn build_expr<'a, I>(
-    skRecordsIter: &mut I, 
-    dst: Id, 
-    matrixOpCount: i32, 
-    boundsStore: &mut Vec<&'a Bounds>,
-    expr: &mut RecExpr<SkiLang>,
-) -> Id
+fn build_expr<'a, I>(skRecordsIter: &mut I, dst: Id, matrixOpCount: i32, expr: &mut RecExpr<SkiLang>) -> Id
 where
 I: Iterator<Item = &'a SkRecords> + 'a,
 {
@@ -174,8 +161,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                             // Construct surface on which matrixOp should be applied.
                             //
                             let newLayerDst = expr.add(SkiLang::Blank);
-                            let surfaceToApplyMatrixOp = 
-                                build_expr(skRecordsIter, newLayerDst, matrixOpCount + 1, boundsStore, expr);
+                            let surfaceToApplyMatrixOp = build_expr(skRecordsIter, newLayerDst, matrixOpCount + 1, expr);
 
                             let src = expr.add(SkiLang::MatrixOp([surfaceToApplyMatrixOp, matrixOpCommand]));
                             let nextDst = expr.add(SkiLang::Concat([dst, src]));
@@ -183,7 +169,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                             // We do this to find the matching Restore
                             // You could have a Save ClipRect Concat44 Draw Restore
                             if matrixOpCount == 0 {
-                                build_expr(skRecordsIter, nextDst, matrixOpCount, boundsStore, expr)
+                                build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                             } else {
                                 nextDst // Need to unwind a bit more
                             }
@@ -194,18 +180,18 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                             let drawCommandAlpha = expr.add(SkiLang::Num(255));
                             let src = expr.add(SkiLang::DrawCommand([drawCommandIndex, drawCommandAlpha]));
                             let nextDst = expr.add(SkiLang::Concat([dst, src]));
-                            build_expr(skRecordsIter, nextDst, matrixOpCount, boundsStore, expr)
+                            build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                         }
                     }
                 },
                 Some(Command::Save(save)) => {
                     // Ignore, MatrixOp is used to decide where to put Save commands.
-                    build_expr(skRecordsIter, dst, 0, boundsStore, expr)
+                    build_expr(skRecordsIter, dst, 0, expr)
                 },
                 Some(Command::SaveLayer(save_layer)) => {
                     // Build the layer over a blank canvas.
                     let blank = expr.add(SkiLang::Blank);
-                    let src = build_expr(skRecordsIter, blank, 0, boundsStore, expr);
+                    let src = build_expr(skRecordsIter, blank, 0, expr);
 
                     let has_bounds = save_layer.suggested_bounds.is_some();
                     let has_backdrop = save_layer.backdrop.is_some();
@@ -229,7 +215,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                         None => {}
                     };
 
-                    let blendOp = if has_filters || has_backdrop {
+                    let blendOp = if has_bounds || has_filters || has_backdrop {
                         let blendOpIndex = expr.add(SkiLang::Num(skRecords.index));
                         let blendOpAlpha = expr.add(SkiLang::Num(255));
                         expr.add(SkiLang::DrawCommand([blendOpIndex, blendOpAlpha]))
@@ -237,17 +223,8 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                         expr.add(SkiLang::NoOp)
                     };
 
-                    let boundsOp = match &save_layer.suggested_bounds {
-                        Some(bounds) => {
-                            let boundStoreIndex  = expr.add(SkiLang::Num(boundsStore.len() as i32));
-                            boundsStore.push(bounds);
-                            expr.add(SkiLang::Bounds([boundStoreIndex]))
-                        },
-                        None => expr.add(SkiLang::NoOp)
-                    };
-
-                    let nextDst = expr.add(SkiLang::Merge([dst, src, color, boundsOp, blendOp]));
-                    build_expr(skRecordsIter, nextDst, matrixOpCount, boundsStore, expr)
+                    let nextDst = expr.add(SkiLang::Merge([dst, src, color, blendOp]));
+                    build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
                 },
                 Some(Command::Restore(restore)) => {
                     // Either SaveLayer or the first MatrixOp that matches this will
@@ -304,11 +281,7 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
     }
 }
 
-fn build_program<'a>(
-    expr: &RecExpr<SkiLang>, 
-    id: Id,
-    boundsStore: &Vec<&'a Bounds>,
-) -> SkiPassSurface {
+fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
     let node = &expr[id];
     match node {
         SkiLang::Blank => {
@@ -324,7 +297,7 @@ fn build_program<'a>(
             }
         },
         SkiLang::MatrixOp(ids) => {
-            let mut targetSurface = build_program(&expr, ids[0], boundsStore);
+            let mut targetSurface = build_program(&expr, ids[0]);
             let mut matrixOpInstructions = to_instructions(&expr, ids[1]);
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
@@ -337,8 +310,8 @@ fn build_program<'a>(
             }
         },
         SkiLang::Concat(ids) => {
-            let mut p1 = build_program(&expr, ids[0], boundsStore);
-            let mut p2 = build_program(&expr, ids[1], boundsStore);
+            let mut p1 = build_program(&expr, ids[0]);
+            let mut p2 = build_program(&expr, ids[1]);
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
 
@@ -372,8 +345,8 @@ fn build_program<'a>(
             }
         },
         SkiLang::Merge(ids) => {
-            let mut dst = build_program(&expr, ids[0], boundsStore);
-            let mut src = build_program(&expr, ids[1], boundsStore);
+            let mut dst = build_program(&expr, ids[0]);
+            let mut src = build_program(&expr, ids[1]);
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
             if dst.modified_matrix {
@@ -388,20 +361,7 @@ fn build_program<'a>(
                 instructions.append(&mut dst.instructions);
             }
 
-            let suggested_bounds = match &expr[ids[3]] {
-                SkiLang::Bounds(inner_ids)=> {
-                    let boundsStoreIndex = match &expr[inner_ids[0]] {
-                        SkiLang::Num(val) => *val,
-                        _ => panic!("Improperly constructed bounds")
-                    };
-                    Some(boundsStore[boundsStoreIndex as usize].clone())
-
-                },
-                SkiLang::NoOp => None,
-                _ => panic!("Bounds was not valid!")
-            };
-
-            let mut blendInstructions = to_instructions(&expr, ids[4]);
+            let mut blendInstructions = to_instructions(&expr, ids[3]);
 
             if blendInstructions.len() > 0 {
                 // Not enough is known about the blend operation, use original saveLayer command.
@@ -424,7 +384,7 @@ fn build_program<'a>(
                                                  color: Some(color_proto_from_expr(expr, ids[2])), 
                                                  filter_info: None,
                                              }),
-                                             suggested_bounds
+                                             suggested_bounds: None
                                          }))
                 });
                 instructions.append(&mut src.instructions);
