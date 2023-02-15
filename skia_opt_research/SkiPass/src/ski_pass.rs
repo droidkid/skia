@@ -25,7 +25,7 @@ use crate::protos::{
 pub fn optimize(record: SkRecord) -> SkiPassRunResult {
     let mut expr = RecExpr::default();
     let blankSurface = expr.add(SkiLang::Blank);
-    let id = build_expr(&mut record.records.iter(), blankSurface, 0, &mut expr);
+    let id = build_expr(&mut record.records.iter(), blankSurface, createContext(0), &mut expr);
 
     let mut skiPassRunResult = SkiPassRunResult::default();
     let mut skiRunInfo = SkiPassRunInfo::default();
@@ -144,103 +144,49 @@ struct SkiLangExpr {
     pub id: Id,
 }
 
-fn build_expr<'a, I>(skRecordsIter: &mut I, dst: Id, matrixOpCount: i32, expr: &mut RecExpr<SkiLang>) -> Id
+struct SkRecordParseContext {
+    matrixOpCount: i32
+}
+
+fn createContext(matrixOpCount: i32) -> SkRecordParseContext {
+   SkRecordParseContext {
+       matrixOpCount
+   }
+}
+
+fn build_expr<'a, I>(
+    skRecordsIter: &mut I, 
+    dst: Id, 
+    context: SkRecordParseContext,
+    expr: &mut RecExpr<SkiLang>
+) -> Id
 where
 I: Iterator<Item = &'a SkRecords> + 'a,
 {
-    match skRecordsIter.next() {
-        Some(skRecords) => {
-            match &skRecords.command {
-                Some(Command::DrawCommand(draw_command)) => {
-                    match draw_command.name.as_str() {
-                        "ClipPath" | "ClipRRect" | "ClipRect" | "Concat44" => {
-                            // Reference to matrixOp command in input SKP.
-                            let matrixOpIndex = expr.add(SkiLang::Num(skRecords.index));
-                            let matrixOpAlpha = expr.add(SkiLang::Num(255));
-                            let matrixOpCommand = expr.add(SkiLang::DrawCommand([matrixOpIndex, matrixOpAlpha]));
-                            // Construct surface on which matrixOp should be applied.
-                            //
-                            let newLayerDst = expr.add(SkiLang::Blank);
-                            let surfaceToApplyMatrixOp = build_expr(skRecordsIter, newLayerDst, matrixOpCount + 1, expr);
-
-                            let src = expr.add(SkiLang::MatrixOp([surfaceToApplyMatrixOp, matrixOpCommand]));
-                            let nextDst = expr.add(SkiLang::Concat([dst, src]));
-
-                            // We do this to find the matching Restore
-                            // You could have a Save ClipRect Concat44 Draw Restore
-                            if matrixOpCount == 0 {
-                                build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
-                            } else {
-                                nextDst // Need to unwind a bit more
-                            }
-
-                        }
-                        _ => {
-                            let drawCommandIndex = expr.add(SkiLang::Num(skRecords.index));
-                            let drawCommandAlpha = expr.add(SkiLang::Num(255));
-                            let src = expr.add(SkiLang::DrawCommand([drawCommandIndex, drawCommandAlpha]));
-                            let nextDst = expr.add(SkiLang::Concat([dst, src]));
-                            build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
-                        }
-                    }
-                },
-                Some(Command::Save(save)) => {
-                    // Ignore, MatrixOp is used to decide where to put Save commands.
-                    build_expr(skRecordsIter, dst, 0, expr)
-                },
-                Some(Command::SaveLayer(save_layer)) => {
-                    // Build the layer over a blank canvas.
-                    let blank = expr.add(SkiLang::Blank);
-                    let src = build_expr(skRecordsIter, blank, 0, expr);
-
-                    let has_bounds = save_layer.suggested_bounds.is_some();
-                    let has_backdrop = save_layer.backdrop.is_some();
-                    let mut has_filters = false;
-                    let mut color = color_expr(expr, 255, 0, 0, 0);
-
-                    match &save_layer.paint {
-                        Some(skPaint) => {
-                            match &skPaint.color {
-                                Some(skColor) => {
-                                   color = color_expr(expr, 
-                                                    skColor.alpha_u8,
-                                                    skColor.red_u8,
-                                                    skColor.green_u8,
-                                                    skColor.blue_u8);
-                                }
-                                None => {}
-                            };
-                            has_filters = skPaint.filter_info.is_some();
-                        },
-                        None => {}
-                    };
-
-                    let blendOp = if has_bounds || has_filters || has_backdrop {
-                        let blendOpIndex = expr.add(SkiLang::Num(skRecords.index));
-                        let blendOpAlpha = expr.add(SkiLang::Num(255));
-                        expr.add(SkiLang::DrawCommand([blendOpIndex, blendOpAlpha]))
-                    } else {
-                        expr.add(SkiLang::NoOp)
-                    };
-
-                    let nextDst = expr.add(SkiLang::Merge([dst, src, color, blendOp]));
-                    build_expr(skRecordsIter, nextDst, matrixOpCount, expr)
-                },
-                Some(Command::Restore(restore)) => {
-                    // Either SaveLayer or the first MatrixOp that matches this will
-                    // continue building the program.
-                    dst
-                },
-                _ => {
-                    panic!("Not implemented yet!")
-                },
-                None => {
-                    panic!("Empty command!")
-                }
-            }
+    let mut drawStack: Vec<Id> = vec![];
+    while true {
+        match skRecordsIter.next() {
+            Some(skRecords) => {
+              let drawCommandIndex = expr.add(SkiLang::Num(skRecords.index));
+              let drawCommandAlpha = expr.add(SkiLang::Num(255));
+              let src = expr.add(SkiLang::DrawCommand([drawCommandIndex, drawCommandAlpha]));
+              drawStack.push(src);
+            },
+        None => break,
         }
-        None => dst,
     }
+
+    if drawStack.len() == 0 {
+        return expr.add(SkiLang::Blank)
+    }
+
+    while drawStack.len() != 1 {
+        let id_1 = drawStack.pop().unwrap();
+        let id_2 = drawStack.pop().unwrap();
+        let nxt = expr.add(SkiLang::Concat([id_2, id_1]));
+        drawStack.push(nxt);
+    }
+    drawStack[0]
 }
 
 #[derive(Debug)]
