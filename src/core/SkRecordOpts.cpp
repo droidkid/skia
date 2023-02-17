@@ -318,6 +318,41 @@ void SkRecordOptimize2(SkRecord* record) {
 }
 
 
+class SkRecordPaintExtractor {
+public:
+    template <typename T>
+    static std::enable_if_t<(T::kTags & kHasPaint_Tag) == kHasPaint_Tag, void>
+    fillSkPaintProto(const T& draw, ski_pass_proto::SkPaint* paintPb) {
+	    auto paint = AsPtr(draw.paint);
+        if (paint != nullptr) {
+           SkColor skcolor = paint->getColor();
+           ski_pass_proto::SkColor *color = paintPb->mutable_color();
+           color->set_alpha_u8(SkColorGetA(skcolor));
+           color->set_red_u8(SkColorGetR(skcolor));
+           color->set_green_u8(SkColorGetG(skcolor));
+           color->set_blue_u8(SkColorGetB(skcolor));
+
+           if(paint->getImageFilter() != nullptr ||
+               paint->getColorFilter() != nullptr ||
+               paint->getBlender() != nullptr) {
+               paintPb->mutable_filter_info();
+           } 
+        }
+	    return;
+    }
+
+    template <typename T>
+    static std::enable_if_t<!(T::kTags & kHasPaint_Tag), void> 
+    fillSkPaintProto(const T& draw, ski_pass_proto::SkPaint *paintPb) {
+    }
+
+private:
+    // Abstracts away whether the paint is always part of the command or optional.
+    template <typename T> static const T* AsPtr(const SkRecords::Optional<T>& x) { return x; }
+    template <typename T> static const T* AsPtr(const T& x) { return &x; }
+};
+
+
 class SkiPassRecordBuilder {
     public:
         SkiPassRecordBuilder(ski_pass_proto::SkRecord* skipass_record):
@@ -330,6 +365,7 @@ class SkiPassRecordBuilder {
             ski_pass_proto::SkRecords::DrawCommand *draw_command = 
                 records->mutable_draw_command();
             draw_command->set_name(std::string(NameOf(command)));
+            SkRecordPaintExtractor::fillSkPaintProto(command, draw_command->mutable_paint());
         }
 
         void operator()(const SkRecords::SaveLayer& command) {
@@ -345,22 +381,7 @@ class SkiPassRecordBuilder {
                 suggested_bounds->set_right(command.bounds->right());
                 suggested_bounds->set_bottom(command.bounds->bottom());
             }
-            if (command.paint != nullptr) {
-                SkColor skcolor = command.paint->getColor();
-
-                ski_pass_proto::SkPaint *paint = saveLayer->mutable_paint();
-                ski_pass_proto::SkColor *color = paint->mutable_color();
-                color->set_alpha_u8(SkColorGetA(skcolor));
-                color->set_red_u8(SkColorGetR(skcolor));
-                color->set_green_u8(SkColorGetG(skcolor));
-                color->set_blue_u8(SkColorGetB(skcolor));
-
-                if(command.paint->getImageFilter() != nullptr ||
-                    command.paint->getColorFilter() != nullptr ||
-                    command.paint->getBlender() != nullptr) {
-                        paint->mutable_filter_info();
-                } 
-            }
+            SkRecordPaintExtractor::fillSkPaintProto(command, saveLayer->mutable_paint());
             if (command.backdrop != nullptr) {
                 saveLayer->mutable_backdrop();
             }
@@ -397,28 +418,27 @@ public:
     SkRecordApplier(SkCanvas *canvas):
         fDraw(canvas, nullptr, nullptr, 0, nullptr) {}
 
-    // src/core/SkRecordPattern::IsDraw used as reference for the 
-
+    // src/core/SkRecordPattern::IsDraw used as reference for these.
     template <typename T>
     std::enable_if_t<(T::kTags & kDrawWithPaint_Tag) == kDrawWithPaint_Tag, void>
     operator()(T* draw) {
-	SkPaint *paint = AsPtr(draw->paint);
-	if (paint != nullptr && alpha != 255) {
+	    SkPaint *paint = AsPtr(draw->paint);
+	    if (paint != nullptr && alpha != 255) {
             paint->setAlpha(SkMulDiv255Round(paint->getAlpha(), this->alpha));
-	}
-	// if paint is nullptr, assume there is nothing to draw.
-	fDraw(*draw);
-	return;
+	    }
+	    // if paint is nullptr, assume there is nothing to draw.
+	    fDraw(*draw);
+	    return;
     }
 
     template <typename T>
     std::enable_if_t<(T::kTags & kDrawWithPaint_Tag) == kDraw_Tag, void> operator()(T* draw) {
-	fDraw(*draw);
+	    fDraw(*draw);
     }
 
     template <typename T>
     std::enable_if_t<!(T::kTags & kDraw_Tag), void> operator()(T* draw) {
-	fDraw(*draw);
+	    fDraw(*draw);
     }
 
     void setAlpha(int alpha) {

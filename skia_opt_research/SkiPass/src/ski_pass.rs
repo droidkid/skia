@@ -24,10 +24,13 @@ use crate::protos::{
 
 pub fn optimize(record: SkRecord) -> SkiPassRunResult {
     let mut expr = RecExpr::default();
-    let id = build_expr(&mut record.records.iter(), &mut expr);
 
     let mut skiPassRunResult = SkiPassRunResult::default();
     let mut skiRunInfo = SkiPassRunInfo::default();
+
+    writeln!(&mut skiRunInfo.sk_records_proto, "{:?}", record);
+
+    let id = build_expr(&mut record.records.iter(), &mut expr);
 
     match run_eqsat_and_extract(&expr, &mut skiRunInfo) {
         Ok(optExpr) => {
@@ -123,13 +126,13 @@ fn run_eqsat_and_extract(
     let root = runner.roots[0];
 
     writeln!(&mut run_info.skilang_expr, "{:#}", expr);
-    println!("EXPR: {:#}", expr);
+    // println!("EXPR: {:#}", expr);
 
     let extractor = Extractor::new(&runner.egraph, SkiLangCostFn);
     let (cost, mut optimized) = extractor.find_best(root);
 
     writeln!(&mut run_info.extracted_skilang_expr, "{:#}", optimized);
-    println!("OPT: {:#}", optimized);
+    // println!("OPT: {:#}", optimized);
 
     // Figure out how to walk a RecExpr without the ID.
     // Until then, use this roundabout way to get the optimized recexpr id.
@@ -323,7 +326,8 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
                 instruction: Some(Instruction::CopyRecord(
                     SkiPassCopyRecord {
                         index,
-                        alpha
+                        alpha,
+                        paint: None
                     }
                 ))
             };
@@ -444,6 +448,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                                              paint: Some(SkPaint{
 												 color,
                                                  filter_info: None,
+                                                 blender: None,
                                              }),
                                              suggested_bounds: None
                                          }))
