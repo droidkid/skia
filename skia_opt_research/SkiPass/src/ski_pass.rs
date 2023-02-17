@@ -14,6 +14,7 @@ use crate::protos::{
     SkiPassProgram, 
     SkiPassRunInfo,
     SkiPassRunResult,
+    sk_paint::Effects,
     ski_pass_instruction::SkiPassCopyRecord,
     ski_pass_instruction::Instruction,
     ski_pass_instruction::SaveLayer,
@@ -47,22 +48,25 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
 define_language! {
     enum SkiLang {
         Num(i32),
+        Exists(bool),
         "noOp" = NoOp,
         "blank" = Blank,
         "color" = Color([Id; 4]),
         // TODO: Consider not using Num as a drawCommand index and make a new type for that?
-        // drawCommand(num, alpha), where
+        // drawCommand(index, paint), where
         //  num: index of drawCommand referenced in source SKP
-        //  alpha: Alpha to apply on top of original drawCommand paint
+        //  alpha: alpha, Num between 0 and 255.
         "drawCommand" = DrawCommand([Id; 2]),
         // matrixOp(layer, num) -> return layer after applying transform on layer 
         "matrixOp" = MatrixOp([Id; 2]),
         // concat(layer1, layer2) -> return layer resulting from sequential execution of
         // instructions(layer1), instructions(layer2)
         "concat" = Concat([Id; 2]),
-		// paint(color blendOrFilter)
+        // filter(exists)
+        "effects" = Effects([Id; 1]),
+		// paint(color, filter)
 		"paint" = Paint([Id; 2]),
-        // merge(layer1, layer2, paint)
+        // merge(layer1, layer2, mergeParams())
         // This translates directly to saveLayer command in Skia.
         "merge" = Merge([Id; 3]),
         // EGRAPH INTERNAL COMMANDS FOLLOW
@@ -70,6 +74,8 @@ define_language! {
         // Extraction
         // alpha(layer, value) -> apply transparency of value on layer
         "alpha" = Alpha([Id; 2]), // alphaChannel, layer
+        // MergeParams([index, paint]) - eventually add bounds, backdrop.
+        "mergeParams" = MergeParams([Id; 2]),
     }
 }
 
@@ -80,21 +86,87 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
         // Kill if only a single drawCommand, and saveLayer is noOp.
         // SaveLayer alpha might have been merged into single drawCommand.
         rewrite!("kill-merge"; 
-                 "(merge ?dst (drawCommand ?x ?a) (paint (color 255 0 0 0) noOp))" 
-                 => "(concat ?dst (drawCommand ?x ?a))"),
+                 "(merge 
+                        ?dst 
+                        (drawCommand ?x ?p) 
+                        (mergeParams 
+                            ?mergeIndex
+                            (paint 
+                                (color 255 0 0 0) 
+                                (effects false)
+                            )
+                        )
+                    )" 
+                 => 
+                 "(concat 
+                        ?dst 
+                        (drawCommand ?x ?p)
+                  )"),
+
         rewrite!("apply-alpha-on-src"; 
-                 "(merge ?dst ?src (paint (color ?a ?r ?g ?b) noOp))" 
-                 => "(merge ?dst (alpha ?a ?src) (paint (color 255 ?r ?g ?b) noOp))"),
-        // TODO: For now we assume merge alpha is 255, eventually we probably want to multiply
-        // alphas.
+                 "(merge 
+                        ?dst 
+                        ?src 
+                        (mergeParams
+                            ?mergeIndex
+                            (paint 
+                                (color ?a ?r ?g ?b) 
+                                (effects false)
+                            )
+                        )
+                    )" 
+                 => 
+                 "(merge 
+                        ?dst 
+                        (alpha ?a ?src) 
+                        (mergeParams
+                            ?mergeIndex
+                            (paint 
+                                (color 255 ?r ?g ?b) 
+                                (effects false)
+                            )
+                        )
+                    )"),
+        // TODO: MULTIPLY ALPHAS!!!
         rewrite!("lift-alpha"; 
-                 "(merge ?dst (alpha ?a ?src) (paint (color 255 ?r ?g ?b) noOp))" 
-                 => "(merge ?dst ?src (paint (color ?a ?r ?g ?b) noOp))"),
-        rewrite!("remove-merge-blank"; "(merge ?layer blank ?paint)" => "?layer"),
+                 "(merge 
+                        ?dst 
+                        (alpha ?A ?src) 
+                        (mergeParams
+                            ?mergeIndex
+                            (paint 
+                                (color 255 ?r ?g ?b) 
+                                (effects false)
+                            )
+                        )
+                    )" 
+                 => 
+                 "(merge 
+                        ?dst 
+                        ?src 
+                        (mergeParams
+                            ?mergeIndex
+                            (paint 
+                                (color ?A ?r ?g ?b) 
+                                (effects false)
+                            )
+                        )
+                    )"),
+        rewrite!("remove-merge-blank"; 
+                 "(merge 
+                        ?layer 
+                        blank 
+                        ?mergeParams
+                   )" 
+                => "?layer"),
         rewrite!("remove-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
-        // TODO: Again, we assume merge alpha is 255, eventually we probably want to multiply
-        // alphas.
-        rewrite!("apply-alpha-on-draw"; "(alpha ?a (drawCommand ?x 255))" => "(drawCommand ?x ?a)"),
+        // TODO: MULTIPLY ALPHAS!!!
+        rewrite!("apply-alpha-on-draw"; 
+                        "(alpha ?a 
+                                (drawCommand 
+                                    ?x 
+                                    255))
+                        " => "(drawCommand ?x ?a)"),
         rewrite!("remove-blank-matrixOp"; "(matrixOp blank ?a)" => "blank"),
         rewrite!("remove-noOp-matrixOp"; "(matrixOp ?layer noOp)" => "?layer"),
     ]
@@ -171,11 +243,11 @@ fn reduceStack(
         match e2_type {
 			StackOp::SaveLayer => {
 				let tmp_src = e1;
-				let merge_paint = e2;
+				let merge_params = e2;
 
                 if !from_restore {
                     // We're not done with this saveLayer, this saveLayer is a barrier
-                    // for some other saveLyer
+                    // for some other saveLayer. So push them back to the stack and exit.
                     drawStack.push((e2_type, e2));
                     drawStack.push((e1_type, e1));
                     return;
@@ -200,7 +272,7 @@ fn reduceStack(
                 reduceStack(expr, &mut apply_state_stack, false);
                 let src = apply_state_stack.pop().unwrap().1;
 
-		   	    let merged = expr.add(SkiLang::Merge([dst, src, merge_paint]));
+		   	    let merged = expr.add(SkiLang::Merge([dst, src, merge_params]));
 		   		drawStack.push((StackOp::Surface, merged));
 		   		drawStack.append(&mut stateStack);
 			},
@@ -254,38 +326,10 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     drawStack.push((StackOp::Save, expr.add(SkiLang::NoOp)));
                },
                Some(Command::SaveLayer(save_layer)) => {
-		   	       let has_bounds = save_layer.suggested_bounds.is_some();
-		   	       let has_backdrop = save_layer.backdrop.is_some();
-		   	       let mut has_filters = false;
-		   	       let mut color = color_expr(expr, 255, 0, 0, 0);
-		   	
-		   	       match &save_layer.paint {
-		   	           Some(skPaint) => {
-		   	               match &skPaint.color {
-		   	                   Some(skColor) => {
-		   	                      color = color_expr(expr, 
-		   	                                       skColor.alpha_u8,
-		   	                                       skColor.red_u8,
-		   	                                       skColor.green_u8,
-		   	                                       skColor.blue_u8);
-		   	                   }
-		   	                   None => {}
-		   	               };
-		   	               has_filters = skPaint.filter_info.is_some();
-		   	           },
-		   	           None => {}
-		   	       };
-		   	
-		   	       let blendOp = if has_bounds || has_filters || has_backdrop {
-		   	           let blendOpIndex = expr.add(SkiLang::Num(skRecords.index));
-		   	           let blendOpAlpha = expr.add(SkiLang::Num(255));
-		   	           expr.add(SkiLang::DrawCommand([blendOpIndex, blendOpAlpha]))
-		   	       } else {
-		   	           expr.add(SkiLang::NoOp)
-		   	       };
-
-					let mergePaint = expr.add(SkiLang::Paint([color, blendOp]));
-		   			drawStack.push((StackOp::SaveLayer, mergePaint));
+                   let index = expr.add(SkiLang::Num(skRecords.index));
+                   let paint = paint_proto_to_expr(expr, &save_layer.paint);
+				   let mergeParams = expr.add(SkiLang::MergeParams([index, paint]));
+		   		   drawStack.push((StackOp::SaveLayer, mergeParams));
                },
                Some(Command::Restore(restore)) => {
                    reduceStack(expr, &mut drawStack, true);
@@ -311,6 +355,17 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
     match node {
         SkiLang::NoOp => {
             vec![]
+        },
+        SkiLang::Num(index) => {
+            let instruction = SkiPassInstruction {
+                instruction: Some(Instruction::CopyRecord(
+                    SkiPassCopyRecord {
+                        index: *index,
+                        alpha: 255,
+                        paint: None
+                }
+            ))};
+            vec![instruction]
         },
         SkiLang::DrawCommand(ids) => {
             let index = match &expr[ids[0]] {
@@ -419,37 +474,38 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 instructions.append(&mut dst.instructions);
             }
 
-            let mut blendInstructions = 
-				match &expr[ids[2]] {
-					SkiLang::Paint(paint_ids) => to_instructions(expr, paint_ids[1]),
-					_ => panic!("Not a paint parameter in SaveLayer")
-				};
+            let mergeParamIds = match &expr[ids[2]] {
+                SkiLang::MergeParams(ids) => ids,
+                _ => panic!("Merge parameter is not MergeParams")
+            };
+            let index = match &expr[mergeParamIds[0]] {
+                SkiLang::Num(index) => *index,
+                _ => panic!("Merge Params first parameter not index")
+            };
+            let paint = paint_expr_to_proto(expr, mergeParamIds[1]);
 
-            if blendInstructions.len() > 0 {
-                // Not enough is known about the blend operation, use original saveLayer command.
-                // NOTE: This assumption is only valid as long as our rewrite rules don't touch
-                // Merges with a blend operation.
-                // TODO: Eventually capture the blend parameters and reconstruct the SaveLayer.
-                // and stop relying on referencing the original saveLayer.
-                instructions.append(&mut blendInstructions);
+            let can_reconstruct = !paint.effects.is_some();
+
+            if !can_reconstruct {
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::CopyRecord(
+                        SkiPassCopyRecord {
+                             index,
+                             paint: Some(paint),
+                             alpha: 255
+                         }
+                    )),
+                });
                 instructions.append(&mut src.instructions);
                 instructions.push(SkiPassInstruction {
                     instruction: Some(Instruction::Restore(Restore{}))
                 });
             } else {
-                // Construct a new SaveLayer.
-				let color = Some(match &expr[ids[2]] {
-					SkiLang::Paint(paint_ids) => color_proto_from_expr(expr, paint_ids[0]),
-					_ => panic!("Not a paint parameter in SaveLayer")
-				});
-                instructions.push(SkiPassInstruction {
-                    instruction: Some(Instruction::SaveLayer(
+                instructions.push(
+                    SkiPassInstruction {
+                        instruction: Some(Instruction::SaveLayer(
                                          SaveLayer{
-                                             paint: Some(SkPaint{
-												 color,
-                                                 filter_info: None,
-                                                 blender: None,
-                                             }),
+                                             paint: Some(paint),  
                                              suggested_bounds: None
                                          }))
                 });
@@ -474,6 +530,8 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
     }
 }
 
+
+// TODO: Change this to color_proto_to_expr
 fn color_expr(expr: &mut RecExpr<SkiLang>, aVal:i32, rVal:i32, gVal:i32, bVal:i32) -> Id {
     let a = expr.add(SkiLang::Num(aVal));
     let r = expr.add(SkiLang::Num(rVal));
@@ -482,8 +540,77 @@ fn color_expr(expr: &mut RecExpr<SkiLang>, aVal:i32, rVal:i32, gVal:i32, bVal:i3
     expr.add(SkiLang::Color([a, r, g, b]))
 }
 
+fn paint_proto_to_expr(expr: &mut RecExpr<SkiLang>, skPaint: &Option<SkPaint>) -> Id {
+    let color = match &skPaint {
+       	Some(skPaint) => {
+       	    match &skPaint.color {
+       	        Some(skColor) => {
+       	            color_expr(expr, 
+       	                skColor.alpha_u8,
+       	                skColor.red_u8,
+       	                skColor.green_u8,
+       	                skColor.blue_u8)
+       	            }
+       	        None => {
+                    // TODO: Assert that this only happens in SaveLayer.
+                    color_expr(expr, 255, 0, 0, 0)
+                }
+       	    }
+       	},
+       	None => {
+            // TODO: Assert that this only happens in SaveLayer.
+            color_expr(expr, 255, 0, 0, 0)
+        }
+    };
 
-fn color_proto_from_expr(expr: &RecExpr<SkiLang>, id: Id) -> SkColor {
+    let effectsOp = match &skPaint {
+       	Some(skPaint) => {
+            if skPaint.effects.is_some() {
+                let exists = expr.add(SkiLang::Exists(true));
+                expr.add(SkiLang::Effects([exists]))
+            } else {
+                let exists = expr.add(SkiLang::Exists(false));
+                expr.add(SkiLang::Effects([exists]))
+            }
+       	},
+       	None => {
+            let exists = expr.add(SkiLang::Exists(false));
+            expr.add(SkiLang::Effects([exists]))
+        }
+    };
+    expr.add(SkiLang::Paint([color, effectsOp]))
+}
+
+fn paint_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
+    let paint_param_ids = match expr[id] {
+        SkiLang::Paint(ids) => ids,
+        _ => panic!("Attempting to convert a non paint expr to proto")
+    };
+    let color = Some(color_expr_to_proto(expr, paint_param_ids[0]));
+    let effects = match expr[paint_param_ids[1]] {
+        SkiLang::Effects(ids) => {
+            match &expr[ids[0]] {
+                SkiLang::Exists(value) => {
+                    if *value {
+                        Some(Effects {})
+                    } else {
+                        None
+                    }
+                },
+                _ => panic!("Effects first parameter not exists!")
+            }
+        },
+        _ => panic!("Paint expr second parameter not Effects")
+    };
+
+    SkPaint {
+        color,
+        effects
+    }
+}
+
+
+fn color_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkColor {
     let node = &expr[id];
     match node {
         SkiLang::Color(ids) => {

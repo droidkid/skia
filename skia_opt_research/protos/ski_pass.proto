@@ -20,19 +20,10 @@ message SkColor {
 message SkPaint {
     SkColor color = 1;
     
-    // TO BE DEPRECATED
-    message Filters {}
-    Filters filter_info = 2;
-
-    message Blender {
-        enum BlendMode {
-            UNKNOWN = 0;
-            ABSENT = 1;
-            SRC_OVER = 2;
-        };
-        BlendMode blend_mode = 1;
-    }
-    Blender blender = 3;
+    // Placeholder before we actually split 
+    // Filters, Effects and BlendModes.
+    message Effects {}
+    Effects effects = 2;
 }
 
 message Bounds {

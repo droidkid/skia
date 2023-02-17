@@ -335,7 +335,7 @@ public:
            if(paint->getImageFilter() != nullptr ||
                paint->getColorFilter() != nullptr ||
                paint->getBlender() != nullptr) {
-               paintPb->mutable_filter_info();
+               paintPb->mutable_effects();
            } 
         }
 	    return;
