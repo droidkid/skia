@@ -14,6 +14,7 @@ use crate::protos::{
     SkiPassProgram, 
     SkiPassRunInfo,
     SkiPassRunResult,
+    BlendMode,
     sk_paint::Effects,
     ski_pass_instruction::SkiPassCopyRecord,
     ski_pass_instruction::Instruction,
@@ -29,7 +30,7 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
     let mut skiPassRunResult = SkiPassRunResult::default();
     let mut skiRunInfo = SkiPassRunInfo::default();
 
-    writeln!(&mut skiRunInfo.sk_records_proto, "{:?}", record);
+    skiRunInfo.input_record = Some(record.clone());
 
     let id = build_expr(&mut record.records.iter(), &mut expr);
 
@@ -51,6 +52,11 @@ define_language! {
         Exists(bool),
         "noOp" = NoOp,
         "blank" = Blank,
+        // BLEND_MODE SYMBOLS BEGIN //
+        "blendMode_srcOver" = BlendMode_SrcOver,
+        "blendMode_src" = BlendMode_Src,
+        "blendMode_unknown" = BlendMode_Unknown,
+        // BLEND MODES SYMBOLS END //
         "color" = Color([Id; 4]),
         // drawCommand(index, paint)
         "drawCommand" = DrawCommand([Id; 2]),
@@ -63,8 +69,9 @@ define_language! {
         // filter(exists)
         "effects" = Effects([Id; 1]),
         "backdrop" = Backdrop([Id; 1]),
-		// paint(color, filter)
-		"paint" = Paint([Id; 2]),
+        "blender" = Blender([Id; 1]),
+		// paint(color, filter, blender)
+		"paint" = Paint([Id; 3]),
         // merge(layer1, layer2, mergeParams())
         // This translates directly to saveLayer command in Skia.
         "merge" = Merge([Id; 3]),
@@ -95,6 +102,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             (paint 
                                 (color 255 0 0 0) 
                                 (effects false)
+                                (blender blendMode_srcOver)
                             )
                             (backdrop false)
                         )
@@ -114,6 +122,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             (paint 
                                 (color ?a ?r ?g ?b) 
                                 (effects false)
+                                ?blender
                             )
                             ?backdrop
                         )
@@ -127,6 +136,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             (paint 
                                 (color 255 ?r ?g ?b) 
                                 (effects false)
+                                ?blender
                             )
                             ?backdrop
                         )
@@ -141,6 +151,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             (paint 
                                 (color 255 ?r ?g ?b) 
                                 (effects false)
+                                ?blender
                             )
                             ?backdrop
                         )
@@ -154,6 +165,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             (paint 
                                 (color ?A ?r ?g ?b) 
                                 (effects false)
+                                ?blender
                             )
                             ?backdrop
                         )
@@ -178,6 +190,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                     (paint
                                         (color 255 ?r ?g ?b)
                                         (effects false)
+                                        (blender blendMode_srcOver)
                                     )
                                 )
                             )
@@ -186,6 +199,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                     (paint
                                         (color ?a ?r ?g ?b)
                                         (effects false)
+                                        (blender blendMode_srcOver)
                                     )
                                 )"),
         rewrite!("remove-blank-matrixOp"; "(matrixOp blank ?a)" => "blank"),
@@ -623,7 +637,38 @@ fn paint_proto_to_expr(expr: &mut RecExpr<SkiLang>, skPaint: &Option<SkPaint>) -
             expr.add(SkiLang::Effects([exists]))
         }
     };
-    expr.add(SkiLang::Paint([color, effectsOp]))
+
+    let blender = match &skPaint {
+        Some(skPaint) => {
+            match &skPaint.blender {
+                Some(blender) => {
+                    if blender.blend_mode == BlendMode::SrcOver.into() {
+                        let blendMode = expr.add(SkiLang::BlendMode_SrcOver);
+                        expr.add(SkiLang::Blender([blendMode]))
+                    } 
+                    else if blender.blend_mode == BlendMode::Src.into() {
+                        let blendMode = expr.add(SkiLang::BlendMode_Src);
+                        expr.add(SkiLang::Blender([blendMode]))
+                    }
+                    else {
+                        let blendMode = expr.add(SkiLang::BlendMode_Unknown);
+                        expr.add(SkiLang::Blender([blendMode]))
+                    }
+                },
+                None => {
+                    let blendMode = expr.add(SkiLang::BlendMode_SrcOver);
+                    expr.add(SkiLang::Blender([blendMode]))
+                }
+            }
+        },
+        None => {
+            let blendMode = expr.add(SkiLang::BlendMode_SrcOver);
+            expr.add(SkiLang::Blender([blendMode]))
+        }
+    };
+
+
+    expr.add(SkiLang::Paint([color, effectsOp, blender]))
 }
 
 fn paint_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
@@ -650,7 +695,8 @@ fn paint_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
 
     SkPaint {
         color,
-        effects
+        effects,
+        blender: None
     }
 }
 

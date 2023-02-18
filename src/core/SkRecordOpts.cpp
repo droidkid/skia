@@ -337,6 +337,18 @@ public:
                paint->getBlender() != nullptr) {
                paintPb->mutable_effects();
            } 
+
+           auto blender = paintPb->mutable_blender();
+           auto blendMode = paint->asBlendMode();
+           if (blendMode == SkBlendMode::kSrcOver) {
+               blender->set_blend_mode(ski_pass_proto::BlendMode::SRC_OVER);
+           } 
+           else if (blendMode == SkBlendMode::kSrc) {
+               blender->set_blend_mode(ski_pass_proto::BlendMode::SRC);
+           } 
+           else {
+               blender->set_blend_mode(ski_pass_proto::BlendMode::UNKNOWN);
+           }
         }
 	    return;
     }

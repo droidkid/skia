@@ -17,6 +17,12 @@ message SkColor {
     int32 blue_u8 = 4;
 }
 
+enum BlendMode {
+    UNKNOWN = 0;
+    SRC_OVER = 1;
+    SRC = 2;
+}
+
 message SkPaint {
     SkColor color = 1;
     
@@ -24,6 +30,12 @@ message SkPaint {
     // Filters, Effects and BlendModes.
     message Effects {}
     Effects effects = 2;
+
+    message Blender {
+        BlendMode blend_mode = 1;
+    }
+    Blender blender = 3;
+    
 }
 
 message Bounds {
@@ -84,7 +96,7 @@ message SkiPassRunInfo {
     // Debug info
     string skilang_expr = 4;
     string extracted_skilang_expr = 5;
-    string skRecords_proto = 6;
+    SkRecord input_record = 6;
 }
 
 /*
