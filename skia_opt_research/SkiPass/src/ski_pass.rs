@@ -62,6 +62,7 @@ define_language! {
         "concat" = Concat([Id; 2]),
         // filter(exists)
         "effects" = Effects([Id; 1]),
+        "backdrop" = Backdrop([Id; 1]),
 		// paint(color, filter)
 		"paint" = Paint([Id; 2]),
         // merge(layer1, layer2, mergeParams())
@@ -72,8 +73,8 @@ define_language! {
         // Extraction
         // alpha(layer, value) -> apply transparency of value on layer
         "alpha" = Alpha([Id; 2]), // alphaChannel, layer
-        // MergeParams([index, paint]) - eventually add bounds, backdrop.
-        "mergeParams" = MergeParams([Id; 2]),
+        // MergeParams([index, paint, backdrop]) - eventually add bounds, backdrop.
+        "mergeParams" = MergeParams([Id; 3]),
         // MatrixOpParams([index])  - eventually add other matrix stuff.
         "matrixOpParams" = MatrixOpParams([Id; 1]),
     }
@@ -95,6 +96,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (color 255 0 0 0) 
                                 (effects false)
                             )
+                            (backdrop false)
                         )
                     )" 
                  => 
@@ -113,6 +115,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (color ?a ?r ?g ?b) 
                                 (effects false)
                             )
+                            ?backdrop
                         )
                     )" 
                  => 
@@ -125,6 +128,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (color 255 ?r ?g ?b) 
                                 (effects false)
                             )
+                            ?backdrop
                         )
                     )"),
         // TODO: MULTIPLY ALPHAS!!!
@@ -138,6 +142,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (color 255 ?r ?g ?b) 
                                 (effects false)
                             )
+                            ?backdrop
                         )
                     )" 
                  => 
@@ -150,13 +155,18 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (color ?A ?r ?g ?b) 
                                 (effects false)
                             )
+                            ?backdrop
                         )
                     )"),
         rewrite!("remove-merge-blank"; 
                  "(merge 
                         ?layer 
                         blank 
-                        ?mergeParams
+                        (mergeParams
+                            ?mergeIndex
+                            ?paint
+                            (backdrop false)
+                        )
                    )" 
                 => "?layer"),
         rewrite!("remove-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
@@ -336,8 +346,13 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                },
                Some(Command::SaveLayer(save_layer)) => {
                    let index = expr.add(SkiLang::Num(skRecords.index));
+
                    let paint = paint_proto_to_expr(expr, &save_layer.paint);
-				   let mergeParams = expr.add(SkiLang::MergeParams([index, paint]));
+
+                   let backdrop_exists = expr.add(SkiLang::Exists(save_layer.backdrop.is_some()));
+                   let backdrop = expr.add(SkiLang::Backdrop([backdrop_exists]));
+
+                   let mergeParams = expr.add(SkiLang::MergeParams([index, paint, backdrop]));
 		   		   drawStack.push((StackOp::SaveLayer, mergeParams));
                },
                Some(Command::Restore(restore)) => {
@@ -503,8 +518,17 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 _ => panic!("Merge Params first parameter not index")
             };
             let paint = paint_expr_to_proto(expr, mergeParamIds[1]);
+            let backdrop_exists = match &expr[mergeParamIds[2]] {
+                SkiLang::Backdrop(ids) => {
+                    match &expr[ids[0]] {
+                        SkiLang::Exists(value) => *value,
+                        _ => panic!("Backdrop first param not Exists")
+                    }
+                },
+                _ => panic!("Merge params third parameter not backdrop")
+            };
 
-            let can_reconstruct = !paint.effects.is_some();
+            let can_reconstruct = !paint.effects.is_some() && !backdrop_exists;
 
             if !can_reconstruct {
                 instructions.push(SkiPassInstruction {
@@ -526,7 +550,8 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                         instruction: Some(Instruction::SaveLayer(
                                          SaveLayer{
                                              paint: Some(paint),  
-                                             suggested_bounds: None
+                                             suggested_bounds: None,
+                                             backdrop: None
                                          }))
                 });
                 instructions.append(&mut src.instructions);

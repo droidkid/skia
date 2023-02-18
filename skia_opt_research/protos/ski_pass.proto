@@ -32,6 +32,7 @@ message Bounds {
     double right = 3;
     double bottom = 4;
 }
+message Backdrop {}
 
 
 message SkRecords  {
@@ -43,8 +44,6 @@ message SkRecords  {
     message SaveLayer {
         Bounds suggested_bounds = 1;
         SkPaint paint = 2;
-
-        message Backdrop {}
         Backdrop backdrop = 3;
     };
 
@@ -104,6 +103,7 @@ message SkiPassInstruction {
     message SaveLayer {
         SkPaint paint = 1;
         Bounds suggested_bounds = 2;
+        Backdrop backdrop = 3;
     }
 
     message Save {}
