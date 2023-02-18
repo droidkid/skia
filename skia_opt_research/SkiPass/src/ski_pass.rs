@@ -52,7 +52,6 @@ define_language! {
         "noOp" = NoOp,
         "blank" = Blank,
         "color" = Color([Id; 4]),
-        // TODO: Consider not using Num as a drawCommand index and make a new type for that?
         // drawCommand(index, paint)
         "drawCommand" = DrawCommand([Id; 2]),
         // TODO: Split matrix and clip ops. Right now clips are a 'matrixOp'
@@ -166,8 +165,19 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         "(alpha ?a 
                                 (drawCommand 
                                     ?x 
-                                    255))
-                        " => "(drawCommand ?x ?a)"),
+                                    (paint
+                                        (color 255 ?r ?g ?b)
+                                        (effects false)
+                                    )
+                                )
+                            )
+                        " => "(drawCommand 
+                                    ?x 
+                                    (paint
+                                        (color ?a ?r ?g ?b)
+                                        (effects false)
+                                    )
+                                )"),
         rewrite!("remove-blank-matrixOp"; "(matrixOp blank ?a)" => "blank"),
     ]
 }
@@ -315,8 +325,8 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                        },
                    _ => {
                            let drawCommandIndex = expr.add(SkiLang::Num(skRecords.index));
-                           let drawCommandAlpha = expr.add(SkiLang::Num(255));
-                           let drawOpCommand = expr.add(SkiLang::DrawCommand([drawCommandIndex, drawCommandAlpha]));
+                           let drawCommandPaint = paint_proto_to_expr(expr, &draw_command.paint);
+                           let drawOpCommand = expr.add(SkiLang::DrawCommand([drawCommandIndex, drawCommandPaint]));
                            drawStack.push((StackOp::Surface, drawOpCommand));
                        }
                    }
@@ -385,17 +395,14 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
                 SkiLang::Num(value) => *value,
                 _ => panic!()
             };
-            let alpha = match &expr[ids[1]] {
-                SkiLang::Num(value) => *value,
-                _ => panic!()
-            };
+            let paint = paint_expr_to_proto(expr, ids[1]);
             let instruction = SkiPassInstruction {
                 // oneof -> Option of a Enum
                 instruction: Some(Instruction::CopyRecord(
                     SkiPassCopyRecord {
                         index,
-                        alpha,
-                        paint: None
+                        alpha: 255,
+                        paint: Some(paint),
                     }
                 ))
             };

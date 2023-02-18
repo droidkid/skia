@@ -424,7 +424,8 @@ public:
     operator()(T* draw) {
 	    SkPaint *paint = AsPtr(draw->paint);
 	    if (paint != nullptr && alpha != 255) {
-            paint->setAlpha(SkMulDiv255Round(paint->getAlpha(), this->alpha));
+            assert(paint->getAlpha() == 255 || paint->getAlpha() == this->alpha);
+            paint->setAlpha(this->alpha);
 	    }
 	    // if paint is nullptr, assume there is nothing to draw.
 	    fDraw(*draw);
@@ -479,7 +480,7 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
     SkRecordApplier applier(canvas);
     for (auto instruction: result.program().instructions()) {
         if (instruction.has_copy_record()) {
-	    applier.setAlpha(instruction.copy_record().alpha());
+	        applier.setAlpha(instruction.copy_record().paint().color().alpha_u8());
             record->mutate((int)(instruction.copy_record().index()), applier);
         }
         if (instruction.has_save()) {
