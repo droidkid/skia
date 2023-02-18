@@ -52,12 +52,11 @@ define_language! {
         Exists(bool),
         "noOp" = NoOp,
         "blank" = Blank,
-        // BLEND_MODE SYMBOLS BEGIN //
+        // ------ BLEND_MODE SYMBOLS BEGIN --------//
         "blendMode_srcOver" = BlendMode_SrcOver,
         "blendMode_src" = BlendMode_Src,
         "blendMode_unknown" = BlendMode_Unknown,
-        // BLEND MODES SYMBOLS END //
-        "color" = Color([Id; 4]),
+        // -------BLEND MODES SYMBOLS END --------//
         // drawCommand(index, paint)
         "drawCommand" = DrawCommand([Id; 2]),
         // TODO: Split matrix and clip ops. Right now clips are a 'matrixOp'
@@ -67,11 +66,27 @@ define_language! {
         // instructions(layer1), instructions(layer2)
         "concat" = Concat([Id; 2]),
         // filter(exists)
-        "effects" = Effects([Id; 1]),
         "backdrop" = Backdrop([Id; 1]),
+
+        // ------ PAINT_PARAMS BEGIN --------//
+        "color" = Color([Id; 4]),
         "blender" = Blender([Id; 1]),
-		// paint(color, filter, blender)
-		"paint" = Paint([Id; 3]),
+        "imageFilter" = ImageFilter([Id; 1]),
+        "colorFilter" = ColorFilter([Id; 1]),
+        "pathEffect" = PathEffect([Id; 1]),
+        "maskFilter" = MaskFilter([Id; 1]),
+        "shader" = Shader([Id; 1]),
+        // ------ PAINT_PARAMS END --------//
+		// paint(color, 
+        //      filter, 
+        //      blender,
+        //      imageFilter,
+        //      colorFilter,
+        //      pathEffect,
+        //      maskFilter,
+        //      shader
+        //  )
+		"paint" = Paint([Id; 7]),
         // merge(layer1, layer2, mergeParams())
         // This translates directly to saveLayer command in Skia.
         "merge" = Merge([Id; 3]),
@@ -93,6 +108,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
         rewrite!("remove-noOp-concat-2"; "(concat ?a blank)" => "?a"),
         // Kill if only a single drawCommand, and saveLayer is noOp.
         // SaveLayer alpha might have been merged into single drawCommand.
+        // TODO: Check that drawCommand paint is effectively_srcOver
         rewrite!("kill-merge"; 
                  "(merge 
                         ?dst 
@@ -101,8 +117,12 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?mergeIndex
                             (paint 
                                 (color 255 0 0 0) 
-                                (effects false)
                                 (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
                             )
                             (backdrop false)
                         )
@@ -113,7 +133,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         (drawCommand ?x ?p)
                   )"),
 
-        rewrite!("apply-alpha-on-src"; 
+        rewrite!("push-merge-alpha-on-src"; 
                  "(merge 
                         ?dst 
                         ?src 
@@ -121,10 +141,14 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?mergeIndex
                             (paint 
                                 (color ?a ?r ?g ?b) 
-                                (effects false)
-                                ?blender
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
                             )
-                            ?backdrop
+                            (backdrop false)
                         )
                     )" 
                  => 
@@ -135,10 +159,14 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?mergeIndex
                             (paint 
                                 (color 255 ?r ?g ?b) 
-                                (effects false)
-                                ?blender
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
                             )
-                            ?backdrop
+                            (backdrop false)
                         )
                     )"),
         // TODO: MULTIPLY ALPHAS!!!
@@ -150,10 +178,14 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?mergeIndex
                             (paint 
                                 (color 255 ?r ?g ?b) 
-                                (effects false)
-                                ?blender
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
                             )
-                            ?backdrop
+                            (backdrop false)
                         )
                     )" 
                  => 
@@ -164,10 +196,14 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?mergeIndex
                             (paint 
                                 (color ?A ?r ?g ?b) 
-                                (effects false)
-                                ?blender
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
                             )
-                            ?backdrop
+                            (backdrop false)
                         )
                     )"),
         rewrite!("remove-merge-blank"; 
@@ -176,7 +212,15 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         blank 
                         (mergeParams
                             ?mergeIndex
-                            ?paint
+                            (paint 
+                                (color ?A ?r ?g ?b) 
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
+                            )
                             (backdrop false)
                         )
                    )" 
@@ -188,9 +232,13 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (drawCommand 
                                     ?x 
                                     (paint
-                                        (color 255 ?r ?g ?b)
-                                        (effects false)
+                                        (color 255 ?r ?g ?b) 
                                         (blender blendMode_srcOver)
+                                        (imageFilter false)
+                                        (colorFilter false)
+                                        (pathEffect false)
+                                        (maskFilter false)
+                                        (shader false)
                                     )
                                 )
                             )
@@ -198,8 +246,12 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                     ?x 
                                     (paint
                                         (color ?a ?r ?g ?b)
-                                        (effects false)
                                         (blender blendMode_srcOver)
+                                        (imageFilter false)
+                                        (colorFilter false)
+                                        (pathEffect false)
+                                        (maskFilter false)
+                                        (shader false)
                                     )
                                 )"),
         rewrite!("remove-blank-matrixOp"; "(matrixOp blank ?a)" => "blank"),
@@ -542,7 +594,15 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 _ => panic!("Merge params third parameter not backdrop")
             };
 
-            let can_reconstruct = !paint.effects.is_some() && !backdrop_exists;
+            let can_reconstruct = !backdrop_exists 
+                                && paint.image_filter.is_none()
+                                && paint.color_filter.is_none()
+                                && paint.path_effect.is_none()
+                                && paint.mask_filter.is_none()
+                                && paint.shader.is_none()
+                                && (paint.blender.is_none() ||
+                                    paint.blender.as_ref().unwrap().blend_mode == 
+                                    BlendMode::SrcOver.into());
 
             if !can_reconstruct {
                 instructions.push(SkiPassInstruction {
@@ -622,21 +682,6 @@ fn paint_proto_to_expr(expr: &mut RecExpr<SkiLang>, skPaint: &Option<SkPaint>) -
         }
     };
 
-    let effectsOp = match &skPaint {
-       	Some(skPaint) => {
-            if skPaint.effects.is_some() {
-                let exists = expr.add(SkiLang::Exists(true));
-                expr.add(SkiLang::Effects([exists]))
-            } else {
-                let exists = expr.add(SkiLang::Exists(false));
-                expr.add(SkiLang::Effects([exists]))
-            }
-       	},
-       	None => {
-            let exists = expr.add(SkiLang::Exists(false));
-            expr.add(SkiLang::Effects([exists]))
-        }
-    };
 
     let blender = match &skPaint {
         Some(skPaint) => {
@@ -667,8 +712,70 @@ fn paint_proto_to_expr(expr: &mut RecExpr<SkiLang>, skPaint: &Option<SkPaint>) -
         }
     };
 
+    let image_filter = match &skPaint {
+       	Some(skPaint) => {
+            let exists = expr.add(SkiLang::Exists(skPaint.image_filter.is_some()));
+            expr.add(SkiLang::ImageFilter([exists]))
+       	},
+       	None => {
+            let exists = expr.add(SkiLang::Exists(false));
+            expr.add(SkiLang::ImageFilter([exists]))
+        }
+    };
 
-    expr.add(SkiLang::Paint([color, effectsOp, blender]))
+    let color_filter = match &skPaint {
+       	Some(skPaint) => {
+            let exists = expr.add(SkiLang::Exists(skPaint.color_filter.is_some()));
+            expr.add(SkiLang::ColorFilter([exists]))
+       	},
+       	None => {
+            let exists = expr.add(SkiLang::Exists(false));
+            expr.add(SkiLang::ColorFilter([exists]))
+        }
+    };
+
+    let path_effect = match &skPaint {
+       	Some(skPaint) => {
+            let exists = expr.add(SkiLang::Exists(skPaint.path_effect.is_some()));
+            expr.add(SkiLang::PathEffect([exists]))
+       	},
+       	None => {
+            let exists = expr.add(SkiLang::Exists(false));
+            expr.add(SkiLang::PathEffect([exists]))
+        }
+    };
+
+    let mask_filter = match &skPaint {
+       	Some(skPaint) => {
+            let exists = expr.add(SkiLang::Exists(skPaint.mask_filter.is_some()));
+            expr.add(SkiLang::MaskFilter([exists]))
+       	},
+       	None => {
+            let exists = expr.add(SkiLang::Exists(false));
+            expr.add(SkiLang::MaskFilter([exists]))
+        }
+    };
+
+    let shader = match &skPaint {
+       	Some(skPaint) => {
+            let exists = expr.add(SkiLang::Exists(skPaint.shader.is_some()));
+            expr.add(SkiLang::Shader([exists]))
+       	},
+       	None => {
+            let exists = expr.add(SkiLang::Exists(false));
+            expr.add(SkiLang::Shader([exists]))
+        }
+    };
+
+    expr.add(SkiLang::Paint([
+            color, 
+            blender,
+            image_filter,
+            color_filter,
+            path_effect,
+            mask_filter,
+            shader
+        ]))
 }
 
 fn paint_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
@@ -677,26 +784,20 @@ fn paint_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
         _ => panic!("Attempting to convert a non paint expr to proto")
     };
     let color = Some(color_expr_to_proto(expr, paint_param_ids[0]));
-    let effects = match expr[paint_param_ids[1]] {
-        SkiLang::Effects(ids) => {
-            match &expr[ids[0]] {
-                SkiLang::Exists(value) => {
-                    if *value {
-                        Some(Effects {})
-                    } else {
-                        None
-                    }
-                },
-                _ => panic!("Effects first parameter not exists!")
-            }
-        },
-        _ => panic!("Paint expr second parameter not Effects")
-    };
 
     SkPaint {
         color,
-        effects,
-        blender: None
+        // TODO: Fill these fields.
+        // It doesn't really matter now, we bail out and copy the command
+        // if any of the below fields are set. Only the color.alpha matters
+        // at this point.
+        effects: None,
+        blender: None,
+        image_filter: None,
+        color_filter: None,
+        path_effect: None,
+        mask_filter: None,
+        shader: None
     }
 }
 
@@ -734,3 +835,4 @@ fn color_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkColor {
         }
     }
 }
+

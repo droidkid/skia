@@ -35,6 +35,22 @@ message SkPaint {
         BlendMode blend_mode = 1;
     }
     Blender blender = 3;
+
+    message ImageFilter {}
+    ImageFilter image_filter = 4;
+
+    message ColorFilter {}
+    ColorFilter color_filter = 5;
+
+    message PathEffect {}
+    PathEffect path_effect = 6;
+
+    message MaskFilter {}
+    MaskFilter mask_filter = 7;
+
+    message Shader {}
+    Shader shader = 8;
+
     
 }
 

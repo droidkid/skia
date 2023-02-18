@@ -349,6 +349,22 @@ public:
            else {
                blender->set_blend_mode(ski_pass_proto::BlendMode::UNKNOWN);
            }
+
+           if (paint->getImageFilter() != nullptr) {
+               paintPb->mutable_image_filter();
+           }
+           if (paint->getColorFilter() != nullptr) {
+               paintPb->mutable_color_filter();
+           }
+           if (paint->getPathEffect() != nullptr) {
+               paintPb->mutable_path_effect();
+           }
+           if (paint->getMaskFilter() != nullptr) {
+               paintPb->mutable_mask_filter();
+           }
+           if (paint->getShader() != nullptr) {
+               paintPb->mutable_shader();
+           }
         }
 	    return;
     }
