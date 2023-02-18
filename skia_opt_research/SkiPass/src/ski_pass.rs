@@ -53,11 +53,10 @@ define_language! {
         "blank" = Blank,
         "color" = Color([Id; 4]),
         // TODO: Consider not using Num as a drawCommand index and make a new type for that?
-        // drawCommand(index, paint), where
-        //  num: index of drawCommand referenced in source SKP
-        //  alpha: alpha, Num between 0 and 255.
+        // drawCommand(index, paint)
         "drawCommand" = DrawCommand([Id; 2]),
-        // matrixOp(layer, num) -> return layer after applying transform on layer 
+        // TODO: Split matrix and clip ops. Right now clips are a 'matrixOp'
+        // matrixOp(layer, matrixOpParams) -> return layer after applying transform on layer 
         "matrixOp" = MatrixOp([Id; 2]),
         // concat(layer1, layer2) -> return layer resulting from sequential execution of
         // instructions(layer1), instructions(layer2)
@@ -76,6 +75,8 @@ define_language! {
         "alpha" = Alpha([Id; 2]), // alphaChannel, layer
         // MergeParams([index, paint]) - eventually add bounds, backdrop.
         "mergeParams" = MergeParams([Id; 2]),
+        // MatrixOpParams([index])  - eventually add other matrix stuff.
+        "matrixOpParams" = MatrixOpParams([Id; 1]),
     }
 }
 
@@ -168,7 +169,6 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                     255))
                         " => "(drawCommand ?x ?a)"),
         rewrite!("remove-blank-matrixOp"; "(matrixOp blank ?a)" => "blank"),
-        rewrite!("remove-noOp-matrixOp"; "(matrixOp ?layer noOp)" => "?layer"),
     ]
 }
 
@@ -310,9 +310,8 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                    match draw_command.name.as_str() {
                        "ClipPath" | "ClipRRect" | "ClipRect" | "Concat44" => {
                            let matrixOpIndex = expr.add(SkiLang::Num(skRecords.index));
-                           let matrixOpAlpha = expr.add(SkiLang::Num(255));
-                           let matrixOpCommand = expr.add(SkiLang::DrawCommand([matrixOpIndex, matrixOpAlpha]));
-                            drawStack.push((StackOp::MatrixOp, matrixOpCommand));
+                           let matrixOpParams = expr.add(SkiLang::MatrixOpParams([matrixOpIndex]));
+                            drawStack.push((StackOp::MatrixOp, matrixOpParams));
                        },
                    _ => {
                            let drawCommandIndex = expr.add(SkiLang::Num(skRecords.index));
@@ -355,6 +354,20 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
     match node {
         SkiLang::NoOp => {
             vec![]
+        },
+        SkiLang::MatrixOpParams(ids) => {
+            let instruction = match &expr[ids[0]] {
+                SkiLang::Num(index) => SkiPassInstruction {
+                        instruction: Some(Instruction::CopyRecord(
+                        SkiPassCopyRecord {
+                            index: *index,
+                            alpha: 255,
+                            paint: None
+                    }))
+                },
+                _ => panic!("MatrixParams not constructed correctly")
+            };
+            vec![instruction]
         },
         SkiLang::Num(index) => {
             let instruction = SkiPassInstruction {
