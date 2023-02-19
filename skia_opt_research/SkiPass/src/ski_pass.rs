@@ -113,15 +113,26 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
         rewrite!("remove-noOp-concat-2"; "(concat ?a blank)" => "?a"),
         // Kill if only a single drawCommand, and saveLayer is noOp.
         // SaveLayer alpha might have been merged into single drawCommand.
-        // TODO: Check that drawCommand paint is effectively_srcOver
-        rewrite!("kill-merge"; 
+        // This rule corresponds to the killSaveLayer at line 216 in src/core/SkRecordOpts.cpp
+        rewrite!("kill-merge-drawIsSrcOver"; 
                  "(merge 
                         ?dst 
-                        (drawCommand ?x ?p) 
+                        (drawCommand 
+                            ?x 
+                            (paint
+                                ?drawPaintColor
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                ?pathEffect
+                                ?maskFilter
+                                ?shader
+                            )
+                        ) 
                         (mergeParams 
                             ?mergeIndex
                             (paint 
-                                (color 255 0 0 0) 
+                                (color ?a 0 0 0)
                                 (blender blendMode_srcOver)
                                 (imageFilter false)
                                 (colorFilter false)
@@ -135,8 +146,70 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                  => 
                  "(concat 
                         ?dst 
-                        (drawCommand ?x ?p)
+                        (drawCommand 
+                            ?x 
+                            (paint
+                                ?drawPaintColor
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                ?pathEffect
+                                ?maskFilter
+                                ?shader
+                            )
+                        ) 
                   )"),
+
+        // We can still merge if blendMode is src and alpha is 255.
+        // This handles drawPaint being blendMode_src branch at
+        // This rule corresponds to the killSaveLayer at line 203 in src/core/SkRecordOpts.cpp
+        // (with the srcOver case is handled in the above rule)
+        rewrite!("kill-merge-drawIsSrc"; 
+                 "(merge 
+                        ?dst 
+                        (drawCommand 
+                            ?x 
+                            (paint
+                                (color 255 ?r ?g ?b)
+                                (blender blendMode_src)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
+                            )
+                        ) 
+                        (mergeParams 
+                            ?mergeIndex
+                            (paint 
+                                (color 255 0 0 0)
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
+                            )
+                            (backdrop false)
+                        )
+                    )" 
+                 => 
+                 "(concat 
+                        ?dst 
+                        (drawCommand 
+                            ?x 
+                            (paint
+                                (color 255 ?r ?g ?b)
+                                (blender blendMode_src)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
+                            )
+                        )
+                  )"),
+
 
         rewrite!("push-merge-alpha-on-src"; 
                  "(merge 
