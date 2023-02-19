@@ -124,7 +124,7 @@ void benchmark_optimization(
     }
 
     // Render SKI_PASS image for Diffing.
-    if (optType == skia_opt_metrics::SKI_PASS) {
+    if (optType == skia_opt_metrics::SKI_PASS || optType == skia_opt_metrics::NO_OPT) {
         std::string path = 
             outDir + 
             "/skipass_renders/" + 
@@ -135,7 +135,9 @@ void benchmark_optimization(
         std::string skp_path = 
             outDir + 
             "/" + 
-            getFileName(skpName) + ".skp";
+            getFileName(skpName) +  "_" +
+            skia_opt_metrics::Optimization_Name(optType) + 
+            ".skp";
 
         SkPictureRecorder recorder;
         SkCanvas* skpCanvas = recorder.beginRecording({0, 0, SkScalar(w), SkScalar(h)});
