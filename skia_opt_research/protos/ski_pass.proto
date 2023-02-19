@@ -26,11 +26,6 @@ enum BlendMode {
 message SkPaint {
     SkColor color = 1;
     
-    // Placeholder before we actually split 
-    // Filters, Effects and BlendModes.
-    message Effects {}
-    Effects effects = 2;
-
     message Blender {
         BlendMode blend_mode = 1;
     }

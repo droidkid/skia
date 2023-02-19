@@ -332,12 +332,6 @@ public:
            color->set_green_u8(SkColorGetG(skcolor));
            color->set_blue_u8(SkColorGetB(skcolor));
 
-           if(paint->getImageFilter() != nullptr ||
-               paint->getColorFilter() != nullptr ||
-               paint->getBlender() != nullptr) {
-               paintPb->mutable_effects();
-           } 
-
            auto blender = paintPb->mutable_blender();
            auto blendMode = paint->asBlendMode();
            if (blendMode == SkBlendMode::kSrcOver) {
