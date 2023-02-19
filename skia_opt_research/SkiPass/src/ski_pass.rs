@@ -15,6 +15,7 @@ use crate::protos::{
     SkiPassRunInfo,
     SkiPassRunResult,
     BlendMode,
+    sk_paint::Blender,
     sk_paint::ImageFilter,
     sk_paint::ColorFilter,
     sk_paint::PathEffect,
@@ -791,12 +792,26 @@ fn get_exists_value(expr: &RecExpr<SkiLang>, id: Id) -> bool {
     }
 }
 
+fn get_blend_mode(expr: &RecExpr<SkiLang>, id: Id) -> i32 {
+    match expr[id] {
+        SkiLang::BlendMode_Src => BlendMode::Src.into() ,
+        SkiLang::BlendMode_SrcOver => BlendMode::SrcOver.into(),
+        SkiLang::BlendMode_Unknown => BlendMode::Unknown.into(),
+        _ => panic!("Not a valid BlendMode")
+    }
+}
+
 fn paint_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
     let paint_param_ids = match expr[id] {
         SkiLang::Paint(ids) => ids,
         _ => panic!("Attempting to convert a non paint expr to proto")
     };
     let color = Some(color_expr_to_proto(expr, paint_param_ids[0]));
+
+    let blend_mode = match expr[paint_param_ids[1]] {
+        SkiLang::Blender(ids) => get_blend_mode(expr, ids[0]),
+        _ => panic!("Second parameter of Paint is not Blender!")
+    };
 
     let image_filter_exists = match expr[paint_param_ids[2]] {
         SkiLang::ImageFilter(ids) => get_exists_value(expr, ids[0]),
@@ -829,7 +844,9 @@ fn paint_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
         // It doesn't really matter now, we bail out and copy the command
         // if any of the below fields are set. Only the color.alpha matters
         // at this point.
-        blender: None,
+        blender: Some(Blender{
+            blend_mode
+        }),
         image_filter: if image_filter_exists {
             Some(ImageFilter {})
         } else {
