@@ -51,10 +51,12 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
     skiPassRunResult
 }
 
+
 define_language! {
     enum SkiLang {
         Num(i32),
         Exists(bool),
+        float(ordered_float::NotNan<f64>),
         "noOp" = NoOp,
         "blank" = Blank,
         // ------ BLEND_MODE SYMBOLS BEGIN --------//
@@ -62,6 +64,7 @@ define_language! {
         "blendMode_src" = BlendMode_Src,
         "blendMode_unknown" = BlendMode_Unknown,
         // -------BLEND MODES SYMBOLS END --------//
+        "bounds" = Bounds(),
         // drawCommand(index, paint)
         "drawCommand" = DrawCommand([Id; 2]),
         // TODO: Split matrix and clip ops. Right now clips are a 'matrixOp'
