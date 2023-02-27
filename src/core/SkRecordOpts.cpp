@@ -397,11 +397,11 @@ class SkiPassRecordBuilder {
             ski_pass_proto::SkRecords_SaveLayer *saveLayer = records->mutable_save_layer();
 
             if (command.bounds != nullptr) {
-                ski_pass_proto::Bounds *suggested_bounds = saveLayer->mutable_suggested_bounds();
-                suggested_bounds->set_left(command.bounds->left());
-                suggested_bounds->set_top(command.bounds->top());
-                suggested_bounds->set_right(command.bounds->right());
-                suggested_bounds->set_bottom(command.bounds->bottom());
+                ski_pass_proto::Bounds *bounds = saveLayer->mutable_bounds();
+                bounds->set_left(command.bounds->left());
+                bounds->set_top(command.bounds->top());
+                bounds->set_right(command.bounds->right());
+                bounds->set_bottom(command.bounds->bottom());
             }
             SkRecordPaintExtractor::fillSkPaintProto(command, saveLayer->mutable_paint());
             if (command.backdrop != nullptr) {
@@ -516,7 +516,18 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
                 instruction.save_layer().paint().color().green_u8(),
                 instruction.save_layer().paint().color().blue_u8()
             );
-            canvas->saveLayer(nullptr, &paint);
+            if (instruction.save_layer().has_bounds()) {
+                canvas->saveLayer(
+                        SkRect::MakeLTRB(
+                            instruction.save_layer().bounds().left(),
+                            instruction.save_layer().bounds().top(),
+                            instruction.save_layer().bounds().right(),
+                            instruction.save_layer().bounds().bottom()
+                        ), 
+                        &paint);
+            } else {
+                canvas->saveLayer(nullptr, &paint);
+            }
         }
         if (instruction.has_restore()) {
             canvas->restore();

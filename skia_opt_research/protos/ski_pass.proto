@@ -65,7 +65,7 @@ message SkRecords  {
     int32 index = 1;;
 
     message SaveLayer {
-        Bounds suggested_bounds = 1;
+        Bounds bounds = 1;
         SkPaint paint = 2;
         Backdrop backdrop = 3;
     };
@@ -125,7 +125,7 @@ message SkiPassInstruction {
     }
     message SaveLayer {
         SkPaint paint = 1;
-        Bounds suggested_bounds = 2;
+        Bounds bounds = 2;
         Backdrop backdrop = 3;
     }
 

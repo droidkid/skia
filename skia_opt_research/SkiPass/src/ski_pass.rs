@@ -7,6 +7,7 @@ use std::fmt::Write;
 use crate::protos;
 use crate::protos::{
     SkPaint,
+    Bounds,
     SkColor,
     SkRecord, 
     SkRecords, 
@@ -54,9 +55,13 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
 
 define_language! {
     enum SkiLang {
+        // NOTE: The order of Num and Float matters!
+        // First all Nums are parsed, and then Floats. So if
+        // you want to force a number to be parsed as a float,
+        // make sure to add a . (1.0 instead of 1)
         Num(i32),
+        Float(ordered_float::NotNan<f64>),
         Exists(bool),
-        float(ordered_float::NotNan<f64>),
         "noOp" = NoOp,
         "blank" = Blank,
         // ------ BLEND_MODE SYMBOLS BEGIN --------//
@@ -64,7 +69,6 @@ define_language! {
         "blendMode_src" = BlendMode_Src,
         "blendMode_unknown" = BlendMode_Unknown,
         // -------BLEND MODES SYMBOLS END --------//
-        "bounds" = Bounds(),
         // drawCommand(index, paint)
         "drawCommand" = DrawCommand([Id; 2]),
         // TODO: Split matrix and clip ops. Right now clips are a 'matrixOp'
@@ -75,7 +79,6 @@ define_language! {
         "concat" = Concat([Id; 2]),
         // filter(exists)
         "backdrop" = Backdrop([Id; 1]),
-
         // ------ PAINT_PARAMS BEGIN --------//
         "color" = Color([Id; 4]),
         "blender" = Blender([Id; 1]),
@@ -95,6 +98,10 @@ define_language! {
         //      shader
         //  )
 		"paint" = Paint([Id; 7]),
+        // rect ( l, t, r, b )
+        "rect" = Rect([Id; 4]),
+        // bound (exists? rect)
+        "bounds" = Bounds([Id; 2]),
         // merge(layer1, layer2, mergeParams())
         // This translates directly to saveLayer command in Skia.
         "merge" = Merge([Id; 3]),
@@ -103,13 +110,18 @@ define_language! {
         // Extraction
         // alpha(layer, value) -> apply transparency of value on layer
         "alpha" = Alpha([Id; 2]), // alphaChannel, layer
-        // MergeParams([index, paint, backdrop]) - eventually add bounds, backdrop.
-        "mergeParams" = MergeParams([Id; 3]),
+        // MergeParams([index, paint, backdrop, bounds])
+        "mergeParams" = MergeParams([Id; 4]),
         // MatrixOpParams([index])  - eventually add other matrix stuff.
         "matrixOpParams" = MatrixOpParams([Id; 1]),
     }
 }
 
+// TODO: Decide on a convention in writing rules 
+// Both of the below are equivalent:
+//    ?pathEffect
+//    (pathEffect ?pathEffectExists)
+// Right now the choice is arbitrary, there's also a choice of using Null.
 fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     vec![
         rewrite!("remove-noOp-concat-1"; "(concat blank ?a)" => "?a"),
@@ -135,7 +147,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         (mergeParams 
                             ?mergeIndex
                             (paint 
-                                (color ?a 0 0 0)
+                                (color 255 0 0 0)
                                 (blender blendMode_srcOver)
                                 (imageFilter false)
                                 (colorFilter false)
@@ -144,6 +156,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
+                            (bounds false ?boundRect)
                         )
                     )" 
                  => 
@@ -194,6 +207,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
+                            (bounds false ?boundRect)
                         )
                     )" 
                  => 
@@ -230,6 +244,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
+                            (bounds false ?boundRect)
                         )
                     )" 
                  => 
@@ -248,6 +263,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
+                            (bounds false ?boundRect)
                         )
                     )"),
         // TODO: MULTIPLY ALPHAS!!!
@@ -267,6 +283,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
+                            (bounds false ?boundRect)
                         )
                     )" 
                  => 
@@ -285,6 +302,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
+                            (bounds false ?boundRect)
                         )
                     )"),
         rewrite!("remove-merge-blank"; 
@@ -303,6 +321,7 @@ fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
+                            (bounds false ?boundRect)
                         )
                    )" 
                 => "?layer"),
@@ -439,9 +458,36 @@ fn reduceStack(
                 reduceStack(expr, &mut apply_state_stack, false);
                 let src = apply_state_stack.pop().unwrap().1;
 
-		   	    let merged = expr.add(SkiLang::Merge([dst, src, merge_params]));
-		   		drawStack.push((StackOp::Surface, merged));
+                let bounds = match expr[merge_params] {
+                    SkiLang::MergeParams(ids) => bounds_expr_to_proto(expr, ids[3]),
+                    _ => panic!("SaveLayer stack does not have mergeParams")
+                };
+
+                match bounds {
+                    Some(bounds) => {
+                        // TODO: Add a clipRect here.
+                        // Remove the bounds from merge_params
+                        let corrected_merge_params = match expr[merge_params] {
+                            SkiLang::MergeParams(ids) => {
+                                let exists = expr.add(SkiLang::Exists(false));
+                                let boundRect = expr.add(SkiLang::NoOp);
+                                let bounds = expr.add(SkiLang::Bounds([exists, boundRect]));
+                                expr.add(SkiLang::MergeParams([ids[0], ids[1], ids[2], bounds]))
+                            },
+                            _ => panic!("SaveLayer stack does not have mergeParams")
+
+                        };
+		   	            let merged = expr.add(SkiLang::Merge([dst, src, corrected_merge_params]));
+		   		        drawStack.push((StackOp::Surface, merged));
+                    },
+                    None => {
+		   	            let merged = expr.add(SkiLang::Merge([dst, src, merge_params]));
+		   		        drawStack.push((StackOp::Surface, merged));
+                    },
+                }
+
 		   		drawStack.append(&mut stateStack);
+
 			},
             StackOp::Save=> {
                 drawStack.push((e1_type, e1));
@@ -495,11 +541,12 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                    let index = expr.add(SkiLang::Num(skRecords.index));
 
                    let paint = paint_proto_to_expr(expr, &save_layer.paint);
+                   let bounds = bounds_proto_to_expr(expr, &save_layer.bounds);
 
                    let backdrop_exists = expr.add(SkiLang::Exists(save_layer.backdrop.is_some()));
                    let backdrop = expr.add(SkiLang::Backdrop([backdrop_exists]));
 
-                   let mergeParams = expr.add(SkiLang::MergeParams([index, paint, backdrop]));
+                   let mergeParams = expr.add(SkiLang::MergeParams([index, paint, backdrop, bounds]));
 		   		   drawStack.push((StackOp::SaveLayer, mergeParams));
                },
                Some(Command::Restore(restore)) => {
@@ -674,6 +721,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 },
                 _ => panic!("Merge params third parameter not backdrop")
             };
+            let bounds = bounds_expr_to_proto(expr, mergeParamIds[3]);
 
             let can_reconstruct = !backdrop_exists 
                                 && paint.image_filter.is_none()
@@ -705,7 +753,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                         instruction: Some(Instruction::SaveLayer(
                                          SaveLayer{
                                              paint: Some(paint),  
-                                             suggested_bounds: None,
+                                             bounds,
                                              backdrop: None
                                          }))
                 });
@@ -738,6 +786,32 @@ fn color_expr(expr: &mut RecExpr<SkiLang>, aVal:i32, rVal:i32, gVal:i32, bVal:i3
     let g = expr.add(SkiLang::Num(gVal));
     let b = expr.add(SkiLang::Num(bVal));
     expr.add(SkiLang::Color([a, r, g, b]))
+}
+
+fn bounds_proto_to_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
+    match bounds {
+        Some(bounds) => {
+            let boundsExist = expr.add(SkiLang::Exists(true));
+
+            let left = ordered_float::NotNan::new(bounds.left).unwrap();
+            let top = ordered_float::NotNan::new(bounds.top).unwrap();
+            let right = ordered_float::NotNan::new(bounds.right).unwrap();
+            let bottom = ordered_float::NotNan::new(bounds.bottom).unwrap();
+
+            let leftExpr = expr.add(SkiLang::Float(left));
+            let topExpr = expr.add(SkiLang::Float(top));
+            let rightExpr = expr.add(SkiLang::Float(right));
+            let bottomExpr = expr.add(SkiLang::Float(bottom));
+
+            let rect = expr.add(SkiLang::Rect([leftExpr, topExpr, rightExpr, bottomExpr]));
+            expr.add(SkiLang::Bounds([boundsExist, rect]))
+        },
+        None => {
+            let boundsExist = expr.add(SkiLang::Exists(false));
+            let noOp = expr.add(SkiLang::NoOp);
+            expr.add(SkiLang::Bounds([boundsExist, noOp]))
+        }
+    }
 }
 
 fn paint_proto_to_expr(expr: &mut RecExpr<SkiLang>, skPaint: &Option<SkPaint>) -> Id {
@@ -874,6 +948,51 @@ fn get_blend_mode(expr: &RecExpr<SkiLang>, id: Id) -> i32 {
         SkiLang::BlendMode_SrcOver => BlendMode::SrcOver.into(),
         SkiLang::BlendMode_Unknown => BlendMode::Unknown.into(),
         _ => panic!("Not a valid BlendMode")
+    }
+}
+
+fn bounds_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> Option<Bounds> {
+    let bounds: Option<Bounds> = match &expr[id] {
+        SkiLang::Bounds(ids) => {
+            match &expr[ids[0]] {
+                SkiLang::Exists(true) => {
+                    Some(unpack_rect_to_bounds(&expr, ids[1]))
+                },
+                SkiLang::Exists(false) => {
+                    None
+                },
+                _ => panic!("First param of bounds not exist flag")
+            }
+        },
+        _ => panic!("Merge params 4th param is not bounds")
+    };
+    bounds
+}
+
+fn unpack_float(expr: &RecExpr<SkiLang>, id: Id) -> f64 {
+    match &expr[id] {
+        SkiLang::Float(val) => {
+            **val
+        },
+        _ => panic!("This is not a float!")
+    }
+}
+
+fn unpack_rect_to_bounds(expr: &RecExpr<SkiLang>, id: Id) -> Bounds {
+    match &expr[id] {
+        SkiLang::Rect(ids) => {
+            let left = unpack_float(expr, ids[0]);
+            let top = unpack_float(expr, ids[1]);
+            let right = unpack_float(expr, ids[2]);
+            let bottom = unpack_float(expr, ids[3]);
+            Bounds {
+                left,
+                top,
+                right,
+                bottom
+            }
+        },
+        _ => panic!("This is not a rect!")
     }
 }
 
