@@ -396,13 +396,13 @@ fn run_eqsat_and_extract(
     let root = runner.roots[0];
 
     writeln!(&mut run_info.skilang_expr, "{:#}", expr);
-    println!("EXPR: {:#}", expr);
+    // println!("EXPR: {:#}", expr);
 
     let extractor = Extractor::new(&runner.egraph, SkiLangCostFn);
     let (cost, mut optimized) = extractor.find_best(root);
 
     writeln!(&mut run_info.extracted_skilang_expr, "{:#}", optimized);
-    println!("OPT: {:#}", optimized);
+    // println!("OPT: {:#}", optimized);
 
     // Figure out how to walk a RecExpr without the ID.
     // Until then, use this roundabout way to get the optimized recexpr id.
@@ -420,7 +420,7 @@ struct SkiLangExpr {
     pub id: Id,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum StackOp {
     Surface,
     MatrixOp,
@@ -503,6 +503,9 @@ fn reduceStack(
                     },
                 };
 		   		drawStack.append(&mut stateStack);
+                if from_restore {
+                    break;
+                }
 			},
             StackOp::Save=> {
                 drawStack.push((e1_type, e1));
@@ -534,7 +537,16 @@ where
 I: Iterator<Item = &'a SkRecords> + 'a,
 {
     let mut drawStack: Vec<(StackOp, Id)> = vec![];
+    let mut count = 0;
     loop {
+        /*
+        println!("{} Stack Start", count);
+        for op in drawStack.iter() {
+            println!("{:?} {:#}", op.0, expr[op.1]);
+        }
+        println!("{} Stack END\n", count);
+        count = count + 1;
+        */
     match skRecordsIter.next() {
        Some(skRecords) => {
            match &skRecords.command {
