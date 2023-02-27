@@ -396,13 +396,13 @@ fn run_eqsat_and_extract(
     let root = runner.roots[0];
 
     writeln!(&mut run_info.skilang_expr, "{:#}", expr);
-    // println!("EXPR: {:#}", expr);
+    println!("EXPR: {:#}", expr);
 
     let extractor = Extractor::new(&runner.egraph, SkiLangCostFn);
     let (cost, mut optimized) = extractor.find_best(root);
 
     writeln!(&mut run_info.extracted_skilang_expr, "{:#}", optimized);
-    // println!("OPT: {:#}", optimized);
+    println!("OPT: {:#}", optimized);
 
     // Figure out how to walk a RecExpr without the ID.
     // Until then, use this roundabout way to get the optimized recexpr id.
@@ -464,6 +464,9 @@ fn reduceStack(
                     }
                 }
 
+                let blank = expr.add(SkiLang::Blank);
+                stateStack.push((StackOp::Surface, blank));
+
 				reduceStack(expr, drawStack, false);
                 let dst = drawStack.pop().unwrap().1;
 
@@ -498,10 +501,8 @@ fn reduceStack(
 		   	            let merged = expr.add(SkiLang::Merge([dst, src, merge_params]));
 		   		        drawStack.push((StackOp::Surface, merged));
                     },
-                }
-
+                };
 		   		drawStack.append(&mut stateStack);
-
 			},
             StackOp::Save=> {
                 drawStack.push((e1_type, e1));
@@ -572,13 +573,29 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                    let index = expr.add(SkiLang::Num(skRecords.index));
 
                    let paint = paint_proto_to_expr(expr, &save_layer.paint);
-                   let bounds = bounds_proto_to_expr(expr, &save_layer.bounds);
+
 
                    let backdrop_exists = expr.add(SkiLang::Exists(save_layer.backdrop.is_some()));
                    let backdrop = expr.add(SkiLang::Backdrop([backdrop_exists]));
 
-                   let mergeParams = expr.add(SkiLang::MergeParams([index, paint, backdrop, bounds]));
+                   // We push the saveLayer bounds to a clipRect inside the saveLayer.
+                   // TODO: Figure out if this is the right way to handle this.
+                   let saveLayerBounds = bounds_proto_to_expr(expr, &None);
+
+                   let mergeParams = expr.add(SkiLang::MergeParams([index, paint, backdrop, saveLayerBounds]));
 		   		   drawStack.push((StackOp::SaveLayer, mergeParams));
+
+                   // The clipRect simulating saveLayer bounds.
+                   if save_layer.bounds.is_some() {
+                        let clipRectBounds = bounds_proto_to_rect_expr(expr, &save_layer.bounds);
+                        let clipOp = expr.add(SkiLang::ClipOp_Intersect);
+                        let clipDoAntiAlias = expr.add(SkiLang::Exists(true));
+                        let clipRectParams = expr.add(SkiLang::ClipRectParams([clipRectBounds, clipOp, clipDoAntiAlias]));
+                        drawStack.push((StackOp::ClipRect, clipRectParams));
+
+                        let blank = expr.add(SkiLang::Blank);
+                        drawStack.push((StackOp::Surface, blank));
+                   }
                },
                Some(Command::Restore(restore)) => {
                    reduceStack(expr, &mut drawStack, true);

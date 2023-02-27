@@ -363,6 +363,8 @@ public:
 	    return;
     }
 
+
+
     template <typename T>
     static std::enable_if_t<!(T::kTags & kHasPaint_Tag), void> 
     fillSkPaintProto(const T& draw, ski_pass_proto::SkPaint *paintPb) {
@@ -464,11 +466,12 @@ class SkiPassRecordBuilder {
 class SkRecordApplier {
 public:
     SkRecordApplier(SkCanvas *canvas):
-        fDraw(canvas, nullptr, nullptr, 0, nullptr) {}
+        fDraw(canvas, nullptr, nullptr, 0, nullptr),
+        canvas(canvas) {}
 
     // src/core/SkRecordPattern::IsDraw used as reference for these.
     template <typename T>
-    std::enable_if_t<(T::kTags & kDrawWithPaint_Tag) == kDrawWithPaint_Tag, void>
+    std::enable_if_t<(T::kTags & kHasPaint_Tag) == kHasPaint_Tag && T::kType != SaveLayer_Type, void>
     operator()(T* draw) {
 	    SkPaint *paint = AsPtr(draw->paint);
 	    if (paint != nullptr && alpha != 255) {
@@ -481,12 +484,21 @@ public:
     }
 
     template <typename T>
-    std::enable_if_t<(T::kTags & kDrawWithPaint_Tag) == kDraw_Tag, void> operator()(T* draw) {
-	    fDraw(*draw);
+    std::enable_if_t<(T::kTags & kHasPaint_Tag) == kHasPaint_Tag && T::kType == SaveLayer_Type, void>
+    operator()(T* draw) {
+	    SkPaint *paint = AsPtr(draw->paint);
+	    if (paint != nullptr && alpha != 255) {
+            assert(paint->getAlpha() == 255 || paint->getAlpha() == this->alpha);
+            paint->setAlpha(this->alpha);
+	    }
+
+        canvas->saveLayer(nullptr, paint);
+        
+	    return;
     }
 
     template <typename T>
-    std::enable_if_t<!(T::kTags & kDraw_Tag), void> operator()(T* draw) {
+    std::enable_if_t<(T::kTags & kHasPaint_Tag) != kHasPaint_Tag, void> operator()(T* draw) {
 	    fDraw(*draw);
     }
 
@@ -496,6 +508,7 @@ public:
 
 private:
     SkRecords::Draw fDraw;
+    SkCanvas *canvas;
     int alpha;
 
     // Abstracts away whether the paint is always part of the command or optional.
