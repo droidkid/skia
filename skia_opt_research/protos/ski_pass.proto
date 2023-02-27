@@ -64,6 +64,10 @@ message SkRecords  {
     // SkRecord will hold SkRecords in order.
     int32 index = 1;;
 
+    message ClipRect {
+        Bounds bounds = 1;
+    };
+
     message SaveLayer {
         Bounds bounds = 1;
         SkPaint paint = 2;
@@ -81,6 +85,7 @@ message SkRecords  {
         Save save = 3;
         Restore restore = 4;
         DrawCommand draw_command = 5;
+        ClipRect clip_rect = 6;
     }
 }
 
@@ -129,6 +134,10 @@ message SkiPassInstruction {
         Backdrop backdrop = 3;
     }
 
+    message ClipRect {
+        Bounds bounds = 1;
+    }
+
     message Save {}
     message Restore {}
     oneof instruction {
@@ -136,6 +145,7 @@ message SkiPassInstruction {
         SaveLayer save_layer = 2;
         Save save = 3;
         Restore restore = 4;
+        ClipRect clip_rect = 5;
     }
 }
 

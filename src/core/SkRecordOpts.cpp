@@ -421,6 +421,18 @@ class SkiPassRecordBuilder {
             records->mutable_restore();
         }
 
+        void operator()(const SkRecords::ClipRect& command) {
+            ski_pass_proto::SkRecords *records = skipass_record->add_records();
+            records->set_index(count++);
+            auto clip_rect = records->mutable_clip_rect();
+            auto bounds = clip_rect->mutable_bounds();
+
+            bounds->set_left(command.rect.left());
+            bounds->set_right(command.rect.right());
+            bounds->set_top(command.rect.top());
+            bounds->set_bottom(command.rect.bottom());
+        }
+
         template <typename T>
             static const char* NameOf(const T&) {
 #define CASE(U) case SkRecords::U##_Type: return #U;
@@ -507,6 +519,16 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
         }
         if (instruction.has_save()) {
             canvas->save();
+        }
+        if (instruction.has_clip_rect()) {
+            canvas->clipRect(
+                SkRect::MakeLTRB(
+                    instruction.clip_rect().bounds().left(),
+                    instruction.clip_rect().bounds().top(),
+                    instruction.clip_rect().bounds().right(),
+                    instruction.clip_rect().bounds().bottom()
+                )
+            );
         }
         if (instruction.has_save_layer()) {
 	        SkPaint paint;

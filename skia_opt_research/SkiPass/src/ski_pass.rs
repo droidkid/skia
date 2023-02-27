@@ -27,6 +27,7 @@ use crate::protos::{
     ski_pass_instruction::SaveLayer,
     ski_pass_instruction::Save,
     ski_pass_instruction::Restore,
+    ski_pass_instruction::ClipRect,
     sk_records::Command, 
 };
 
@@ -74,6 +75,9 @@ define_language! {
         // TODO: Split matrix and clip ops. Right now clips are a 'matrixOp'
         // matrixOp(layer, matrixOpParams) -> return layer after applying transform on layer 
         "matrixOp" = MatrixOp([Id; 2]),
+        // clipRect(layer, clipRectParams) -> return layer after applying clip on layer 
+        // Right now clipRectParam is just a rect, but it could be it's own type later on.
+        "clipRect" = ClipRect([Id; 2]),
         // concat(layer1, layer2) -> return layer resulting from sequential execution of
         // instructions(layer1), instructions(layer2)
         "concat" = Concat([Id; 2]),
@@ -412,6 +416,7 @@ struct SkiLangExpr {
 enum StackOp {
     Surface,
     MatrixOp,
+    ClipRect,
     Save,
 	SaveLayer,
 }
@@ -444,6 +449,7 @@ fn reduceStack(
                 for op in drawStack.iter() {
                 	match op.0 {
                     	StackOp::MatrixOp => stateStack.push(op.clone()),
+                    	StackOp::ClipRect => stateStack.push(op.clone()),
                         StackOp::Save => stateStack.push(op.clone()),
                         StackOp::SaveLayer => stateStack.clear(),
                         _ => {}
@@ -494,11 +500,15 @@ fn reduceStack(
                 if from_restore {
                     break;
                 }
-            }
+            },
             StackOp::MatrixOp => {
                 let nxt = expr.add(SkiLang::MatrixOp([e1, e2]));
                 drawStack.push((StackOp::Surface, nxt));
-            }
+            },
+            StackOp::ClipRect => {
+                let nxt = expr.add(SkiLang::ClipRect([e1, e2]));
+                drawStack.push((StackOp::Surface, nxt));
+            },
             StackOp::Surface => {
                 let nxt = expr.add(SkiLang::Concat([e2, e1]));
                 drawStack.push((StackOp::Surface, nxt));
@@ -521,10 +531,10 @@ I: Iterator<Item = &'a SkRecords> + 'a,
            match &skRecords.command {
                Some(Command::DrawCommand(draw_command)) => {
                    match draw_command.name.as_str() {
-                       "ClipPath" | "ClipRRect" | "ClipRect" | "Concat44" => {
+                       "ClipPath" | "ClipRRect" | "Concat44" => {
                            let matrixOpIndex = expr.add(SkiLang::Num(skRecords.index));
                            let matrixOpParams = expr.add(SkiLang::MatrixOpParams([matrixOpIndex]));
-                            drawStack.push((StackOp::MatrixOp, matrixOpParams));
+                           drawStack.push((StackOp::MatrixOp, matrixOpParams));
                        },
                    _ => {
                            let drawCommandIndex = expr.add(SkiLang::Num(skRecords.index));
@@ -533,6 +543,10 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                            drawStack.push((StackOp::Surface, drawOpCommand));
                        }
                    }
+               },
+               Some(Command::ClipRect(clip_rect)) => {
+                    let clipOpParams = bounds_proto_to_rect_expr(expr, &clip_rect.bounds);
+                    drawStack.push((StackOp::ClipRect, clipOpParams));
                },
                Some(Command::Save(save)) => {
                     drawStack.push((StackOp::Save, expr.add(SkiLang::NoOp)));
@@ -644,6 +658,25 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
             instructions.append(&mut matrixOpInstructions);
+            instructions.append(&mut targetSurface.instructions);
+
+            SkiPassSurface {
+                instructions,
+                modified_matrix: true,
+            }
+        },
+        SkiLang::ClipRect(ids) => {
+            let mut targetSurface = build_program(&expr, ids[0]);
+            let mut bounds: Option<Bounds> = Some(unpack_rect_to_bounds(&expr, ids[1]));
+
+            let mut instructions: Vec<SkiPassInstruction> = vec![];
+            instructions.push(SkiPassInstruction {
+                instruction: Some(Instruction::ClipRect({
+                    ClipRect {
+                        bounds
+                    }
+                }))
+            });
             instructions.append(&mut targetSurface.instructions);
 
             SkiPassSurface {
@@ -773,7 +806,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             panic!("An Alpha survived extraction! THIS SHOULD NOT HAPPEN");
         },
         _ => {
-            panic!("Badly constructed Recexpr");
+            panic!("Badly constructed Recexpr {:?} ", node);
         }
     }
 }
@@ -788,7 +821,7 @@ fn color_expr(expr: &mut RecExpr<SkiLang>, aVal:i32, rVal:i32, gVal:i32, bVal:i3
     expr.add(SkiLang::Color([a, r, g, b]))
 }
 
-fn bounds_proto_to_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
+fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
     match bounds {
         Some(bounds) => {
             let boundsExist = expr.add(SkiLang::Exists(true));
@@ -803,7 +836,19 @@ fn bounds_proto_to_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) ->
             let rightExpr = expr.add(SkiLang::Float(right));
             let bottomExpr = expr.add(SkiLang::Float(bottom));
 
-            let rect = expr.add(SkiLang::Rect([leftExpr, topExpr, rightExpr, bottomExpr]));
+            expr.add(SkiLang::Rect([leftExpr, topExpr, rightExpr, bottomExpr]))
+        },
+        None => {
+            panic!("There is no Bounds Proto to unpack!");
+        }
+    }
+}
+
+fn bounds_proto_to_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
+    match bounds {
+        Some(value) => {
+            let boundsExist = expr.add(SkiLang::Exists(true));
+            let rect = bounds_proto_to_rect_expr(expr, bounds);
             expr.add(SkiLang::Bounds([boundsExist, rect]))
         },
         None => {
