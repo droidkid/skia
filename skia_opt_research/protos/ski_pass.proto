@@ -23,6 +23,12 @@ enum BlendMode {
     SRC = 2;
 }
 
+enum ClipOp {
+    UNKNOWN_CLIP_OP = 0;
+    DIFFERENCE = 1;
+    INTERSECT = 2;
+}
+
 message SkPaint {
     SkColor color = 1;
     
@@ -66,6 +72,8 @@ message SkRecords  {
 
     message ClipRect {
         Bounds bounds = 1;
+        ClipOp clip_op = 2;
+        bool do_anti_alias = 3;
     };
 
     message SaveLayer {
@@ -136,6 +144,8 @@ message SkiPassInstruction {
 
     message ClipRect {
         Bounds bounds = 1;
+        ClipOp clip_op = 2;
+        bool do_anti_alias = 3;
     }
 
     message Save {}

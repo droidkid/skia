@@ -431,6 +431,20 @@ class SkiPassRecordBuilder {
             bounds->set_right(command.rect.right());
             bounds->set_top(command.rect.top());
             bounds->set_bottom(command.rect.bottom());
+
+            switch (command.opAA.op()) {
+                case(SkClipOp::kDifference):
+                    clip_rect->set_clip_op(ski_pass_proto::ClipOp::DIFFERENCE);
+                    break;
+                case(SkClipOp::kIntersect):
+                    clip_rect->set_clip_op(ski_pass_proto::ClipOp::INTERSECT);
+                    break;
+                default:
+                    assert(0);
+                    clip_rect->set_clip_op(ski_pass_proto::ClipOp::UNKNOWN_CLIP_OP);
+                    break;
+            }
+            clip_rect->set_do_anti_alias(command.opAA.aa());
         }
 
         template <typename T>
@@ -521,14 +535,25 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
             canvas->save();
         }
         if (instruction.has_clip_rect()) {
-            canvas->clipRect(
-                SkRect::MakeLTRB(
-                    instruction.clip_rect().bounds().left(),
-                    instruction.clip_rect().bounds().top(),
-                    instruction.clip_rect().bounds().right(),
-                    instruction.clip_rect().bounds().bottom()
-                )
+            SkRect rect = SkRect::MakeLTRB(
+                instruction.clip_rect().bounds().left(),
+                instruction.clip_rect().bounds().top(),
+                instruction.clip_rect().bounds().right(),
+                instruction.clip_rect().bounds().bottom()
             );
+
+            SkClipOp clipOp;
+            switch(instruction.clip_rect().clip_op()) {
+                case ski_pass_proto::DIFFERENCE:
+                    clipOp = SkClipOp::kDifference;
+                    break;
+                case ski_pass_proto::INTERSECT:
+                case ski_pass_proto::UNKNOWN_CLIP_OP:
+                    clipOp = SkClipOp::kIntersect;
+                    break;
+            }
+            bool do_anti_alias = instruction.clip_rect().do_anti_alias();
+            canvas->clipRect(rect, clipOp, do_anti_alias);
         }
         if (instruction.has_save_layer()) {
 	        SkPaint paint;

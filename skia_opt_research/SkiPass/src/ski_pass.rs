@@ -16,6 +16,7 @@ use crate::protos::{
     SkiPassRunInfo,
     SkiPassRunResult,
     BlendMode,
+    ClipOp,
     sk_paint::Blender,
     sk_paint::ImageFilter,
     sk_paint::ColorFilter,
@@ -62,6 +63,7 @@ define_language! {
         // make sure to add a . (1.0 instead of 1)
         Num(i32),
         Float(ordered_float::NotNan<f64>),
+        // TODO: Rename to Bool
         Exists(bool),
         "noOp" = NoOp,
         "blank" = Blank,
@@ -70,13 +72,16 @@ define_language! {
         "blendMode_src" = BlendMode_Src,
         "blendMode_unknown" = BlendMode_Unknown,
         // -------BLEND MODES SYMBOLS END --------//
+        // ------ CLIP_OP SYMBOLS BEGIN --------//
+        "clipOp_diff" = ClipOp_Diff,
+        "clipOp_intersect" = ClipOp_Intersect,
+        // -------CLIP OP SYMBOLS END --------//
         // drawCommand(index, paint)
         "drawCommand" = DrawCommand([Id; 2]),
         // TODO: Split matrix and clip ops. Right now clips are a 'matrixOp'
         // matrixOp(layer, matrixOpParams) -> return layer after applying transform on layer 
         "matrixOp" = MatrixOp([Id; 2]),
         // clipRect(layer, clipRectParams) -> return layer after applying clip on layer 
-        // Right now clipRectParam is just a rect, but it could be it's own type later on.
         "clipRect" = ClipRect([Id; 2]),
         // concat(layer1, layer2) -> return layer resulting from sequential execution of
         // instructions(layer1), instructions(layer2)
@@ -116,6 +121,9 @@ define_language! {
         "alpha" = Alpha([Id; 2]), // alphaChannel, layer
         // MergeParams([index, paint, backdrop, bounds])
         "mergeParams" = MergeParams([Id; 4]),
+        // ClipParams
+        // ClipRectParams([bounds, clipOp, doAntiAlias])
+        "clipRectParams" = ClipRectParams([Id; 3]),
         // MatrixOpParams([index])  - eventually add other matrix stuff.
         "matrixOpParams" = MatrixOpParams([Id; 1]),
     }
@@ -418,7 +426,7 @@ enum StackOp {
     MatrixOp,
     ClipRect,
     Save,
-	SaveLayer,
+    SaveLayer,
 }
 
 fn reduceStack(
@@ -545,8 +553,17 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                    }
                },
                Some(Command::ClipRect(clip_rect)) => {
-                    let clipOpParams = bounds_proto_to_rect_expr(expr, &clip_rect.bounds);
-                    drawStack.push((StackOp::ClipRect, clipOpParams));
+                    let clipOpRect = bounds_proto_to_rect_expr(expr, &clip_rect.bounds);
+                    let clipOp = if clip_rect.clip_op == ClipOp::Difference.into() {
+                        expr.add(SkiLang::ClipOp_Diff)
+                    } else if clip_rect.clip_op == ClipOp::Intersect.into() {
+                        expr.add(SkiLang::ClipOp_Intersect)
+                    } else {
+                        panic!("Unknown clipOp mode")
+                    };
+                    let isAntiAlias = expr.add(SkiLang::Exists(clip_rect.do_anti_alias));
+                    let clipRectParams = expr.add(SkiLang::ClipRectParams([clipOpRect, clipOp, isAntiAlias]));
+                    drawStack.push((StackOp::ClipRect, clipRectParams));
                },
                Some(Command::Save(save)) => {
                     drawStack.push((StackOp::Save, expr.add(SkiLang::NoOp)));
@@ -667,13 +684,30 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         },
         SkiLang::ClipRect(ids) => {
             let mut targetSurface = build_program(&expr, ids[0]);
-            let mut bounds: Option<Bounds> = Some(unpack_rect_to_bounds(&expr, ids[1]));
+            let clipRectParams = match &expr[ids[1]] {
+                SkiLang::ClipRectParams(ids) => ids,
+                _ => panic!("ClipRect first param is not ClipRect")
+            };
+
+            let bounds: Option<Bounds> = Some(unpack_rect_to_bounds(&expr, clipRectParams[0]));
+            let clip_op : i32 = match &expr[clipRectParams[1]] {
+                SkiLang::ClipOp_Intersect => ClipOp::Intersect.into(),
+                SkiLang::ClipOp_Diff => ClipOp::Difference.into(),
+                _ => panic!("ClipOp is invalid")
+            };
+
+            let do_anti_alias : bool = match &expr[clipRectParams[2]] {
+                SkiLang::Exists(val) => *val,
+                _ => panic!("ClipOp third parameter is not bool (doAntiAlias)"),
+            };
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
             instructions.push(SkiPassInstruction {
                 instruction: Some(Instruction::ClipRect({
                     ClipRect {
-                        bounds
+                        bounds,
+                        clip_op,
+                        do_anti_alias
                     }
                 }))
             });
