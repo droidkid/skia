@@ -14,7 +14,6 @@ use std::slice;
 
 use protos::{
     SkRecord, 
-    SkiPassProgram, 
     SkiPassRunResult, 
     SkiPassRunInfo,
     ski_pass_run_info::SkiPassRunError,
@@ -41,7 +40,7 @@ pub extern "C" fn ski_pass_optimize(data_ptr: *const u8, len: size_t) -> SkiPass
         Ok(sk_record) => {
             skipass_run = ski_pass::optimize(sk_record);
         }
-        Err(e) => {
+        Err(_e) => {
             let mut run_info = SkiPassRunInfo::default();
             run_info.status = SkiPassRunStatus::Failed as i32;
             run_info.error = Some(SkiPassRunError {

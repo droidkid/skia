@@ -6,28 +6,10 @@ use crate::ski_lang_converters::{
     bounds_proto_to_rect_expr,
     bounds_expr_to_proto,
     paint_proto_to_expr,
-    color_proto_to_expr,
-    unpack_float,
-    unpack_rect_to_bounds,
 };
 use crate::protos::{
-    SkPaint,
-    Bounds,
-    SkColor,
-    SkRecord, 
-    SkRecords, 
-    SkiPassInstruction,
-    SkiPassProgram, 
-    SkiPassRunInfo,
-    SkiPassRunResult,
-    BlendMode,
+    SkRecords,
     ClipOp,
-    sk_paint::Blender,
-    sk_paint::ImageFilter,
-    sk_paint::ColorFilter,
-    sk_paint::PathEffect,
-    sk_paint::MaskFilter,
-    sk_paint::Shader,
     sk_records::Command, 
 };
 
@@ -53,7 +35,7 @@ where
 I: Iterator<Item = &'a SkRecords> + 'a,
 {
     let mut drawStack: Vec<(StackOp, Id)> = vec![];
-    let mut count = 0;
+    let _count = 0;
     loop {
 
     match skRecordsIter.next() {
@@ -87,7 +69,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     let clipRectParams = expr.add(SkiLang::ClipRectParams([clipOpRect, clipOp, isAntiAlias]));
                     drawStack.push((StackOp::ClipRect, clipRectParams));
                },
-               Some(Command::Save(save)) => {
+               Some(Command::Save(_save)) => {
                     drawStack.push((StackOp::Save, expr.add(SkiLang::NoOp)));
                },
                Some(Command::SaveLayer(save_layer)) => {
@@ -118,7 +100,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                         drawStack.push((StackOp::Surface, blank));
                    }
                },
-               Some(Command::Restore(restore)) => {
+               Some(Command::Restore(_restore)) => {
                    reduceStack(expr, &mut drawStack, true);
                },
                None => {}
@@ -183,7 +165,7 @@ fn reduceStack(
                 };
 
                 match bounds {
-                    Some(bounds) => {
+                    Some(_bounds) => {
                         // TODO: Add a clipRect here.
                         // Remove the bounds from merge_params
                         let corrected_merge_params = match expr[merge_params] {

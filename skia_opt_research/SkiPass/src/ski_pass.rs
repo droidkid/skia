@@ -1,7 +1,7 @@
 use egg::*;
 use std::error::Error;
-use std::fmt;
-use prost::Message;
+
+
 use std::fmt::Write;
 
 use crate::protos;
@@ -10,7 +10,6 @@ use crate::protos::{
     Bounds,
     SkColor,
     SkRecord, 
-    SkRecords, 
     SkiPassInstruction,
     SkiPassProgram, 
     SkiPassRunInfo,
@@ -28,8 +27,7 @@ use crate::protos::{
     ski_pass_instruction::SaveLayer,
     ski_pass_instruction::Save,
     ski_pass_instruction::Restore,
-    ski_pass_instruction::ClipRect,
-    sk_records::Command, 
+    ski_pass_instruction::ClipRect, 
 };
 use crate::ski_lang::SkiLang;
 use crate::ski_lang::make_rules;
@@ -45,7 +43,7 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
 
     skiRunInfo.input_record = Some(record.clone());
 
-    let id = build_expr(&mut record.records.iter(), &mut expr);
+    let _id = build_expr(&mut record.records.iter(), &mut expr);
 
     match run_eqsat_and_extract(&expr, &mut skiRunInfo) {
         Ok(optExpr) => {
@@ -54,7 +52,7 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
             skiPassRunResult.program = Some(program);
             skiPassRunResult.run_info = Some(skiRunInfo);
         }
-        Err(e) => {}
+        Err(_e) => {}
     }
     skiPassRunResult
 }
@@ -64,14 +62,14 @@ fn run_eqsat_and_extract(
     expr: &RecExpr<SkiLang>,
     run_info: &mut protos::SkiPassRunInfo,
     ) -> Result<SkiLangExpr, Box<dyn Error>> {
-    let mut runner = Runner::default().with_expr(expr).run(&make_rules());
+    let runner = Runner::default().with_expr(expr).run(&make_rules());
     let root = runner.roots[0];
 
     writeln!(&mut run_info.skilang_expr, "{:#}", expr);
     // println!("EXPR: {:#}", expr);
 
     let extractor = Extractor::new(&runner.egraph, SkiLangCostFn);
-    let (cost, mut optimized) = extractor.find_best(root);
+    let (_cost, optimized) = extractor.find_best(root);
 
     writeln!(&mut run_info.extracted_skilang_expr, "{:#}", optimized);
     // println!("OPT: {:#}", optimized);
@@ -157,7 +155,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 modified_matrix: false,
             }
         },
-        SkiLang::DrawCommand(ids) => {
+        SkiLang::DrawCommand(_ids) => {
             SkiPassSurface {
                 instructions: to_instructions(&expr, id),  // NOTE: id, not ids[0] -> we are parsing the command, not its args
                 modified_matrix: false,
@@ -330,7 +328,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             }
 
         },
-        SkiLang::Alpha(ids) => {
+        SkiLang::Alpha(_ids) => {
             panic!("An Alpha survived extraction! THIS SHOULD NOT HAPPEN");
         },
         _ => {

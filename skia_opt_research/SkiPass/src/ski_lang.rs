@@ -324,8 +324,8 @@ impl CostFunction<SkiLang> for SkiLangCostFn {
             C: FnMut(Id) -> Self::Cost
     {
         let op_cost = match enode {
-            SkiLang::Alpha(ids) => 100000000.0,
-            SkiLang::Merge(ids) => 1.0,
+            SkiLang::Alpha(_ids) => 100000000.0,
+            SkiLang::Merge(_ids) => 1.0,
             _ => 0.0
         };
         enode.fold(op_cost, |sum, id| sum + costs(id))

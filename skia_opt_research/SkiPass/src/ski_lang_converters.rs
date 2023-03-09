@@ -4,28 +4,13 @@ use crate::ski_lang::SkiLang;
 use crate::protos::{
     SkPaint,
     Bounds,
-    SkColor,
-    SkRecord, 
-    SkRecords, 
-    SkiPassInstruction,
-    SkiPassProgram, 
-    SkiPassRunInfo,
-    SkiPassRunResult,
-    BlendMode,
-    ClipOp,
-    sk_paint::Blender,
-    sk_paint::ImageFilter,
-    sk_paint::ColorFilter,
-    sk_paint::PathEffect,
-    sk_paint::MaskFilter,
-    sk_paint::Shader,
-    sk_records::Command, 
+    BlendMode, 
 };
 
 pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
     match bounds {
         Some(bounds) => {
-            let boundsExist = expr.add(SkiLang::Exists(true));
+            let _boundsExist = expr.add(SkiLang::Exists(true));
 
             let left = ordered_float::NotNan::new(bounds.left).unwrap();
             let top = ordered_float::NotNan::new(bounds.top).unwrap();
@@ -47,7 +32,7 @@ pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bo
 
 pub fn bounds_proto_to_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
     match bounds {
-        Some(value) => {
+        Some(_value) => {
             let boundsExist = expr.add(SkiLang::Exists(true));
             let rect = bounds_proto_to_rect_expr(expr, bounds);
             expr.add(SkiLang::Bounds([boundsExist, rect]))
