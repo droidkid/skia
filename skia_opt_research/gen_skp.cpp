@@ -1,5 +1,8 @@
 #include <iostream>
 #include "include/core/SkCanvas.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkImageFilter.h"
+#include "include/effects/SkImageFilters.h"
 #include "include/core/SkData.h"
 #include "include/core/SkStream.h"
 #include "include/core/SkSurface.h"
@@ -193,14 +196,14 @@ void draw_008_noOpSaveLayerRemove(SkCanvas *canvas) {
     canvas->restore();
 }
 
-void recordOptsTest_SingleNoopSaveRestore(SkCanvas *canvas) {
+void draw_009_recordOptsTest_SingleNoopSaveRestore(SkCanvas *canvas) {
     // This is effectively a NoOp. 
     canvas->save();
     canvas->clipRect(SkRect::MakeWH(200, 200));
     canvas->restore();
 }
 
-void recordOptsTest_NoopSaveRestores(SkCanvas *canvas) {
+void draw_010_recordOptsTest_NoopSaveRestores(SkCanvas *canvas) {
     canvas->save();
 
         canvas->save();
@@ -215,7 +218,7 @@ void recordOptsTest_NoopSaveRestores(SkCanvas *canvas) {
     canvas->restore();
 }
 
-void recordOptsTest_NoopSaveLayerDrawRestore(SkCanvas *canvas) {
+void draw_011_recordOptsTest_NoopSaveLayerDrawRestore(SkCanvas *canvas) {
 	// Copied from RecordOptsTest.cpp
     SkRect bounds = SkRect::MakeWH(100, 200);
     SkRect   draw = SkRect::MakeWH(50, 60);
@@ -262,7 +265,7 @@ void recordOptsTest_NoopSaveLayerDrawRestore(SkCanvas *canvas) {
     canvas->restore();
 }
 
-void recordOptsTest_NotOnlyAlphaPaintSaveLayer(SkCanvas *canvas) {
+void draw_012_recordOptsTest_NotOnlyAlphaPaintSaveLayer(SkCanvas *canvas) {
 	// Copied from RecordOptsTest.cpp
     SkRect   draw1 = SkRect::MakeWH(50, 60);
     SkRect   draw2 = SkRect::MakeWH(150, 60);
@@ -284,6 +287,42 @@ void recordOptsTest_NotOnlyAlphaPaintSaveLayer(SkCanvas *canvas) {
     canvas->restore();
 }
 
+void draw_013_captureSaveLayerState_scaleOutside(SkCanvas *canvas) {
+    SkPaint paint;
+    paint.setColor(SkColorSetRGB(255, 0, 0));
+    SkFont font(nullptr, 80);
+    font.setScaleX(.3f);
+
+  	SkPaint lPaint;
+  	sk_sp<SkImageFilter> shadowFilter = SkImageFilters::DropShadow(
+             5.0f, 0.0f, 5.0f, 0.0f, SK_ColorBLUE, nullptr);
+	lPaint.setImageFilter(shadowFilter);
+    SkRect rect[1] = {{ 10, 20, 90, 110 }};
+
+    canvas->scale(2.0, 2.0);
+  	    canvas->saveLayer(nullptr, &lPaint);
+        canvas->drawString("Hello", rect[0].fLeft + 10, rect[0].fBottom - 10, font, paint);
+    canvas->restore();
+}
+
+void draw_014_captureSaveLayerState_scaleInside(SkCanvas *canvas) {
+    SkPaint paint;
+    paint.setColor(SkColorSetRGB(255, 0, 0));
+    SkFont font(nullptr, 80);
+    font.setScaleX(.3f);
+
+  	SkPaint lPaint;
+  	sk_sp<SkImageFilter> shadowFilter = SkImageFilters::DropShadow(
+             5.0f, 0.0f, 5.0f, 0.0f, SK_ColorBLUE, nullptr);
+	lPaint.setImageFilter(shadowFilter);
+    SkRect rect[1] = {{ 10, 20, 90, 110 }};
+
+  	canvas->saveLayer(nullptr, &lPaint);
+        canvas->scale(2.0, 2.0);
+        canvas->drawString("Hello", rect[0].fLeft + 10, rect[0].fBottom - 10, font, paint);
+    canvas->restore();
+}
+
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
     initializeEventTracingForTools();
@@ -299,8 +338,11 @@ int main(int argc, char **argv) {
     raster(512, 512, draw_008_noOpSaveLayerRemove, FLAGS_dir[0], "008_noOpSave.skp");
 
     // Some tests from RecordOptsTest.cpp
-    raster(512, 512, recordOptsTest_SingleNoopSaveRestore, FLAGS_dir[0], "SingleNoopSaveRestore.skp");
-    raster(512, 512, recordOptsTest_NoopSaveRestores, FLAGS_dir[0], "NoopSaveRestores.skp");
-    raster(512, 512, recordOptsTest_NoopSaveLayerDrawRestore, FLAGS_dir[0], "NoopSaveLayerDrawRestore.skp");
-    raster(512, 512, recordOptsTest_NotOnlyAlphaPaintSaveLayer, FLAGS_dir[0], "NotOnlyAlphaPaintSaveLayer.skp");
+    raster(512, 512, draw_009_recordOptsTest_SingleNoopSaveRestore, FLAGS_dir[0], "SingleNoopSaveRestore.skp");
+    raster(512, 512, draw_010_recordOptsTest_NoopSaveRestores, FLAGS_dir[0], "NoopSaveRestores.skp");
+    raster(512, 512, draw_011_recordOptsTest_NoopSaveLayerDrawRestore, FLAGS_dir[0], "NoopSaveLayerDrawRestore.skp");
+    raster(512, 512, draw_012_recordOptsTest_NotOnlyAlphaPaintSaveLayer, FLAGS_dir[0], "NotOnlyAlphaPaintSaveLayer.skp");
+
+    raster(512, 512, draw_013_captureSaveLayerState_scaleOutside, FLAGS_dir[0], "013_captureSaveLayerState_scaleOutside.skp");
+    raster(512, 512, draw_014_captureSaveLayerState_scaleInside, FLAGS_dir[0], "014_captureSaveLayerState_scaleInside.skp");
 }
