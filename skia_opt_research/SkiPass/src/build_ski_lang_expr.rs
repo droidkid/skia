@@ -20,6 +20,7 @@ pub struct SkiLangExpr {
 
 #[derive(Clone, Debug)]
 enum StackOp {
+    State,
     Surface,
     MatrixOp,
     ClipRect,
@@ -81,11 +82,12 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                    let backdrop_exists = expr.add(SkiLang::Exists(save_layer.backdrop.is_some()));
                    let backdrop = expr.add(SkiLang::Backdrop([backdrop_exists]));
 
-                   // We push the saveLayer bounds to a clipRect inside the saveLayer.
-                   // TODO: Figure out if this is the right way to handle this.
                    let saveLayerBounds = bounds_proto_to_expr(expr, &None);
 
-                   let mergeParams = expr.add(SkiLang::MergeParams([index, paint, backdrop, saveLayerBounds]));
+                   // The stack will fill in the right state, for now we put in a identity state inside.
+                   let stateAtMerge = expr.add(SkiLang::BlankState);
+
+                   let mergeParams = expr.add(SkiLang::MergeParams([index, paint, backdrop, saveLayerBounds, stateAtMerge]));
 		   		   drawStack.push((StackOp::SaveLayer, mergeParams));
 
                    // The clipRect simulating saveLayer bounds.
@@ -113,6 +115,33 @@ I: Iterator<Item = &'a SkRecords> + 'a,
     drawStack[0].1
 }
 
+fn reduceStateStack(
+    expr: &mut RecExpr<SkiLang>,
+    stateStack : &mut Vec<(StackOp, Id)>, 
+) {
+    stateStack.push((StackOp::State, expr.add(SkiLang::BlankState)));
+    while stateStack.len() != 1 {
+        let (e1_type, e1) = stateStack.pop().unwrap();
+        let (e2_type, e2) = stateStack.pop().unwrap();
+        match e2_type {
+            StackOp::MatrixOp => {
+                let nxt = expr.add(SkiLang::MatrixOp([e1, e2]));
+                stateStack.push((StackOp::State, nxt));
+            },
+            StackOp::ClipRect => {
+                let nxt = expr.add(SkiLang::ClipRect([e1, e2]));
+                stateStack.push((StackOp::State, nxt));
+            },
+            StackOp::Save => {
+                stateStack.push((e1_type, e1));
+            },
+            _ => {
+                panic!("StateStack has non-state ops!");
+            },
+        };
+    }
+}
+
 fn reduceStack(
     expr: &mut RecExpr<SkiLang>,
     drawStack : &mut Vec<(StackOp, Id)>, 
@@ -125,7 +154,7 @@ fn reduceStack(
         let (e2_type, e2) = drawStack.pop().unwrap();
         match e2_type {
 			StackOp::SaveLayer => {
-				let tmp_src = e1;
+				let src = e1;
 				let merge_params = e2;
 
                 if !from_restore {
@@ -149,43 +178,28 @@ fn reduceStack(
                 }
 
                 let blank = expr.add(SkiLang::Blank);
-                stateStack.push((StackOp::Surface, blank));
 
 				reduceStack(expr, drawStack, false);
                 let dst = drawStack.pop().unwrap().1;
-
-                let mut apply_state_stack = stateStack.clone();
-                apply_state_stack.push((StackOp::Surface, tmp_src));
-                reduceStack(expr, &mut apply_state_stack, false);
-                let src = apply_state_stack.pop().unwrap().1;
 
                 let bounds = match expr[merge_params] {
                     SkiLang::MergeParams(ids) => bounds_expr_to_proto(expr, ids[3]),
                     _ => panic!("SaveLayer stack does not have mergeParams")
                 };
 
-                match bounds {
-                    Some(_bounds) => {
-                        // TODO: Add a clipRect here.
-                        // Remove the bounds from merge_params
-                        let corrected_merge_params = match expr[merge_params] {
-                            SkiLang::MergeParams(ids) => {
-                                let exists = expr.add(SkiLang::Exists(false));
-                                let boundRect = expr.add(SkiLang::NoOp);
-                                let bounds = expr.add(SkiLang::Bounds([exists, boundRect]));
-                                expr.add(SkiLang::MergeParams([ids[0], ids[1], ids[2], bounds]))
-                            },
-                            _ => panic!("SaveLayer stack does not have mergeParams")
+                let mut mergeStateStack = stateStack.clone();
+                reduceStateStack(expr, &mut mergeStateStack);
+                let mergeState = mergeStateStack.pop().unwrap().1;
 
-                        };
-		   	            let merged = expr.add(SkiLang::Merge([dst, src, corrected_merge_params]));
-		   		        drawStack.push((StackOp::Surface, merged));
+                let corrected_merge_params = match expr[merge_params] {
+                    SkiLang::MergeParams(ids) => {
+                        expr.add(SkiLang::MergeParams([ids[0], ids[1], ids[2], ids[3], mergeState]))
                     },
-                    None => {
-		   	            let merged = expr.add(SkiLang::Merge([dst, src, merge_params]));
-		   		        drawStack.push((StackOp::Surface, merged));
-                    },
+                    _ => panic!("SaveLayer stack does not have mergeParams")
                 };
+		   	    let merged = expr.add(SkiLang::Merge([dst, src, corrected_merge_params]));
+		   		drawStack.push((StackOp::Surface, merged));
+
 		   		drawStack.append(&mut stateStack);
                 if from_restore {
                     break;
@@ -208,6 +222,9 @@ fn reduceStack(
             StackOp::Surface => {
                 let nxt = expr.add(SkiLang::Concat([e2, e1]));
                 drawStack.push((StackOp::Surface, nxt));
+            },
+            StackOp::State => {
+                panic!("Trying to reduce a stateStack in drawStack method");
             }
         };
     }

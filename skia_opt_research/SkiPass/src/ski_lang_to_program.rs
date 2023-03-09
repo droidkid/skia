@@ -153,6 +153,9 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 SkiLang::MergeParams(ids) => ids,
                 _ => panic!("Merge parameter is not MergeParams")
             };
+
+            let mut reconstructStateInstructions = build_program(expr, mergeParamIds[4]).instructions;
+
             let index = match &expr[mergeParamIds[0]] {
                 SkiLang::Num(index) => *index,
                 _ => panic!("Merge Params first parameter not index")
@@ -169,6 +172,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             };
             let bounds = bounds_expr_to_proto(expr, mergeParamIds[3]);
 
+            let mut src_instructions: Vec<SkiPassInstruction> = vec![];
             let can_reconstruct = !backdrop_exists 
                                 && paint.image_filter.is_none()
                                 && paint.color_filter.is_none()
@@ -180,7 +184,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                                     BlendMode::SrcOver.into());
 
             if !can_reconstruct {
-                instructions.push(SkiPassInstruction {
+                src_instructions.push(SkiPassInstruction {
                     instruction: Some(Instruction::CopyRecord(
                         SkiPassCopyRecord {
                              index,
@@ -189,12 +193,12 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                          }
                     )),
                 });
-                instructions.append(&mut src.instructions);
-                instructions.push(SkiPassInstruction {
+                src_instructions.append(&mut src.instructions);
+                src_instructions.push(SkiPassInstruction {
                     instruction: Some(Instruction::Restore(Restore{}))
                 });
             } else {
-                instructions.push(
+                src_instructions.push(
                     SkiPassInstruction {
                         instruction: Some(Instruction::SaveLayer(
                                          SaveLayer{
@@ -203,11 +207,24 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                                              backdrop: None
                                          }))
                 });
-                instructions.append(&mut src.instructions);
-                instructions.push(SkiPassInstruction {
+                src_instructions.append(&mut src.instructions);
+                src_instructions.push(SkiPassInstruction {
                     instruction: Some(Instruction::Restore(Restore{}))
                 });
             };
+
+            if reconstructStateInstructions.len() > 0 {
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Save(Save{}))
+                });
+                instructions.append(&mut reconstructStateInstructions);
+                instructions.append(&mut src_instructions);
+                instructions.push(SkiPassInstruction {
+                    instruction: Some(Instruction::Restore(Restore{}))
+                });
+            } else {
+                instructions.append(&mut src_instructions);
+            }
             
             SkiPassSurface {
                 instructions,
@@ -217,6 +234,12 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         },
         SkiLang::Alpha(_ids) => {
             panic!("An Alpha survived extraction! THIS SHOULD NOT HAPPEN");
+        },
+        SkiLang::BlankState => {
+            SkiPassSurface {
+                instructions: vec![],
+                modified_matrix: false
+            }
         },
         _ => {
             panic!("Badly constructed Recexpr {:?} ", node);
@@ -228,6 +251,9 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
     let node = &expr[id];
     match node {
         SkiLang::NoOp => {
+            vec![]
+        },
+        SkiLang::BlankState => {
             vec![]
         },
         SkiLang::MatrixOpParams(ids) => {

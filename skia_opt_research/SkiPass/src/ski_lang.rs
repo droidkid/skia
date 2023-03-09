@@ -11,7 +11,10 @@ define_language! {
         // TODO: Rename to Bool
         Exists(bool),
         "noOp" = NoOp,
+        // TODO: Rename to BlankSurface
         "blank" = Blank,
+        // blankState
+        "blankState" = BlankState, 
         // ------ BLEND_MODE SYMBOLS BEGIN --------//
         "blendMode_srcOver" = BlendMode_SrcOver,
         "blendMode_src" = BlendMode_Src,
@@ -64,8 +67,8 @@ define_language! {
         // Extraction
         // alpha(layer, value) -> apply transparency of value on layer
         "alpha" = Alpha([Id; 2]), // alphaChannel, layer
-        // MergeParams([index, paint, backdrop, bounds])
-        "mergeParams" = MergeParams([Id; 4]),
+        // MergeParams([index, paint, backdrop, bounds, state])
+        "mergeParams" = MergeParams([Id; 5]),
         // ClipParams
         // ClipRectParams([bounds, clipOp, doAntiAlias])
         "clipRectParams" = ClipRectParams([Id; 3]),
@@ -114,6 +117,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                             (backdrop false)
                             (bounds false ?boundRect)
+                            ?stateVars
                         )
                     )" 
                  => 
@@ -165,6 +169,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                             (backdrop false)
                             (bounds false ?boundRect)
+                            ?stateVars
                         )
                     )" 
                  => 
@@ -202,6 +207,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                             (backdrop false)
                             (bounds false ?boundRect)
+                            ?stateVars
                         )
                     )" 
                  => 
@@ -221,6 +227,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                             (backdrop false)
                             (bounds false ?boundRect)
+                            ?stateVars
                         )
                     )"),
         // TODO: MULTIPLY ALPHAS!!!
@@ -241,6 +248,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                             (backdrop false)
                             (bounds false ?boundRect)
+                            ?stateVars
                         )
                     )" 
                  => 
@@ -260,6 +268,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                             (backdrop false)
                             (bounds false ?boundRect)
+                            ?stateVars
                         )
                     )"),
         rewrite!("remove-merge-blank"; 
@@ -279,6 +288,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                             (backdrop false)
                             (bounds false ?boundRect)
+                            ?stateVars
                         )
                    )" 
                 => "?layer"),
