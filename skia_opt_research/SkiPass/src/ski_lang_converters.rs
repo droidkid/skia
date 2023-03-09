@@ -4,7 +4,26 @@ use crate::ski_lang::SkiLang;
 use crate::protos::{
     SkPaint,
     Bounds,
-    BlendMode, 
+    SkColor,
+    SkRecord, 
+    SkiPassInstruction,
+    SkiPassProgram, 
+    SkiPassRunInfo,
+    SkiPassRunResult,
+    BlendMode,
+    ClipOp,
+    sk_paint::Blender,
+    sk_paint::ImageFilter,
+    sk_paint::ColorFilter,
+    sk_paint::PathEffect,
+    sk_paint::MaskFilter,
+    sk_paint::Shader,
+    ski_pass_instruction::SkiPassCopyRecord,
+    ski_pass_instruction::Instruction,
+    ski_pass_instruction::SaveLayer,
+    ski_pass_instruction::Save,
+    ski_pass_instruction::Restore,
+    ski_pass_instruction::ClipRect, 
 };
 
 pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
@@ -214,5 +233,133 @@ pub fn unpack_float(expr: &RecExpr<SkiLang>, id: Id) -> f64 {
             **val
         },
         _ => panic!("This is not a float!")
+    }
+}
+
+pub fn get_exists_value(expr: &RecExpr<SkiLang>, id: Id) -> bool {
+    match expr[id] {
+        SkiLang::Exists(value) => {
+            value
+        },
+        _ => panic!("Not a SkiLang::Exists")
+    }
+}
+
+pub fn get_blend_mode(expr: &RecExpr<SkiLang>, id: Id) -> i32 {
+    match expr[id] {
+        SkiLang::BlendMode_Src => BlendMode::Src.into() ,
+        SkiLang::BlendMode_SrcOver => BlendMode::SrcOver.into(),
+        SkiLang::BlendMode_Unknown => BlendMode::Unknown.into(),
+        _ => panic!("Not a valid BlendMode")
+    }
+}
+
+pub fn paint_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
+    let paint_param_ids = match expr[id] {
+        SkiLang::Paint(ids) => ids,
+        _ => panic!("Attempting to convert a non paint expr to proto")
+    };
+    let color = Some(color_expr_to_proto(expr, paint_param_ids[0]));
+
+    let blend_mode = match expr[paint_param_ids[1]] {
+        SkiLang::Blender(ids) => get_blend_mode(expr, ids[0]),
+        _ => panic!("Second parameter of Paint is not Blender!")
+    };
+
+    let image_filter_exists = match expr[paint_param_ids[2]] {
+        SkiLang::ImageFilter(ids) => get_exists_value(expr, ids[0]),
+        _ => panic!("Third parameter of Paint is not ImageFilter!")
+    };
+
+    let color_filter_exists = match expr[paint_param_ids[3]] {
+        SkiLang::ColorFilter(ids) => get_exists_value(expr, ids[0]),
+        _ => panic!("Fourth parameter of Paint is not ColorFilter!")
+    };
+
+    let path_effect_exists = match expr[paint_param_ids[4]] {
+        SkiLang::PathEffect(ids) => get_exists_value(expr, ids[0]),
+        _ => panic!("Fifth parameter of Paint is not PathEffect!")
+    };
+
+    let mask_filter_exists = match expr[paint_param_ids[5]] {
+        SkiLang::MaskFilter(ids) => get_exists_value(expr, ids[0]),
+        _ => panic!("Sixth parameter of Paint is not MaskFilter!")
+    };
+
+    let shader_exists = match expr[paint_param_ids[6]] {
+        SkiLang::Shader(ids) => get_exists_value(expr, ids[0]),
+        _ => panic!("Seventh parameter of Paint is not Shader!")
+    };
+
+    SkPaint {
+        color,
+        // TODO: Fill these fields.
+        // It doesn't really matter now, we bail out and copy the command
+        // if any of the below fields are set. Only the color.alpha matters
+        // at this point.
+        blender: Some(Blender{
+            blend_mode
+        }),
+        image_filter: if image_filter_exists {
+            Some(ImageFilter {})
+        } else {
+            None
+        },
+        color_filter: if color_filter_exists {
+            Some(ColorFilter {})
+        } else {
+            None
+        },
+        path_effect: if path_effect_exists {
+            Some(PathEffect {})
+        } else {
+            None
+        },
+        mask_filter: if mask_filter_exists {
+            Some(MaskFilter {})
+        } else {
+            None
+        },
+        shader: if shader_exists {
+            Some(Shader {})
+        } else {
+            None
+        },
+    }
+}
+
+
+
+pub fn color_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkColor {
+    let node = &expr[id];
+    match node {
+        SkiLang::Color(ids) => {
+            let alpha_u8  = match &expr[ids[0]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
+            let red_u8  = match &expr[ids[1]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
+            let green_u8  = match &expr[ids[2]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
+            let blue_u8  = match &expr[ids[3]] {
+                SkiLang::Num(value) => *value,
+                _ => panic!()
+            };
+    
+            SkColor {
+              alpha_u8,
+              red_u8,
+              green_u8,
+              blue_u8
+            }
+        },
+        _ => {
+            panic!("Not a Color!");
+        }
     }
 }
