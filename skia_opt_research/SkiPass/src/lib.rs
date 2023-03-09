@@ -1,5 +1,8 @@
 #[macro_export]
 pub mod ski_pass;
+pub mod ski_lang;
+pub mod ski_lang_converters;
+pub mod build_ski_lang_expr;
 pub mod protos {
     include!(concat!(env!("OUT_DIR"), "/ski_pass_proto.rs"));
 }
