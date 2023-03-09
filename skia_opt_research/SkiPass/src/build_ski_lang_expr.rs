@@ -82,25 +82,13 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                    let backdrop_exists = expr.add(SkiLang::Exists(save_layer.backdrop.is_some()));
                    let backdrop = expr.add(SkiLang::Backdrop([backdrop_exists]));
 
-                   let saveLayerBounds = bounds_proto_to_expr(expr, &None);
+                   let saveLayerBounds = bounds_proto_to_expr(expr, &save_layer.bounds);
 
                    // The stack will fill in the right state, for now we put in a identity state inside.
                    let stateAtMerge = expr.add(SkiLang::BlankState);
 
                    let mergeParams = expr.add(SkiLang::MergeParams([index, paint, backdrop, saveLayerBounds, stateAtMerge]));
 		   		   drawStack.push((StackOp::SaveLayer, mergeParams));
-
-                   // The clipRect simulating saveLayer bounds.
-                   if save_layer.bounds.is_some() {
-                        let clipRectBounds = bounds_proto_to_rect_expr(expr, &save_layer.bounds);
-                        let clipOp = expr.add(SkiLang::ClipOp_Intersect);
-                        let clipDoAntiAlias = expr.add(SkiLang::Exists(true));
-                        let clipRectParams = expr.add(SkiLang::ClipRectParams([clipRectBounds, clipOp, clipDoAntiAlias]));
-                        drawStack.push((StackOp::ClipRect, clipRectParams));
-
-                        let blank = expr.add(SkiLang::Blank);
-                        drawStack.push((StackOp::Surface, blank));
-                   }
                },
                Some(Command::Restore(_restore)) => {
                    reduceStack(expr, &mut drawStack, true);

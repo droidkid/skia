@@ -116,7 +116,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
-                            (bounds false ?boundRect)
+                            ?bounds
                             ?stateVars
                         )
                     )" 
@@ -168,7 +168,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
-                            (bounds false ?boundRect)
+                            ?bounds
                             ?stateVars
                         )
                     )" 
@@ -206,7 +206,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
-                            (bounds false ?boundRect)
+                            ?bounds
                             ?stateVars
                         )
                     )" 
@@ -226,7 +226,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
-                            (bounds false ?boundRect)
+                            ?bounds
                             ?stateVars
                         )
                     )"),
@@ -247,7 +247,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
-                            (bounds false ?boundRect)
+                            ?bounds
                             ?stateVars
                         )
                     )" 
@@ -267,7 +267,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
-                            (bounds false ?boundRect)
+                            ?bounds
                             ?stateVars
                         )
                     )"),
@@ -287,7 +287,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
-                            (bounds false ?boundRect)
+                            ?bounds
                             ?stateVars
                         )
                    )" 

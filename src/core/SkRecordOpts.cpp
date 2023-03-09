@@ -471,7 +471,7 @@ public:
 
     // src/core/SkRecordPattern::IsDraw used as reference for these.
     template <typename T>
-    std::enable_if_t<(T::kTags & kHasPaint_Tag) == kHasPaint_Tag && T::kType != SaveLayer_Type, void>
+    std::enable_if_t<(T::kTags & kHasPaint_Tag) == kHasPaint_Tag,  void>
     operator()(T* draw) {
 	    SkPaint *paint = AsPtr(draw->paint);
 	    if (paint != nullptr && alpha != 255) {
@@ -480,20 +480,6 @@ public:
 	    }
 	    // if paint is nullptr, assume there is nothing to draw.
 	    fDraw(*draw);
-	    return;
-    }
-
-    template <typename T>
-    std::enable_if_t<(T::kTags & kHasPaint_Tag) == kHasPaint_Tag && T::kType == SaveLayer_Type, void>
-    operator()(T* draw) {
-	    SkPaint *paint = AsPtr(draw->paint);
-	    if (paint != nullptr && alpha != 255) {
-            assert(paint->getAlpha() == 255 || paint->getAlpha() == this->alpha);
-            paint->setAlpha(this->alpha);
-	    }
-
-        canvas->saveLayer(nullptr, paint);
-        
 	    return;
     }
 
