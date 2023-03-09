@@ -1,27 +1,15 @@
 use egg::*;
-use std::error::Error;
 
-use std::fmt::Write;
+
+
 use crate::ski_lang_converters::*;
 
-use crate::protos;
+
 use crate::protos::{
-    SkPaint,
-    Bounds,
-    SkColor,
-    SkRecord, 
+    Bounds, 
     SkiPassInstruction,
-    SkiPassProgram, 
-    SkiPassRunInfo,
-    SkiPassRunResult,
     BlendMode,
     ClipOp,
-    sk_paint::Blender,
-    sk_paint::ImageFilter,
-    sk_paint::ColorFilter,
-    sk_paint::PathEffect,
-    sk_paint::MaskFilter,
-    sk_paint::Shader,
     ski_pass_instruction::SkiPassCopyRecord,
     ski_pass_instruction::Instruction,
     ski_pass_instruction::SaveLayer,
@@ -30,10 +18,10 @@ use crate::protos::{
     ski_pass_instruction::ClipRect, 
 };
 use crate::ski_lang::SkiLang;
-use crate::ski_lang::make_rules;
-use crate::ski_lang::SkiLangCostFn;
-use crate::build_ski_lang_expr::build_expr;
-use crate::build_ski_lang_expr::SkiLangExpr;
+
+
+
+
 
 #[derive(Debug)]
 pub struct SkiPassSurface {

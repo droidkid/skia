@@ -5,28 +5,10 @@ use std::fmt::Write;
 
 use crate::protos;
 use crate::protos::{
-    SkPaint,
-    Bounds,
-    SkColor,
-    SkRecord, 
-    SkiPassInstruction,
+    SkRecord,
     SkiPassProgram, 
     SkiPassRunInfo,
-    SkiPassRunResult,
-    BlendMode,
-    ClipOp,
-    sk_paint::Blender,
-    sk_paint::ImageFilter,
-    sk_paint::ColorFilter,
-    sk_paint::PathEffect,
-    sk_paint::MaskFilter,
-    sk_paint::Shader,
-    ski_pass_instruction::SkiPassCopyRecord,
-    ski_pass_instruction::Instruction,
-    ski_pass_instruction::SaveLayer,
-    ski_pass_instruction::Save,
-    ski_pass_instruction::Restore,
-    ski_pass_instruction::ClipRect, 
+    SkiPassRunResult, 
 };
 use crate::ski_lang::SkiLang;
 use crate::ski_lang::make_rules;
