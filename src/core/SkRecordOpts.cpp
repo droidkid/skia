@@ -411,6 +411,19 @@ class SkiPassRecordBuilder {
             }
         }
 
+        void operator()(const SkRecords::Concat44& command) {
+            ski_pass_proto::SkRecords *records = skipass_record->add_records();
+            records->set_index(count++);
+
+            ski_pass_proto::SkRecords_Concat44 *concat44 = records->mutable_concat44();
+            ski_pass_proto::SkM44 *matrix = concat44->mutable_matrix();
+            SkScalar v[16];
+            command.matrix.getColMajor(v);
+            for (int i=0; i < 16; i++) {
+                matrix->add_m(v[i]);
+            }
+        }
+
         void operator()(const SkRecords::Save& command) {
             ski_pass_proto::SkRecords *records = skipass_record->add_records();
             records->set_index(count++);
@@ -553,6 +566,14 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
             }
             bool do_anti_alias = instruction.clip_rect().do_anti_alias();
             canvas->clipRect(rect, clipOp, do_anti_alias);
+        }
+        if (instruction.has_concat44()) {
+            SkScalar v[16];
+            for (int i=0; i<16; i++) {
+                v[i] = instruction.concat44().matrix().m(i);
+            }
+            SkM44 skm44 = SkM44::ColMajor(v);
+            canvas->concat(skm44);
         }
         if (instruction.has_save_layer()) {
 	        SkPaint paint;

@@ -2,6 +2,7 @@ use egg::*;
 use crate::ski_lang::SkiLang;
 
 use crate::protos::{
+    SkM44,
     SkPaint,
     Bounds,
     SkColor,
@@ -348,6 +349,54 @@ pub fn color_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkColor {
         },
         _ => {
             panic!("Not a Color!");
+        }
+    }
+}
+
+pub fn skm44_to_expr(expr: &mut RecExpr<SkiLang>, skM44: &Option<SkM44>) -> Id {
+    match skM44 {
+        Some(skM44) => {
+            // Ugh... is there a better way to do this?
+            let mut fmat: [ordered_float::NotNan<f64>; 16] = [
+                ordered_float::NotNan::new(skM44.m[0]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[1]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[2]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[3]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[4]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[5]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[6]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[7]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[8]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[9]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[10]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[11]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[12]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[13]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[14]).unwrap(),
+                ordered_float::NotNan::new(skM44.m[15]).unwrap(),
+            ];
+            let mut mat: [Id; 16] = [
+                expr.add(SkiLang::Float(fmat[0])),
+                expr.add(SkiLang::Float(fmat[1])),
+                expr.add(SkiLang::Float(fmat[2])),
+                expr.add(SkiLang::Float(fmat[3])),
+                expr.add(SkiLang::Float(fmat[4])),
+                expr.add(SkiLang::Float(fmat[5])),
+                expr.add(SkiLang::Float(fmat[6])),
+                expr.add(SkiLang::Float(fmat[7])),
+                expr.add(SkiLang::Float(fmat[8])),
+                expr.add(SkiLang::Float(fmat[9])),
+                expr.add(SkiLang::Float(fmat[10])),
+                expr.add(SkiLang::Float(fmat[11])),
+                expr.add(SkiLang::Float(fmat[12])),
+                expr.add(SkiLang::Float(fmat[13])),
+                expr.add(SkiLang::Float(fmat[14])),
+                expr.add(SkiLang::Float(fmat[15])),
+            ];
+            expr.add(SkiLang::M44(mat))
+        },
+        None => {
+            panic!("Empty SkM44!");
         }
     }
 }

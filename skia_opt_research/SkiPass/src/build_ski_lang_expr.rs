@@ -6,6 +6,7 @@ use crate::ski_lang_converters::{
     bounds_proto_to_rect_expr,
     bounds_expr_to_proto,
     paint_proto_to_expr,
+    skm44_to_expr,
 };
 use crate::protos::{
     SkRecords,
@@ -23,6 +24,7 @@ enum StackOp {
     State,
     Surface,
     MatrixOp,
+    Concat44,
     ClipRect,
     Save,
     SaveLayer,
@@ -44,7 +46,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
            match &skRecords.command {
                Some(Command::DrawCommand(draw_command)) => {
                    match draw_command.name.as_str() {
-                       "ClipPath" | "ClipRRect" | "Concat44" => {
+                       "ClipPath" | "ClipRRect" => {
                            let matrixOpIndex = expr.add(SkiLang::Num(skRecords.index));
                            let matrixOpParams = expr.add(SkiLang::MatrixOpParams([matrixOpIndex]));
                            drawStack.push((StackOp::MatrixOp, matrixOpParams));
@@ -70,6 +72,10 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     let clipRectParams = expr.add(SkiLang::ClipRectParams([clipOpRect, clipOp, isAntiAlias]));
                     drawStack.push((StackOp::ClipRect, clipRectParams));
                },
+               Some(Command::Concat44(concat44)) => {
+                   let m44 = skm44_to_expr(expr, &concat44.matrix);
+                   drawStack.push((StackOp::Concat44, m44));
+               },
                Some(Command::Save(_save)) => {
                     drawStack.push((StackOp::Save, expr.add(SkiLang::NoOp)));
                },
@@ -92,6 +98,9 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                },
                Some(Command::Restore(_restore)) => {
                    reduceStack(expr, &mut drawStack, true);
+               },
+               _ => {
+                    panic!("Unsupported SkRecord");
                },
                None => {}
            }
@@ -118,6 +127,10 @@ fn reduceStateStack(
             },
             StackOp::ClipRect => {
                 let nxt = expr.add(SkiLang::ClipRect([e1, e2]));
+                stateStack.push((StackOp::State, nxt));
+            },
+            StackOp::Concat44 => {
+                let nxt = expr.add(SkiLang::Concat44([e1, e2]));
                 stateStack.push((StackOp::State, nxt));
             },
             StackOp::Save => {
@@ -159,6 +172,7 @@ fn reduceStack(
                 	match op.0 {
                     	StackOp::MatrixOp => stateStack.push(op.clone()),
                     	StackOp::ClipRect => stateStack.push(op.clone()),
+                    	StackOp::Concat44 => stateStack.push(op.clone()),
                         StackOp::Save => stateStack.push(op.clone()),
                         StackOp::SaveLayer => stateStack.clear(),
                         _ => {}
@@ -201,6 +215,10 @@ fn reduceStack(
             },
             StackOp::MatrixOp => {
                 let nxt = expr.add(SkiLang::MatrixOp([e1, e2]));
+                drawStack.push((StackOp::Surface, nxt));
+            },
+            StackOp::Concat44 => {
+                let nxt = expr.add(SkiLang::Concat44([e1, e2]));
                 drawStack.push((StackOp::Surface, nxt));
             },
             StackOp::ClipRect => {

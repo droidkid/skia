@@ -29,6 +29,14 @@ enum ClipOp {
     INTERSECT = 2;
 }
 
+message SkM44 {
+    // (I'm going to regret this...)
+    // Indices correspond to column row major order.
+    // Same as skia/include/core/SkM44.h;l=146
+    // SkM44 should always has 16 elements.
+    repeated double m = 1;
+}
+
 message SkPaint {
     SkColor color = 1;
     
@@ -76,6 +84,10 @@ message SkRecords  {
         bool do_anti_alias = 3;
     };
 
+    message Concat44 {
+        SkM44 matrix = 1;
+    };
+
     message SaveLayer {
         Bounds bounds = 1;
         SkPaint paint = 2;
@@ -94,6 +106,7 @@ message SkRecords  {
         Restore restore = 4;
         DrawCommand draw_command = 5;
         ClipRect clip_rect = 6;
+        Concat44 concat44 = 7;
     }
 }
 
@@ -148,6 +161,10 @@ message SkiPassInstruction {
         bool do_anti_alias = 3;
     }
 
+    message Concat44 {
+        SkM44 matrix = 1;
+    }
+
     message Save {}
     message Restore {}
     oneof instruction {
@@ -156,6 +173,7 @@ message SkiPassInstruction {
         Save save = 3;
         Restore restore = 4;
         ClipRect clip_rect = 5;
+        Concat44 concat44 = 6;
     }
 }
 

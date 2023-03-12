@@ -10,7 +10,9 @@ use crate::protos::{
     SkiPassInstruction,
     BlendMode,
     ClipOp,
+    SkM44,
     ski_pass_instruction::SkiPassCopyRecord,
+    ski_pass_instruction::Concat44,
     ski_pass_instruction::Instruction,
     ski_pass_instruction::SaveLayer,
     ski_pass_instruction::Save,
@@ -61,6 +63,19 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 modified_matrix: true,
             }
         },
+        SkiLang::Concat44(ids) => {
+            let mut targetSurface = build_program(&expr, ids[0]);
+            let mut matrixOpInstructions = to_instructions(&expr, ids[1]);
+
+            let mut instructions: Vec<SkiPassInstruction> = vec![];
+            instructions.append(&mut matrixOpInstructions);
+            instructions.append(&mut targetSurface.instructions);
+
+            SkiPassSurface {
+                instructions,
+                modified_matrix: true,
+            }
+        },
         SkiLang::ClipRect(ids) => {
             let mut targetSurface = build_program(&expr, ids[0]);
             let clipRectParams = match &expr[ids[1]] {
@@ -97,6 +112,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 modified_matrix: true,
             }
         },
+        // Not to be confused with Concat44 (which is a state matrix multiplication)
         SkiLang::Concat(ids) => {
             let mut p1 = build_program(&expr, ids[0]);
             let mut p2 = build_program(&expr, ids[1]);
@@ -255,6 +271,22 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
         },
         SkiLang::BlankState => {
             vec![]
+        },
+        SkiLang::M44(ids) => {
+            let mut m: Vec<f64> = vec![];
+            for id in ids {
+                m.push(unpack_float(expr, *id));
+            }
+            let instruction = SkiPassInstruction {
+                instruction : Some(Instruction::Concat44(
+                    Concat44 {
+                        matrix: Some(SkM44{
+                            m
+                        })
+                    }
+                ))
+            };
+            vec![instruction]
         },
         SkiLang::MatrixOpParams(ids) => {
             let instruction = match &expr[ids[0]] {

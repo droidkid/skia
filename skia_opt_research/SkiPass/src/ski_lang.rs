@@ -29,6 +29,7 @@ define_language! {
         // TODO: Split matrix and clip ops. Right now clips are a 'matrixOp'
         // matrixOp(layer, matrixOpParams) -> return layer after applying transform on layer 
         "matrixOp" = MatrixOp([Id; 2]),
+        "concat44" = Concat44([Id; 2]),
         // clipRect(layer, clipRectParams) -> return layer after applying clip on layer 
         "clipRect" = ClipRect([Id; 2]),
         // concat(layer1, layer2) -> return layer resulting from sequential execution of
@@ -74,6 +75,9 @@ define_language! {
         "clipRectParams" = ClipRectParams([Id; 3]),
         // MatrixOpParams([index])  - eventually add other matrix stuff.
         "matrixOpParams" = MatrixOpParams([Id; 1]),
+        // 4x4 matrix
+        // TODO: Are we going to store 16 items?
+        "m44" = M44([Id; 16]),
     }
 }
 
@@ -321,7 +325,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                         (shader false)
                                     )
                                 )"),
-        rewrite!("remove-blank-matrixOp"; "(matrixOp blank ?a)" => "blank"),
     ]
 }
 
