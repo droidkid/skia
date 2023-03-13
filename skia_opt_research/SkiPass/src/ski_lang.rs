@@ -297,13 +297,12 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                    )" 
                 => "?layer"),
         rewrite!("remove-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
-        // TODO: MULTIPLY ALPHAS!!!
         rewrite!("apply-alpha-on-draw"; 
-                        "(alpha ?a 
+                        "(alpha ?layer_alpha
                                 (drawCommand 
                                     ?x 
                                     (paint
-                                        (color 255 ?r ?g ?b) 
+                                        (color ?draw_alpha ?r ?g ?b) 
                                         (blender blendMode_srcOver)
                                         (imageFilter false)
                                         (colorFilter false)
@@ -313,10 +312,15 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                     )
                                 )
                             )
-                        " => "(drawCommand 
+                        " => {
+                            FoldAlpha {
+                                layer_alpha: "?layer_alpha".parse().unwrap(),
+                                draw_alpha: "?draw_alpha".parse().unwrap(),
+                                merged_alpha: "?merged_alpha".parse().unwrap(),
+                                expr: "(drawCommand 
                                     ?x 
                                     (paint
-                                        (color ?a ?r ?g ?b)
+                                        (color ?merged_alpha ?r ?g ?b)
                                         (blender blendMode_srcOver)
                                         (imageFilter false)
                                         (colorFilter false)
@@ -324,7 +328,10 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                         (maskFilter false)
                                         (shader false)
                                     )
-                                )"),
+                                )".parse().unwrap(),
+                            }
+                        }
+                ),
     ]
 }
 
@@ -342,5 +349,38 @@ impl CostFunction<SkiLang> for SkiLangCostFn {
             _ => 0.0
         };
         enode.fold(op_cost, |sum, id| sum + costs(id))
+    }
+}
+
+struct FoldAlpha {
+    layer_alpha: Var,
+    draw_alpha: Var,
+    merged_alpha: Var,
+    expr: Pattern<SkiLang>
+}
+
+impl Applier<SkiLang, ()> for FoldAlpha {
+    fn apply_one(
+        &self, 
+        egraph: &mut EGraph<SkiLang, ()>,
+        matched_id: Id, 
+        subst: &Subst, 
+        searcher_pattern: Option<&PatternAst<SkiLang>>, 
+        rule_name: Symbol) -> Vec<Id> {
+        let matched_expr: RecExpr<SkiLang> = egraph.id_to_expr(matched_id);
+        let layer_alpha_id = subst[self.layer_alpha];
+        let draw_alpha_id = subst[self.draw_alpha];
+        let layer_alpha :i32 = match egraph.id_to_expr(layer_alpha_id)[0.into()] {
+            SkiLang::Num(val) => val,
+            _ => panic!("Not a valid alpha value")
+        };
+        let draw_alpha :i32 = match egraph.id_to_expr(draw_alpha_id)[0.into()] {
+            SkiLang::Num(val) => val,
+            _ => panic!("Not a valid alpha value")
+        };
+        let merged_alpha = SkiLang::Num((layer_alpha * draw_alpha) / 255);
+        let mut subst = subst.clone();
+        subst.insert(self.merged_alpha, egraph.add(merged_alpha));
+        self.expr.apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
     }
 }

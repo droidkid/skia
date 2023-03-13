@@ -488,7 +488,6 @@ public:
     operator()(T* draw) {
 	    SkPaint *paint = AsPtr(draw->paint);
 	    if (paint != nullptr && alpha != 255) {
-            assert(paint->getAlpha() == 255 || paint->getAlpha() == this->alpha);
             paint->setAlpha(this->alpha);
 	    }
 	    // if paint is nullptr, assume there is nothing to draw.

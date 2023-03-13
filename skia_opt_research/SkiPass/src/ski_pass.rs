@@ -44,7 +44,10 @@ fn run_eqsat_and_extract(
     expr: &RecExpr<SkiLang>,
     run_info: &mut protos::SkiPassRunInfo,
     ) -> Result<SkiLangExpr, Box<dyn Error>> {
-    let runner = Runner::default().with_expr(expr).run(&make_rules());
+    let runner = Runner::default()
+        .with_explanations_enabled()
+        .with_expr(expr)
+        .run(&make_rules());
     let root = runner.roots[0];
 
     writeln!(&mut run_info.skilang_expr, "{:#}", expr);
