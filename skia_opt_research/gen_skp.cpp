@@ -323,6 +323,61 @@ void draw_014_captureSaveLayerState_scaleInside(SkCanvas *canvas) {
     canvas->restore();
 }
 
+void draw_015_mergeSrcOverTree(SkCanvas *canvas) {
+    SkPaint red;
+    red.setColor(SK_ColorRED);
+  	red.setAlphaf(0.5);  
+  
+  	SkPaint blue;
+    blue.setColor(SK_ColorBLUE);
+  	blue.setAlphaf(0.5);  
+
+    SkPaint green;
+    green.setColor(SK_ColorGREEN);
+  	green.setAlphaf(0.5);  
+
+    SkPaint yellow;
+    yellow.setColor(SK_ColorYELLOW);
+  	yellow.setAlphaf(0.5);  
+
+  
+  	canvas->drawRect(SkRect::MakeLTRB(10, 60, 100, 120), red);
+  	canvas->saveLayer(nullptr, nullptr);
+  		canvas->drawRect(SkRect::MakeLTRB(50, 60, 120, 120), blue);
+  		canvas->saveLayer(nullptr, nullptr);
+  			canvas->drawRect(SkRect::MakeLTRB(30, 30, 90, 100), green);
+        	canvas->drawRect(SkRect::MakeLTRB(30, 110, 90, 140), yellow);
+  		canvas->restore();
+    canvas->restore();
+}
+
+
+void draw_016_collapseInnerMerge(SkCanvas *canvas) {
+    SkPaint red;
+    red.setColor(SK_ColorRED);
+  	red.setAlphaf(0.5);  
+  
+  	SkPaint blue;
+    blue.setColor(SK_ColorBLUE);
+  	blue.setAlphaf(0.5);  
+
+    SkPaint green;
+    green.setColor(SK_ColorGREEN);
+  	green.setAlphaf(0.5);  
+
+    SkPaint yellow;
+    yellow.setColor(SK_ColorYELLOW);
+  	yellow.setAlphaf(0.5);  
+  
+  	canvas->drawRect(SkRect::MakeLTRB(10, 60, 100, 120), red);
+  	canvas->saveLayer(nullptr, nullptr);
+  		canvas->drawRect(SkRect::MakeLTRB(50, 60, 120, 120), blue);
+  		canvas->saveLayer(nullptr, nullptr);
+  			canvas->drawRect(SkRect::MakeLTRB(30, 30, 90, 100), green);
+  		canvas->restore();
+    canvas->restore();
+}
+
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
     initializeEventTracingForTools();
@@ -345,4 +400,6 @@ int main(int argc, char **argv) {
 
     raster(512, 512, draw_013_captureSaveLayerState_scaleOutside, FLAGS_dir[0], "013_captureSaveLayerState_scaleOutside.skp");
     raster(512, 512, draw_014_captureSaveLayerState_scaleInside, FLAGS_dir[0], "014_captureSaveLayerState_scaleInside.skp");
+    raster(512, 512, draw_015_mergeSrcOverTree, FLAGS_dir[0], "015_mergeSrcOverTree.skp");
+    raster(512, 512, draw_016_collapseInnerMerge, FLAGS_dir[0], "016_collapseInnerMerge.skp");
 }

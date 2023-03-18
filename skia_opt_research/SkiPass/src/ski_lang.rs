@@ -78,6 +78,8 @@ define_language! {
         // 4x4 matrix
         // TODO: Are we going to store 16 items?
         "m44" = M44([Id; 16]),
+        "srcOver" = SrcOver([Id; 2]),
+        "someFilterAndState" = SomeFilterAndState([Id; 2]),
     }
 }
 
@@ -194,7 +196,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                   )"),
 
 
-        rewrite!("push-merge-alpha-on-src"; 
+        rewrite!("apply-alphaVOp"; 
                  "(merge 
                         ?dst 
                         ?src 
@@ -234,8 +236,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?stateVars
                         )
                     )"),
-        // TODO: MULTIPLY ALPHAS!!!
-        rewrite!("lift-alpha"; 
+        rewrite!("pack-alphaVOp"; 
                  "(merge 
                         ?dst 
                         (alpha ?A ?src) 
@@ -296,6 +297,8 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         )
                    )" 
                 => "?layer"),
+
+
         rewrite!("remove-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
         rewrite!("apply-alpha-on-draw"; 
                         "(alpha ?layer_alpha
@@ -332,6 +335,137 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             }
                         }
                 ),
+
+        rewrite!("apply-srcOver-VOp"; 
+                 "(merge 
+                        ?layerA
+                        ?layerB
+                        (mergeParams
+                            ?mergeIndex
+                            (paint 
+                                (color ?A 0 0 0) 
+                                (blender blendMode_srcOver)
+                                ?imageFilter
+                                ?colorFilter
+                                ?pathEffect
+                                ?maskFilter
+                                ?shader
+                            )
+                            ?backdrop
+                            ?bounds
+                            ?stateVars
+                        )
+                   )" 
+                   => "(srcOver 
+                        ?layerA 
+                        (someFilterAndState 
+                            ?layerB
+                            (mergeParams
+                                ?mergeIndex
+                                (paint 
+                                    (color ?A 0 0 0) 
+                                    (blender blendMode_srcOver)
+                                    ?imageFilter
+                                    ?colorFilter
+                                    ?pathEffect
+                                    ?maskFilter
+                                    ?shader
+                                )
+                                ?backdrop
+                                ?bounds
+                                ?stateVars
+                            )
+                        ) 
+                    )"),
+
+        rewrite!("unpack-srcOver-VOp"; 
+                   "(srcOver 
+                        ?layerA 
+                        (someFilterAndState 
+                            ?layerB
+                            (mergeParams
+                                ?mergeIndex
+                                (paint 
+                                    (color ?A 0 0 0) 
+                                    (blender blendMode_srcOver)
+                                    ?imageFilter
+                                    ?colorFilter
+                                    ?pathEffect
+                                    ?maskFilter
+                                    ?shader
+                                )
+                                ?backdrop
+                                ?bounds
+                                ?stateVars
+                            )
+                        ) 
+                 )" =>
+                 "(merge 
+                        ?layerA
+                        ?layerB
+                        (mergeParams
+                            ?mergeIndex
+                            (paint 
+                                (color ?A 0 0 0) 
+                                (blender blendMode_srcOver)
+                                ?imageFilter
+                                ?colorFilter
+                                ?pathEffect
+                                ?maskFilter
+                                ?shader
+                            )
+                            ?backdrop
+                            ?bounds
+                            ?stateVars
+                        )
+                   )" 
+                ),
+
+        // The only reason we have these rules is we can't unpack them.
+        rewrite!("killSomeFilterAndState";
+                "(someFilterAndState
+                    ?layer
+                    (mergeParams
+                        ?mergeIndex
+                        (paint 
+                            (color 255 0 0 0) 
+                            (blender blendMode_srcOver)
+                            (imageFilter false)
+                            (colorFilter false)
+                            (pathEffect false)
+                            (maskFilter false)
+                            (shader false)
+                        )
+                        (backdrop false)
+                        (bounds false noOp)
+                        blankState
+                     )
+                )" => "?layer"),
+
+        // This is to mainly unpack into merge.
+        rewrite!("unpack-someFilterAndState";
+                "?layer" =>
+                "(someFilterAndState
+                    ?layer
+                    (mergeParams
+                        -1
+                        (paint 
+                            (color 255 0 0 0) 
+                            (blender blendMode_srcOver)
+                            (imageFilter false)
+                            (colorFilter false)
+                            (pathEffect false)
+                            (maskFilter false)
+                            (shader false)
+                        )
+                        (backdrop false)
+                        (bounds false noOp)
+                        blankState
+                ))"),
+
+        rewrite!("rearrange-srcOver"; 
+                 "(srcOver ?A (srcOver ?B ?C))" => "(srcOver (srcOver ?A ?B) ?C)"),
+
     ]
 }
 
@@ -345,6 +479,8 @@ impl CostFunction<SkiLang> for SkiLangCostFn {
     {
         let op_cost = match enode {
             SkiLang::Alpha(_ids) => 100000000.0,
+            SkiLang::SomeFilterAndState(_ids) => 100000000.0,
+            SkiLang::SrcOver(_ids) => 100000000.0,
             SkiLang::Merge(_ids) => 1.0,
             _ => 0.0
         };
