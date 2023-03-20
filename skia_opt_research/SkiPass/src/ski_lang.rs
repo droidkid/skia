@@ -1,5 +1,16 @@
 use egg::*;
 
+use crate::protos::{
+    Bounds
+};
+use crate::ski_lang_converters::{
+    bounds_proto_to_expr,
+    bounds_proto_to_rect_expr,
+    unpack_rect_to_bounds,
+    unpack_float
+    
+};
+
 define_language! {
     pub enum SkiLang {
         // NOTE: The order of Num and Float matters!
@@ -466,6 +477,18 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
         rewrite!("rearrange-srcOver"; 
                  "(srcOver ?A (srcOver ?B ?C))" => "(srcOver (srcOver ?A ?B) ?C)"),
 
+        rewrite!("clipRect-intersect"; 
+                "(clipRect 
+                    (clipRect ?layer (clipRectParams ?bounds1 ?clipOp ?doAntiAlias)) 
+                    (clipRectParams ?bounds2 ?clipOp ?doAntiAlias)
+                )" =>  {
+                FoldClipRect {
+                    bounds1: "?bounds1".parse().unwrap(),
+                    bounds2: "?bounds2".parse().unwrap(),
+                    merged_bounds: "?bounds".parse().unwrap(),
+                    expr: "(clipRect ?layer (clipRectParams ?bounds ?clipOp ?doAntiAlias))".parse().unwrap(),
+                }
+        }),
     ]
 }
 
@@ -517,6 +540,53 @@ impl Applier<SkiLang, ()> for FoldAlpha {
         let merged_alpha = SkiLang::Num((layer_alpha * draw_alpha) / 255);
         let mut subst = subst.clone();
         subst.insert(self.merged_alpha, egraph.add(merged_alpha));
+        self.expr.apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
+    }
+}
+
+struct FoldClipRect {
+    bounds1: Var,
+    bounds2: Var,
+    merged_bounds: Var,
+    expr: Pattern<SkiLang>
+}
+
+fn bounds_intersection(bounds1: Bounds, bounds2: Bounds) -> Option<Bounds> {
+    println!("bounds1: {:?}", bounds1);
+    println!("bounds2: {:?}", bounds2);
+    Some(
+        Bounds {
+            left: bounds1.left.max(bounds2.left),
+            top: bounds1.top.max(bounds2.top),
+            right: bounds1.right.min(bounds2.right),
+            bottom: bounds2.bottom.min(bounds2.bottom) 
+        }
+    )
+}
+
+impl Applier<SkiLang, ()> for FoldClipRect {
+
+    fn apply_one(
+        &self, 
+        egraph: &mut EGraph<SkiLang, ()>,
+        matched_id: Id, 
+        subst: &Subst, 
+        searcher_pattern: Option<&PatternAst<SkiLang>>, 
+        rule_name: Symbol) -> Vec<Id> {
+
+        let mut matched_expr: RecExpr<SkiLang> = egraph.id_to_expr(matched_id);
+        let bounds1 = subst[self.bounds1];
+        let bounds2 = subst[self.bounds2];
+    
+        let bounds1_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds1), 4.into());
+        let bounds2_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds2), 4.into());
+
+        let bounds_proto = bounds_intersection(bounds1_proto, bounds2_proto); 
+        let mut bounds_expr = RecExpr::default();
+        let bounds = bounds_proto_to_rect_expr(&mut bounds_expr, &bounds_proto);
+        
+        let mut subst = subst.clone();
+        subst.insert(self.merged_bounds, egraph.add_expr(&bounds_expr));
         self.expr.apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
     }
 }

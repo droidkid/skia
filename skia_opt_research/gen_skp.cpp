@@ -378,6 +378,16 @@ void draw_016_collapseInnerMerge(SkCanvas *canvas) {
     canvas->restore();
 }
 
+void draw_017_TestClipRectIntersection(SkCanvas *canvas) {
+    SkPaint p;
+    p.setColor(SK_ColorRED);
+    p.setAntiAlias(true);
+
+    canvas->clipRect(SkRect::MakeLTRB(30, 30, 200, 200));
+    canvas->clipRect(SkRect::MakeLTRB(0, 0, 35, 35));
+    canvas->drawRect(SkRect::MakeLTRB(10, 10, 500, 500), p);
+}
+
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
     initializeEventTracingForTools();
@@ -402,4 +412,5 @@ int main(int argc, char **argv) {
     raster(512, 512, draw_014_captureSaveLayerState_scaleInside, FLAGS_dir[0], "014_captureSaveLayerState_scaleInside.skp");
     raster(512, 512, draw_015_mergeSrcOverTree, FLAGS_dir[0], "015_mergeSrcOverTree.skp");
     raster(512, 512, draw_016_collapseInnerMerge, FLAGS_dir[0], "016_collapseInnerMerge.skp");
+    raster(512, 512, draw_017_TestClipRectIntersection, FLAGS_dir[0], "draw_017_TestClipRectIntersection");
 }

@@ -212,7 +212,7 @@ pub fn unpack_rect_to_bounds(expr: &RecExpr<SkiLang>, id: Id) -> Bounds {
                 bottom
             }
         },
-        _ => panic!("This is not a rect!")
+        _ => panic!("This is not a rect! {}", &expr[id])
     }
 }
 
