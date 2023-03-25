@@ -551,17 +551,15 @@ struct FoldClipRect {
     expr: Pattern<SkiLang>
 }
 
-fn bounds_intersection(bounds1: Bounds, bounds2: Bounds) -> Option<Bounds> {
-    println!("bounds1: {:?}", bounds1);
-    println!("bounds2: {:?}", bounds2);
-    Some(
-        Bounds {
-            left: bounds1.left.max(bounds2.left),
-            top: bounds1.top.max(bounds2.top),
-            right: bounds1.right.min(bounds2.right),
-            bottom: bounds2.bottom.min(bounds2.bottom) 
-        }
-    )
+fn bounds_intersection(bounds1: Bounds, bounds2: Bounds) -> Bounds {
+    println!("Bounds1: {:?}", bounds1);
+    println!("Bounds2: {:?}", bounds2);
+    Bounds {
+        left: bounds1.left.max(bounds2.left),
+        top: bounds1.top.max(bounds2.top),
+        right: bounds1.right.min(bounds2.right),
+        bottom: bounds1.bottom.min(bounds2.bottom) 
+    }
 }
 
 impl Applier<SkiLang, ()> for FoldClipRect {
@@ -582,8 +580,9 @@ impl Applier<SkiLang, ()> for FoldClipRect {
         let bounds2_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds2), 4.into());
 
         let bounds_proto = bounds_intersection(bounds1_proto, bounds2_proto); 
+        println!("BoundsR: {:?}", bounds_proto);
         let mut bounds_expr = RecExpr::default();
-        let bounds = bounds_proto_to_rect_expr(&mut bounds_expr, &bounds_proto);
+        let bounds = bounds_proto_to_rect_expr(&mut bounds_expr, &Some(bounds_proto));
         
         let mut subst = subst.clone();
         subst.insert(self.merged_bounds, egraph.add_expr(&bounds_expr));
