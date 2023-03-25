@@ -479,14 +479,14 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
 
         rewrite!("clipRect-intersect"; 
                 "(clipRect 
-                    (clipRect ?layer (clipRectParams ?bounds1 ?clipOp ?doAntiAlias)) 
-                    (clipRectParams ?bounds2 ?clipOp ?doAntiAlias)
+                    (clipRect ?layer (clipRectParams ?bounds1 clipOp_intersect ?doAntiAlias)) 
+                    (clipRectParams ?bounds2 clipOp_intersect ?doAntiAlias)
                 )" =>  {
                 FoldClipRect {
                     bounds1: "?bounds1".parse().unwrap(),
                     bounds2: "?bounds2".parse().unwrap(),
                     merged_bounds: "?bounds".parse().unwrap(),
-                    expr: "(clipRect ?layer (clipRectParams ?bounds ?clipOp ?doAntiAlias))".parse().unwrap(),
+                    expr: "(clipRect ?layer (clipRectParams ?bounds clipOp_intersect ?doAntiAlias))".parse().unwrap(),
                 }
         }),
     ]
@@ -552,8 +552,6 @@ struct FoldClipRect {
 }
 
 fn bounds_intersection(bounds1: Bounds, bounds2: Bounds) -> Bounds {
-    println!("Bounds1: {:?}", bounds1);
-    println!("Bounds2: {:?}", bounds2);
     Bounds {
         left: bounds1.left.max(bounds2.left),
         top: bounds1.top.max(bounds2.top),
@@ -580,7 +578,6 @@ impl Applier<SkiLang, ()> for FoldClipRect {
         let bounds2_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds2), 4.into());
 
         let bounds_proto = bounds_intersection(bounds1_proto, bounds2_proto); 
-        println!("BoundsR: {:?}", bounds_proto);
         let mut bounds_expr = RecExpr::default();
         let bounds = bounds_proto_to_rect_expr(&mut bounds_expr, &Some(bounds_proto));
         
