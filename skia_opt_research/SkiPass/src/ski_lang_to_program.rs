@@ -21,10 +21,6 @@ use crate::protos::{
 };
 use crate::ski_lang::SkiLang;
 
-
-
-
-
 #[derive(Debug)]
 pub struct SkiPassSurface {
     instructions: Vec<SkiPassInstruction>,
@@ -171,6 +167,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             };
 
             let mut reconstructStateInstructions = build_program(expr, mergeParamIds[4]).instructions;
+            reconstructStateInstructions.reverse();
 
             let index = match &expr[mergeParamIds[0]] {
                 SkiLang::Num(index) => *index,

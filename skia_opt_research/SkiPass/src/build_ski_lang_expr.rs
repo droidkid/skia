@@ -116,7 +116,9 @@ fn reduceStateStack(
     expr: &mut RecExpr<SkiLang>,
     stateStack : &mut Vec<(StackOp, Id)>, 
 ) {
+    stateStack.reverse();
     stateStack.push((StackOp::State, expr.add(SkiLang::BlankState)));
+
     while stateStack.len() != 1 {
         let (e1_type, e1) = stateStack.pop().unwrap();
         let (e2_type, e2) = stateStack.pop().unwrap();
@@ -133,7 +135,7 @@ fn reduceStateStack(
                 let nxt = expr.add(SkiLang::Concat44([e1, e2]));
                 stateStack.push((StackOp::State, nxt));
             },
-            StackOp::Save => {
+            StackOp::Save=> {
                 stateStack.push((e1_type, e1));
             },
             _ => {

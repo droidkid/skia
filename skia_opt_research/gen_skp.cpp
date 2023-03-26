@@ -388,6 +388,28 @@ void draw_017_TestClipRectIntersection(SkCanvas *canvas) {
     canvas->drawRect(SkRect::MakeLTRB(10, 10, 500, 500), p);
 }
 
+void draw_018_collapseScale(SkCanvas *canvas) {
+    SkPaint red_paint;
+    red_paint.setColor(SK_ColorRED);
+    SkPaint yellow_paint;
+    yellow_paint.setColor(SK_ColorYELLOW);
+    SkPaint green_paint;
+    green_paint.setColor(SK_ColorGREEN);
+
+    SkFont font(nullptr, 80);
+    font.setScaleX(.3f);
+
+  	SkPaint lPaint;
+    SkRect rect[1] = {{ 10, 20, 90, 110 }};
+
+    canvas->drawRect(SkRect::MakeLTRB(60, 0, 120, 60), yellow_paint);
+    canvas->scale(2.0, 2.0);
+    canvas->drawRect(SkRect::MakeLTRB(0, 0, 30, 30), green_paint);
+  	    canvas->saveLayer(nullptr, &lPaint);
+        canvas->drawString("Hello", rect[0].fLeft + 10, rect[0].fBottom - 10, font, red_paint);
+    canvas->restore();
+}
+
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
     initializeEventTracingForTools();
@@ -412,5 +434,6 @@ int main(int argc, char **argv) {
     raster(512, 512, draw_014_captureSaveLayerState_scaleInside, FLAGS_dir[0], "014_captureSaveLayerState_scaleInside.skp");
     raster(512, 512, draw_015_mergeSrcOverTree, FLAGS_dir[0], "015_mergeSrcOverTree.skp");
     raster(512, 512, draw_016_collapseInnerMerge, FLAGS_dir[0], "016_collapseInnerMerge.skp");
-    raster(512, 512, draw_017_TestClipRectIntersection, FLAGS_dir[0], "draw_017_TestClipRectIntersection");
+    raster(512, 512, draw_017_TestClipRectIntersection, FLAGS_dir[0], "017_TestClipRectIntersection.skp");
+    raster(512, 512, draw_018_collapseScale, FLAGS_dir[0], "018_CollapseScale.skp");
 }

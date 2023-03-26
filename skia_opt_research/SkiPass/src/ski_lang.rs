@@ -8,7 +8,6 @@ use crate::ski_lang_converters::{
     bounds_proto_to_rect_expr,
     unpack_rect_to_bounds,
     unpack_float
-    
 };
 
 define_language! {
@@ -108,6 +107,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
         rewrite!("kill-blank-concat-1"; "(concat blank ?a)" => "?a"),
         rewrite!("kill-blank-concat-2"; "(concat ?a blank)" => "?a"),
         rewrite!("kill-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
+		/*
         rewrite!("kill-merge-blank"; 
                  "(merge 
                         ?layer 
@@ -129,33 +129,13 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         )
                    )" 
                 => "?layer"),
+		*/
+
     ];
 
 
     // Merge related rules.
     rules.extend( vec![
-        // Kill NoOp - SaveLayer(nullptr, nullptr).
-        rewrite!("kill-noOp-merge";
-                 "(merge 
-                        ?dst 
-                        ?src
-                        (mergeParams 
-                            ?mergeIndex
-                            (paint 
-                                (color 255 ?r ?g ?b)
-                                (blender blendMode_srcOver)
-                                (imageFilter false)
-                                (colorFilter false)
-                                (pathEffect false)
-                                (maskFilter false)
-                                (shader false)
-                            )
-                            (backdrop false)
-                            (bounds false ?b)
-                            blankState
-                        )
-                    )" => "(concat ?dst ?src)"),
-
         // Kill if only a single drawCommand, and saveLayer is noOp.
         // SaveLayer alpha might have been merged into single drawCommand.
         // This rule corresponds to the killSaveLayer at line 216 in src/core/SkRecordOpts.cpp
@@ -186,8 +166,8 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
-                            ?bounds
-                            ?stateVars
+                            (bounds false ?bounds)
+                            blankState
                         )
                     )" 
                  => 
@@ -238,8 +218,8 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 (shader false)
                             )
                             (backdrop false)
-                            ?bounds
-                            ?stateVars
+                            (bounds false ?bounds)
+                            blankState
                         )
                     )" 
                  => 
@@ -398,7 +378,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
             }),
         ]);
 
-
+		/*
         // Packing and Unpacking Filter and State.
         // This is not a bidirectional rule as information is lost when going one way.
         rules.extend(vec![
@@ -421,7 +401,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         blankState
                      )
                 )" => "?layer"),
-
             rewrite!("recreateSomeFilterAndState";
                 "?layer" =>
                 "(someFilterAndState
@@ -440,9 +419,124 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         (backdrop false)
                         (bounds false noOp)
                         blankState
-                ))")
+                ))"),
         ]);
 
+        rules.extend(vec![
+            rewrite!("popClipRectOntoLayer";
+                "(someFilterAndState
+                    ?layer
+                    (mergeParams
+                        ?mergeIndex
+                        (paint 
+                            (color 255 0 0 0) 
+                            (blender blendMode_srcOver)
+                            (imageFilter false)
+                            (colorFilter false)
+                            (pathEffect false)
+                            (maskFilter false)
+                            (shader false)
+                        )
+                        (backdrop false)
+                        (bounds false noOp)
+                        (clipRect ?inner ?params)
+                     )
+                )" <=> 
+                "(someFilterAndState
+                    (clipRect ?layer ?params)
+                    (mergeParams
+                        ?mergeIndex
+                        (paint 
+                            (color 255 0 0 0) 
+                            (blender blendMode_srcOver)
+                            (imageFilter false)
+                            (colorFilter false)
+                            (pathEffect false)
+                            (maskFilter false)
+                            (shader false)
+                        )
+                        (backdrop false)
+                        (bounds false noOp)
+                        ?inner
+                     )
+                )"),
+
+            rewrite!("popConcatM44OntoLayer";
+                "(someFilterAndState
+                    ?layer
+                    (mergeParams
+                        ?mergeIndex
+                        (paint 
+                            (color 255 0 0 0) 
+                            (blender blendMode_srcOver)
+                            (imageFilter false)
+                            (colorFilter false)
+                            (pathEffect false)
+                            (maskFilter false)
+                            (shader false)
+                        )
+                        (backdrop false)
+                        (bounds false noOp)
+                        (concat44 ?inner ?params)
+                     )
+                )" <=> 
+                "(someFilterAndState
+                    (concat44 ?layer ?params)
+                    (mergeParams
+                        ?mergeIndex
+                        (paint 
+                            (color 255 0 0 0) 
+                            (blender blendMode_srcOver)
+                            (imageFilter false)
+                            (colorFilter false)
+                            (pathEffect false)
+                            (maskFilter false)
+                            (shader false)
+                        )
+                        (backdrop false)
+                        (bounds false noOp)
+                        ?inner
+                     )
+                )"),
+            rewrite!("popMatrixOpOntoLayer";
+                "(someFilterAndState
+                    ?layer
+                    (mergeParams
+                        ?mergeIndex
+                        (paint 
+                            (color 255 0 0 0) 
+                            (blender blendMode_srcOver)
+                            (imageFilter false)
+                            (colorFilter false)
+                            (pathEffect false)
+                            (maskFilter false)
+                            (shader false)
+                        )
+                        (backdrop false)
+                        (bounds false noOp)
+                        (matrixOp ?inner ?params)
+                     )
+                )" <=> 
+                "(someFilterAndState
+                    (matrixOp ?layer ?params)
+                    (mergeParams
+                        ?mergeIndex
+                        (paint 
+                            (color 255 0 0 0) 
+                            (blender blendMode_srcOver)
+                            (imageFilter false)
+                            (colorFilter false)
+                            (pathEffect false)
+                            (maskFilter false)
+                            (shader false)
+                        )
+                        (backdrop false)
+                        (bounds false noOp)
+                        ?inner
+                     )
+                )"),
+        ].concat());
+		*/
 
         rules.extend(vec![
             rewrite!("rearrange-srcOver"; 
@@ -450,8 +544,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
             rewrite!("concatIsSrcOver";
                      "(concat ?A ?B)" <=> "(srcOver ?A ?B)"),
         ].concat());
-
-
 
         // Bidirectional rules to extract common clipRect, m44 and matrixOp operations over srcOver.
         rules.extend(vec![
