@@ -100,9 +100,62 @@ define_language! {
 //    (pathEffect ?pathEffectExists)
 // Right now the choice is arbitrary, there's also a choice of using Null.
 pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
-    vec![
-        rewrite!("remove-noOp-concat-1"; "(concat blank ?a)" => "?a"),
-        rewrite!("remove-noOp-concat-2"; "(concat ?a blank)" => "?a"),
+    // Trivial Rules, related to blank and identity.
+    let mut rules = vec![
+        rewrite!("kill-blank-clip"; "(clipRect blank ?p)" => "blank"),
+        rewrite!("kill-blank-mOp"; "(matrixOp blank ?p)" => "blank"),
+        rewrite!("kill-blank-concat44"; "(concat44 blank ?p)" => "blank"),
+        rewrite!("kill-blank-concat-1"; "(concat blank ?a)" => "?a"),
+        rewrite!("kill-blank-concat-2"; "(concat ?a blank)" => "?a"),
+        rewrite!("kill-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
+        rewrite!("kill-merge-blank"; 
+                 "(merge 
+                        ?layer 
+                        blank 
+                        (mergeParams
+                            ?mergeIndex
+                            (paint 
+                                (color ?A ?r ?g ?b) 
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
+                            )
+                            (backdrop false)
+                            ?bounds
+                            ?stateVars
+                        )
+                   )" 
+                => "?layer"),
+    ];
+
+
+    // Merge related rules.
+    rules.extend( vec![
+        // Kill NoOp - SaveLayer(nullptr, nullptr).
+        rewrite!("kill-noOp-merge";
+                 "(merge 
+                        ?dst 
+                        ?src
+                        (mergeParams 
+                            ?mergeIndex
+                            (paint 
+                                (color 255 ?r ?g ?b)
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
+                            )
+                            (backdrop false)
+                            (bounds false ?b)
+                            blankState
+                        )
+                    )" => "(concat ?dst ?src)"),
+
         // Kill if only a single drawCommand, and saveLayer is noOp.
         // SaveLayer alpha might have been merged into single drawCommand.
         // This rule corresponds to the killSaveLayer at line 216 in src/core/SkRecordOpts.cpp
@@ -124,7 +177,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         (mergeParams 
                             ?mergeIndex
                             (paint 
-                                (color 255 0 0 0)
+                                (color 255 ?r ?g ?b)
                                 (blender blendMode_srcOver)
                                 (imageFilter false)
                                 (colorFilter false)
@@ -206,8 +259,11 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         )
                   )"),
 
+    ]);
 
-        rewrite!("apply-alphaVOp"; 
+    // Virtual Op Bidirectional Rules.
+    rules.extend(vec![
+        rewrite!("alphaVirtualOp"; 
                  "(merge 
                         ?dst 
                         ?src 
@@ -227,7 +283,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?stateVars
                         )
                     )" 
-                 => 
+                 <=> 
                  "(merge 
                         ?dst 
                         (alpha ?a ?src) 
@@ -247,71 +303,53 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?stateVars
                         )
                     )"),
-        rewrite!("pack-alphaVOp"; 
+        rewrite!("srcOverVirtualOp"; 
                  "(merge 
-                        ?dst 
-                        (alpha ?A ?src) 
+                        ?layerA
+                        ?layerB
                         (mergeParams
                             ?mergeIndex
                             (paint 
-                                (color 255 ?r ?g ?b) 
+                                (color ?A 0 0 0) 
                                 (blender blendMode_srcOver)
-                                (imageFilter false)
-                                (colorFilter false)
-                                (pathEffect false)
-                                (maskFilter false)
-                                (shader false)
+                                ?imageFilter
+                                ?colorFilter
+                                ?pathEffect
+                                ?maskFilter
+                                ?shader
                             )
-                            (backdrop false)
-                            ?bounds
-                            ?stateVars
-                        )
-                    )" 
-                 => 
-                 "(merge 
-                        ?dst 
-                        ?src 
-                        (mergeParams
-                            ?mergeIndex
-                            (paint 
-                                (color ?A ?r ?g ?b) 
-                                (blender blendMode_srcOver)
-                                (imageFilter false)
-                                (colorFilter false)
-                                (pathEffect false)
-                                (maskFilter false)
-                                (shader false)
-                            )
-                            (backdrop false)
-                            ?bounds
-                            ?stateVars
-                        )
-                    )"),
-        rewrite!("remove-merge-blank"; 
-                 "(merge 
-                        ?layer 
-                        blank 
-                        (mergeParams
-                            ?mergeIndex
-                            (paint 
-                                (color ?A ?r ?g ?b) 
-                                (blender blendMode_srcOver)
-                                (imageFilter false)
-                                (colorFilter false)
-                                (pathEffect false)
-                                (maskFilter false)
-                                (shader false)
-                            )
-                            (backdrop false)
+                            ?backdrop
                             ?bounds
                             ?stateVars
                         )
                    )" 
-                => "?layer"),
+                   <=> "(srcOver 
+                        ?layerA 
+                        (someFilterAndState 
+                            ?layerB
+                            (mergeParams
+                                ?mergeIndex
+                                (paint 
+                                    (color ?A 0 0 0) 
+                                    (blender blendMode_srcOver)
+                                    ?imageFilter
+                                    ?colorFilter
+                                    ?pathEffect
+                                    ?maskFilter
+                                    ?shader
+                                )
+                                ?backdrop
+                                ?bounds
+                                ?stateVars
+                            )
+                        ) 
+                    )"),
 
+    ].concat());
 
-        rewrite!("remove-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
-        rewrite!("apply-alpha-on-draw"; 
+    // Folding VirtualOps
+    rules.extend(vec![
+        rewrite!("fold-draw"; 
                         "(alpha ?layer_alpha
                                 (drawCommand 
                                     ?x 
@@ -345,95 +383,26 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 )".parse().unwrap(),
                             }
                         }
-                ),
+                    ),
+        rewrite!("clipRect-intersect"; 
+                "(clipRect 
+                    (clipRect ?layer (clipRectParams ?bounds1 clipOp_intersect ?doAntiAlias)) 
+                    (clipRectParams ?bounds2 clipOp_intersect ?doAntiAlias)
+                )" =>  {
+                FoldClipRect {
+                    bounds1: "?bounds1".parse().unwrap(),
+                    bounds2: "?bounds2".parse().unwrap(),
+                    merged_bounds: "?bounds".parse().unwrap(),
+                    expr: "(clipRect ?layer (clipRectParams ?bounds clipOp_intersect ?doAntiAlias))".parse().unwrap(),
+                }
+            }),
+        ]);
 
-        rewrite!("apply-srcOver-VOp"; 
-                 "(merge 
-                        ?layerA
-                        ?layerB
-                        (mergeParams
-                            ?mergeIndex
-                            (paint 
-                                (color ?A 0 0 0) 
-                                (blender blendMode_srcOver)
-                                ?imageFilter
-                                ?colorFilter
-                                ?pathEffect
-                                ?maskFilter
-                                ?shader
-                            )
-                            ?backdrop
-                            ?bounds
-                            ?stateVars
-                        )
-                   )" 
-                   => "(srcOver 
-                        ?layerA 
-                        (someFilterAndState 
-                            ?layerB
-                            (mergeParams
-                                ?mergeIndex
-                                (paint 
-                                    (color ?A 0 0 0) 
-                                    (blender blendMode_srcOver)
-                                    ?imageFilter
-                                    ?colorFilter
-                                    ?pathEffect
-                                    ?maskFilter
-                                    ?shader
-                                )
-                                ?backdrop
-                                ?bounds
-                                ?stateVars
-                            )
-                        ) 
-                    )"),
 
-        rewrite!("unpack-srcOver-VOp"; 
-                   "(srcOver 
-                        ?layerA 
-                        (someFilterAndState 
-                            ?layerB
-                            (mergeParams
-                                ?mergeIndex
-                                (paint 
-                                    (color ?A 0 0 0) 
-                                    (blender blendMode_srcOver)
-                                    ?imageFilter
-                                    ?colorFilter
-                                    ?pathEffect
-                                    ?maskFilter
-                                    ?shader
-                                )
-                                ?backdrop
-                                ?bounds
-                                ?stateVars
-                            )
-                        ) 
-                 )" =>
-                 "(merge 
-                        ?layerA
-                        ?layerB
-                        (mergeParams
-                            ?mergeIndex
-                            (paint 
-                                (color ?A 0 0 0) 
-                                (blender blendMode_srcOver)
-                                ?imageFilter
-                                ?colorFilter
-                                ?pathEffect
-                                ?maskFilter
-                                ?shader
-                            )
-                            ?backdrop
-                            ?bounds
-                            ?stateVars
-                        )
-                   )" 
-                ),
-
-        // The only reason we have these rules is we can't unpack them.
-        rewrite!("killSomeFilterAndState";
+        // Packing and Unpacking Filter and State.
+        // This is not a bidirectional rule as information is lost when going one way.
+        rules.extend(vec![
+            rewrite!("killSomeFilterAndState";
                 "(someFilterAndState
                     ?layer
                     (mergeParams
@@ -453,8 +422,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                      )
                 )" => "?layer"),
 
-        // This is to mainly unpack into merge.
-        rewrite!("unpack-someFilterAndState";
+            rewrite!("recreateSomeFilterAndState";
                 "?layer" =>
                 "(someFilterAndState
                     ?layer
@@ -472,24 +440,32 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         (backdrop false)
                         (bounds false noOp)
                         blankState
-                ))"),
+                ))")
+        ]);
 
-        rewrite!("rearrange-srcOver"; 
-                 "(srcOver ?A (srcOver ?B ?C))" => "(srcOver (srcOver ?A ?B) ?C)"),
 
-        rewrite!("clipRect-intersect"; 
-                "(clipRect 
-                    (clipRect ?layer (clipRectParams ?bounds1 clipOp_intersect ?doAntiAlias)) 
-                    (clipRectParams ?bounds2 clipOp_intersect ?doAntiAlias)
-                )" =>  {
-                FoldClipRect {
-                    bounds1: "?bounds1".parse().unwrap(),
-                    bounds2: "?bounds2".parse().unwrap(),
-                    merged_bounds: "?bounds".parse().unwrap(),
-                    expr: "(clipRect ?layer (clipRectParams ?bounds clipOp_intersect ?doAntiAlias))".parse().unwrap(),
-                }
-        }),
-    ]
+        rules.extend(vec![
+            rewrite!("rearrange-srcOver"; 
+                    "(srcOver ?A (srcOver ?B ?C))" <=> "(srcOver (srcOver ?A ?B) ?C)"),
+            rewrite!("concatIsSrcOver";
+                     "(concat ?A ?B)" <=> "(srcOver ?A ?B)"),
+        ].concat());
+
+
+
+        // Bidirectional rules to extract common clipRect, m44 and matrixOp operations over srcOver.
+        rules.extend(vec![
+            rewrite!("extract-common-clip"; 
+                 "(srcOver (clipRect ?A ?params) (clipRect ?B ?params))" <=> "(clipRect (srcOver ?A ?B) ?params)"),
+
+            rewrite!("extract-common-m44"; 
+                 "(srcOver (concat44 ?A ?params) (concat44 ?B ?params))" <=> "(concat44 (srcOver ?A ?B) ?params)"),
+
+            rewrite!("extract-common-matrixOp"; 
+                 "(srcOver (matrixOp ?A ?params) (matrixOp ?B ?params))" <=> "(matrixOp (srcOver ?A ?B) ?params)")
+        ].concat());
+
+        rules
 }
 
 // This CostFn exists to prevent internal SkiLang functions (such as alpha) to never be extracted.
