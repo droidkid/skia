@@ -107,7 +107,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
         rewrite!("kill-blank-concat-1"; "(concat blank ?a)" => "?a"),
         rewrite!("kill-blank-concat-2"; "(concat ?a blank)" => "?a"),
         rewrite!("kill-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
-		/*
         rewrite!("kill-merge-blank"; 
                  "(merge 
                         ?layer 
@@ -129,13 +128,32 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         )
                    )" 
                 => "?layer"),
-		*/
-
     ];
 
 
     // Merge related rules.
     rules.extend( vec![
+        // Kill NoOp - SaveLayer(nullptr, nullptr).
+        rewrite!("kill-noOp-merge";
+                 "(merge 
+                        ?dst 
+                        ?src
+                        (mergeParams 
+                            ?mergeIndex
+                            (paint 
+                                (color 255 ?r ?g ?b)
+                                (blender blendMode_srcOver)
+                                (imageFilter false)
+                                (colorFilter false)
+                                (pathEffect false)
+                                (maskFilter false)
+                                (shader false)
+                            )
+                            (backdrop false)
+                            (bounds false ?b)
+                            blankState
+                        )
+                    )" => "(concat ?dst ?src)"),
         // Kill if only a single drawCommand, and saveLayer is noOp.
         // SaveLayer alpha might have been merged into single drawCommand.
         // This rule corresponds to the killSaveLayer at line 216 in src/core/SkRecordOpts.cpp
@@ -378,7 +396,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
             }),
         ]);
 
-		/*
         // Packing and Unpacking Filter and State.
         // This is not a bidirectional rule as information is lost when going one way.
         rules.extend(vec![
@@ -536,7 +553,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                      )
                 )"),
         ].concat());
-		*/
+
 
         rules.extend(vec![
             rewrite!("rearrange-srcOver"; 
@@ -605,7 +622,9 @@ impl Applier<SkiLang, ()> for FoldAlpha {
             SkiLang::Num(val) => val,
             _ => panic!("Not a valid alpha value")
         };
-        let merged_alpha = SkiLang::Num((layer_alpha * draw_alpha) / 255);
+        let mut merged_alpha_value = (layer_alpha * draw_alpha) / 255;
+        let merged_alpha = SkiLang::Num(merged_alpha_value);
+
         let mut subst = subst.clone();
         subst.insert(self.merged_alpha, egraph.add(merged_alpha));
         self.expr.apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
