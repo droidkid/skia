@@ -631,19 +631,25 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
 // This CostFn exists to prevent internal SkiLang functions (such as alpha) to never be extracted.
 pub struct SkiLangCostFn;
 impl CostFunction<SkiLang> for SkiLangCostFn {
-    type Cost=f64;
+    // Number of virtual ops, number of layers, number of commands
+    type Cost=(i32, i32, i32);
     fn cost<C>(&mut self, enode: &SkiLang, mut costs: C) -> Self::Cost
         where
             C: FnMut(Id) -> Self::Cost
     {
         let op_cost = match enode {
-            SkiLang::Alpha(_ids) => 100000000.0,
-            SkiLang::SomeFilterAndState(_ids) => 100000000.0,
-            SkiLang::SrcOver(_ids) => 100000000.0,
-            SkiLang::Merge(_ids) => 1.0,
-            _ => 0.0
+            SkiLang::Alpha(_ids) => (1, 0, 1),
+            SkiLang::SomeFilterAndState(_ids) => (1, 0, 1),
+            SkiLang::SrcOver(_ids) => (1, 0, 1),
+            // TODO: We want a cost that is (number of layers, cost) and that depends on subtree size.
+            SkiLang::Merge(_ids) => (0, 1, 1), 
+            _ => (0, 0, 1)
         };
-        enode.fold(op_cost, |sum, id| sum + costs(id))
+        enode.fold(op_cost, |sum, id| (
+                sum.0 + costs(id).0, 
+                sum.1 + costs(id).1,
+                sum.2 + costs(id).2
+        ))
     }
 }
 
