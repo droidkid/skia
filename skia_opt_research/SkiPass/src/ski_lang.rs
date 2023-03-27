@@ -440,6 +440,45 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
         ]);
 
         rules.extend(vec![
+            rewrite!("popFilterOntoLayer";
+                "(someFilterAndState
+                    ?layer
+                    (mergeParams
+                        ?mergeIndex
+                        ?paint
+                        ?backdrop
+                        ?bounds
+                        ?stateParams
+                    )
+                )" <=> 
+                "(someFilterAndState
+                    (someFilterAndState
+                        ?layer
+                        (mergeParams
+                            ?mergeIndex
+                            ?paint
+                            ?backdrop
+                            ?bounds
+                            blankState
+                        )
+                    )
+                    (mergeParams
+                        -1
+                        (paint 
+                            (color 255 0 0 0) 
+                            (blender blendMode_srcOver)
+                            (imageFilter false)
+                            (colorFilter false)
+                            (pathEffect false)
+                            (maskFilter false)
+                            (shader false)
+                        )
+                        (backdrop false)
+                        (bounds false noOp)
+                        ?stateParams
+                    )
+                )"),
+
             rewrite!("popClipRectOntoLayer";
                 "(someFilterAndState
                     ?layer
@@ -572,6 +611,18 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
 
             rewrite!("extract-common-matrixOp"; 
                  "(srcOver (matrixOp ?A ?params) (matrixOp ?B ?params))" <=> "(matrixOp (srcOver ?A ?B) ?params)")
+        ].concat());
+
+        // Alpha-Matrix Bidirectional rules
+        rules.extend(vec![
+            rewrite!("alpha-m44"; 
+                     "(alpha ?a (concat44 ?layer ?params))" <=> "(concat44 (alpha ?a ?layer) ?params)"),
+
+            rewrite!("alpha-clipRect"; 
+                     "(alpha ?a (clipRect ?layer ?params))" <=> "(clipRect (alpha ?a ?layer) ?params)"),
+
+            rewrite!("alpha-matrixOp"; 
+                     "(alpha ?a (matrixOp ?layer ?params))" <=> "(matrixOp (alpha ?a ?layer) ?params)"),
         ].concat());
 
         rules

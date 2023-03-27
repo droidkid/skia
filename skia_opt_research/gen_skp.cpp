@@ -115,7 +115,10 @@ void draw_006_clipRect2(SkCanvas *canvas) {
     SkPaint pSolidBlue;
     pSolidBlue.setColor(SK_ColorBLUE);
 
-    canvas->saveLayer(nullptr, nullptr);
+    SkPaint lPaint;
+    lPaint.setAlphaf(0.5);
+
+    canvas->saveLayer(nullptr, &lPaint);
     canvas->clipRect(SkRect::MakeWH(90, 80));
     canvas->drawCircle(100, 100, 60, paint);
     canvas->restore();
@@ -388,7 +391,32 @@ void draw_017_TestClipRectIntersection(SkCanvas *canvas) {
     canvas->drawRect(SkRect::MakeLTRB(10, 10, 500, 500), p);
 }
 
-void draw_018_collapseScale(SkCanvas *canvas) {
+
+void draw_018_commonsScale(SkCanvas *canvas) {
+    /*
+       This test is to show that our optimizer outputs
+
+       concat44
+       drawRect
+       saveLayer
+        drawRect
+       restore
+
+        instead of 
+
+       save
+        concat44
+        drawRect
+       restore
+       save
+        concat44
+        saveLayer
+            drawRect
+        restore
+       restore
+
+       The concat44 ought to be lifted up because of srcOver.
+    */
     SkPaint red_paint;
     red_paint.setColor(SK_ColorRED);
     SkPaint yellow_paint;
@@ -400,15 +428,19 @@ void draw_018_collapseScale(SkCanvas *canvas) {
     font.setScaleX(.3f);
 
   	SkPaint lPaint;
-    SkRect rect[1] = {{ 10, 20, 90, 110 }};
+  	sk_sp<SkImageFilter> shadowFilter = SkImageFilters::DropShadow(
+             5.0f, 0.0f, 5.0f, 0.0f, SK_ColorBLUE, nullptr);
+	lPaint.setImageFilter(shadowFilter);
 
     canvas->drawRect(SkRect::MakeLTRB(60, 0, 120, 60), yellow_paint);
     canvas->scale(2.0, 2.0);
     canvas->drawRect(SkRect::MakeLTRB(0, 0, 30, 30), green_paint);
   	    canvas->saveLayer(nullptr, &lPaint);
+        SkRect rect[1] = {{ 10, 20, 90, 110 }};
         canvas->drawString("Hello", rect[0].fLeft + 10, rect[0].fBottom - 10, font, red_paint);
     canvas->restore();
 }
+
 
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
@@ -435,5 +467,5 @@ int main(int argc, char **argv) {
     raster(512, 512, draw_015_mergeSrcOverTree, FLAGS_dir[0], "015_mergeSrcOverTree.skp");
     raster(512, 512, draw_016_collapseInnerMerge, FLAGS_dir[0], "016_collapseInnerMerge.skp");
     raster(512, 512, draw_017_TestClipRectIntersection, FLAGS_dir[0], "017_TestClipRectIntersection.skp");
-    raster(512, 512, draw_018_collapseScale, FLAGS_dir[0], "018_CollapseScale.skp");
+    raster(512, 512, draw_018_commonsScale, FLAGS_dir[0], "018_CommonScale.skp");
 }
