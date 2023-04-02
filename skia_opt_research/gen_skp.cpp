@@ -15,9 +15,28 @@
 
 using namespace std;
 
+/**
+  * Generates .skp files meant for testing SkiPass in specified directory.
+  * The -dir flag expects a path to the directory that exists and is specified without a trailing '/'.
+  *
+  * To add a test case, add a raster(draw_function, skp_filename). 
+  * MAKE SURE skp_filename ends with .skp to be picked up by the benchmark.
+  *
+  * Building:
+  * $ ninja -C ${BUILD_DIR} skia_opt_gen_skps
+  *
+  * Usage: 
+  * $ ./skia_opt_gen_skps 
+  * $ ./skia_opt_gen_skps --dir <output_dir>
+  */
+
 static DEFINE_string(dir, "./skia_opt_research/skps", "directory where to output skps");
 
-void raster(int width, int height, void (*draw)(SkCanvas*), const char* dir, const char *testcase_name) {
+void raster(void (*draw)(SkCanvas*), const char *skp_filename) {
+    int width = 512;
+    int height = 512;
+    const char *dir = FLAGS_dir[0];
+
     SkPictureRecorder recorder;
     SkCanvas* pictureCanvas = recorder.beginRecording({0, 0, SkScalar(width), SkScalar(height)});
     draw(pictureCanvas);
@@ -26,7 +45,7 @@ void raster(int width, int height, void (*draw)(SkCanvas*), const char* dir, con
     sk_sp<SkData> skData = picture->serialize();
     std::string skp_path(dir);
     skp_path.append("/");
-    skp_path.append(testcase_name);
+    skp_path.append(skp_filename);
     SkFILEWStream skpOut(skp_path.c_str());
     (void)skpOut.write(skData->data(), skData->size());
 }
@@ -89,23 +108,16 @@ void draw_003_nestedSaveLayer(SkCanvas *canvas) {
     canvas->restore();
 }
 
-void draw_004_drawOval(SkCanvas *canvas) {
-    SkPaint pSolidBlue;
-    pSolidBlue.setColor(SK_ColorBLUE);
-    canvas->drawOval(SkRect::MakeLTRB(10, 70, 60, 120), pSolidBlue);
-    canvas->restore();
-}
-
 void draw_005_clipRect(SkCanvas *canvas) {
     SkPaint paint;
     canvas->drawOval(SkRect::MakeLTRB(10, 0, 260, 120), paint);
   	canvas->save();
-    canvas->clipRect(SkRect::MakeWH(90, 80));
-  	    canvas->save();
         canvas->clipRect(SkRect::MakeWH(90, 80));
-        canvas->drawOval(SkRect::MakeLTRB(40, 0, 160, 120), paint);
+  	    canvas->save();
+            canvas->clipRect(SkRect::MakeWH(90, 80));
+            canvas->drawOval(SkRect::MakeLTRB(40, 0, 160, 120), paint);
         canvas->restore();
-    canvas->drawOval(SkRect::MakeLTRB(40, 0, 160, 120), paint);
+        canvas->drawOval(SkRect::MakeLTRB(40, 0, 160, 120), paint);
     canvas->restore();
 }
 
@@ -119,8 +131,8 @@ void draw_006_clipRect2(SkCanvas *canvas) {
     lPaint.setAlphaf(0.5);
 
     canvas->saveLayer(nullptr, &lPaint);
-    canvas->clipRect(SkRect::MakeWH(90, 80));
-    canvas->drawCircle(100, 100, 60, paint);
+        canvas->clipRect(SkRect::MakeWH(90, 80));
+        canvas->drawCircle(100, 100, 60, paint);
     canvas->restore();
 
     canvas->drawRect(SkRect::MakeLTRB(90, 90, 110, 130), pSolidBlue);
@@ -179,6 +191,10 @@ void draw_007_saveLayer(SkCanvas *canvas) {
     canvas->restore();
 }
 
+/**
+  * This is to check if SkiPass removes empty SaveLayers.
+  * (SkRecordOpts does not kill empty saveLayers)
+  */
 void draw_008_noOpSaveLayerRemove(SkCanvas *canvas) {
     SkPaint pSolidBlue;
     pSolidBlue.setColor(SK_ColorBLUE);
@@ -221,6 +237,9 @@ void draw_010_recordOptsTest_NoopSaveRestores(SkCanvas *canvas) {
     canvas->restore();
 }
 
+/**
+  * This test is to check SkiPass killing layers under various conditions (mirroring SkRecordOpts.cpp). 
+  */
 void draw_011_recordOptsTest_NoopSaveLayerDrawRestore(SkCanvas *canvas) {
 	// Copied from RecordOptsTest.cpp
     SkRect bounds = SkRect::MakeWH(100, 200);
@@ -245,11 +264,6 @@ void draw_011_recordOptsTest_NoopSaveLayerDrawRestore(SkCanvas *canvas) {
         canvas->drawRect(draw, opaqueDrawPaint);
     canvas->restore();
 
-    // Should NOT BE killed! See NotOnlyAlphaPaintSaveLayer case.
-    canvas->saveLayer(nullptr, &translucentLayerPaint);
-        canvas->drawRect(draw, opaqueDrawPaint);
-    canvas->restore();
-
     // Should NOT BE killed!
     canvas->saveLayer(nullptr, &xfermodeLayerPaint);
         canvas->drawRect(draw, opaqueDrawPaint);
@@ -268,28 +282,33 @@ void draw_011_recordOptsTest_NoopSaveLayerDrawRestore(SkCanvas *canvas) {
     canvas->restore();
 }
 
+/**
+  * If the alpha in a saveLayer has a non-alpha color component, Sk_Record_Opts never
+  * attempts to fold it. Ski_Pass does attempt to fold it. 
+  */
 void draw_012_recordOptsTest_NotOnlyAlphaPaintSaveLayer(SkCanvas *canvas) {
 	// Copied from RecordOptsTest.cpp
-    SkRect   draw1 = SkRect::MakeWH(50, 60);
-    SkRect   draw2 = SkRect::MakeWH(150, 60);
-
+    SkRect draw1 = SkRect::MakeWH(50, 60);
+    SkRect draw2 = SkRect::MakeWH(150, 60);
 
     SkPaint translucentLayerPaint;
     translucentLayerPaint.setColor(0x80808080);  // Not only alpha.
 
     SkPaint opaqueDrawPaint2;
     opaqueDrawPaint2.setColor(0xFF800000);  // Opaque.
-                                           //
+
     SkPaint opaqueDrawPaint1;
     opaqueDrawPaint1.setColor(0xFF102030);  // Opaque.
 
     canvas->drawRect(draw1, opaqueDrawPaint1);
-    // Can NOT be killed, you get a diff.
     canvas->saveLayer(nullptr, &translucentLayerPaint);
         canvas->drawRect(draw2, opaqueDrawPaint2);
     canvas->restore();
 }
 
+/**
+  * This test is to check if the state outside a saveLayer outside is captured correctly.
+  */
 void draw_013_captureSaveLayerState_scaleOutside(SkCanvas *canvas) {
     SkPaint paint;
     paint.setColor(SkColorSetRGB(255, 0, 0));
@@ -308,6 +327,9 @@ void draw_013_captureSaveLayerState_scaleOutside(SkCanvas *canvas) {
     canvas->restore();
 }
 
+/**
+  * This test is to check if the state inside a saveLayer does not leak outside.
+  */
 void draw_014_captureSaveLayerState_scaleInside(SkCanvas *canvas) {
     SkPaint paint;
     paint.setColor(SkColorSetRGB(255, 0, 0));
@@ -326,6 +348,11 @@ void draw_014_captureSaveLayerState_scaleInside(SkCanvas *canvas) {
     canvas->restore();
 }
 
+/**
+  * This test is to show that when the layers are being merged using srcOver,
+  * you can kill the saveLayers.
+  * We are trying to apply the rule srcOver(a, srcOver(b, c)) = srcOver(srcOver(a, b), c)
+  */
 void draw_015_mergeSrcOverTree(SkCanvas *canvas) {
     SkPaint red;
     red.setColor(SK_ColorRED);
@@ -355,32 +382,10 @@ void draw_015_mergeSrcOverTree(SkCanvas *canvas) {
 }
 
 
-void draw_016_collapseInnerMerge(SkCanvas *canvas) {
-    SkPaint red;
-    red.setColor(SK_ColorRED);
-  	red.setAlphaf(0.5);  
-  
-  	SkPaint blue;
-    blue.setColor(SK_ColorBLUE);
-  	blue.setAlphaf(0.5);  
-
-    SkPaint green;
-    green.setColor(SK_ColorGREEN);
-  	green.setAlphaf(0.5);  
-
-    SkPaint yellow;
-    yellow.setColor(SK_ColorYELLOW);
-  	yellow.setAlphaf(0.5);  
-  
-  	canvas->drawRect(SkRect::MakeLTRB(10, 60, 100, 120), red);
-  	canvas->saveLayer(nullptr, nullptr);
-  		canvas->drawRect(SkRect::MakeLTRB(50, 60, 120, 120), blue);
-  		canvas->saveLayer(nullptr, nullptr);
-  			canvas->drawRect(SkRect::MakeLTRB(30, 30, 90, 100), green);
-  		canvas->restore();
-    canvas->restore();
-}
-
+/**
+  * SkiPass ought to fold the clipRects intersects into a single clipRect.
+  * When the clipRect mode is difference, it should NOT fold the clipRects.
+  */
 void draw_017_TestClipRectIntersection(SkCanvas *canvas) {
     SkPaint p;
     p.setColor(SK_ColorRED);
@@ -389,34 +394,37 @@ void draw_017_TestClipRectIntersection(SkCanvas *canvas) {
     canvas->clipRect(SkRect::MakeLTRB(30, 30, 200, 200));
     canvas->clipRect(SkRect::MakeLTRB(0, 0, 35, 35));
     canvas->drawRect(SkRect::MakeLTRB(10, 10, 500, 500), p);
+
+    canvas->clipRect(SkRect::MakeLTRB(30, 330, 200, 500), SkClipOp::kDifference);
+    canvas->clipRect(SkRect::MakeLTRB(300, 300, 500, 500), SkClipOp::kDifference);
+    canvas->drawRect(SkRect::MakeLTRB(10, 310, 500, 400), p);
 }
 
+/*
+   This test is to show that our optimizer outputs
 
+   concat44
+   drawRect
+   saveLayer
+    drawRect
+   restore
+
+    instead of 
+
+   save
+    concat44
+    drawRect
+   restore
+   save
+    concat44
+    saveLayer
+        drawRect
+    restore
+   restore
+
+   The concat44 ought to be lifted up because of srcOver.
+*/
 void draw_018_commonsScale(SkCanvas *canvas) {
-    /*
-       This test is to show that our optimizer outputs
-
-       concat44
-       drawRect
-       saveLayer
-        drawRect
-       restore
-
-        instead of 
-
-       save
-        concat44
-        drawRect
-       restore
-       save
-        concat44
-        saveLayer
-            drawRect
-        restore
-       restore
-
-       The concat44 ought to be lifted up because of srcOver.
-    */
     SkPaint red_paint;
     red_paint.setColor(SK_ColorRED);
     SkPaint yellow_paint;
@@ -446,26 +454,21 @@ int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
     initializeEventTracingForTools();
 
-    raster(512, 512, draw_000_simpleDraw, FLAGS_dir[0], "000_simpleDraw.skp");
-    raster(512, 512, draw_001_saveLayerRect, FLAGS_dir[0], "001_saveLayerRect.skp");
-    raster(512, 512, draw_002_blankSaveLayer, FLAGS_dir[0], "002_blankSaveLayer.skp");
-    raster(512, 512, draw_003_nestedSaveLayer, FLAGS_dir[0], "003_nestedSaveLayer.skp");
-    raster(512, 512, draw_004_drawOval, FLAGS_dir[0], "004_drawOval.skp");
-    raster(512, 512, draw_005_clipRect, FLAGS_dir[0], "005_clipRect.skp");
-    raster(512, 512, draw_006_clipRect2, FLAGS_dir[0], "006_clipRect2.skp");
-    raster(512, 512, draw_007_saveLayer, FLAGS_dir[0], "007_saveLayer.skp");
-    raster(512, 512, draw_008_noOpSaveLayerRemove, FLAGS_dir[0], "008_noOpSave.skp");
-
-    // Some tests from RecordOptsTest.cpp
-    raster(512, 512, draw_009_recordOptsTest_SingleNoopSaveRestore, FLAGS_dir[0], "SingleNoopSaveRestore.skp");
-    raster(512, 512, draw_010_recordOptsTest_NoopSaveRestores, FLAGS_dir[0], "NoopSaveRestores.skp");
-    raster(512, 512, draw_011_recordOptsTest_NoopSaveLayerDrawRestore, FLAGS_dir[0], "NoopSaveLayerDrawRestore.skp");
-    raster(512, 512, draw_012_recordOptsTest_NotOnlyAlphaPaintSaveLayer, FLAGS_dir[0], "NotOnlyAlphaPaintSaveLayer.skp");
-
-    raster(512, 512, draw_013_captureSaveLayerState_scaleOutside, FLAGS_dir[0], "013_captureSaveLayerState_scaleOutside.skp");
-    raster(512, 512, draw_014_captureSaveLayerState_scaleInside, FLAGS_dir[0], "014_captureSaveLayerState_scaleInside.skp");
-    raster(512, 512, draw_015_mergeSrcOverTree, FLAGS_dir[0], "015_mergeSrcOverTree.skp");
-    raster(512, 512, draw_016_collapseInnerMerge, FLAGS_dir[0], "016_collapseInnerMerge.skp");
-    raster(512, 512, draw_017_TestClipRectIntersection, FLAGS_dir[0], "017_TestClipRectIntersection.skp");
-    raster(512, 512, draw_018_commonsScale, FLAGS_dir[0], "018_CommonScale.skp");
+    raster(draw_000_simpleDraw, "000_simpleDraw.skp");
+    raster(draw_001_saveLayerRect,"001_saveLayerRect.skp");
+    raster(draw_002_blankSaveLayer, "002_blankSaveLayer.skp");
+    raster(draw_003_nestedSaveLayer, "003_nestedSaveLayer.skp");
+    raster(draw_005_clipRect, "005_clipRect.skp");
+    raster(draw_006_clipRect2, "006_clipRect2.skp");
+    raster(draw_007_saveLayer, "007_saveLayer.skp");
+    raster(draw_008_noOpSaveLayerRemove, "008_noOpSave.skp");
+    raster(draw_009_recordOptsTest_SingleNoopSaveRestore, "009_SingleNoopSaveRestore.skp");
+    raster(draw_010_recordOptsTest_NoopSaveRestores, "010_NoopSaveRestores.skp");
+    raster(draw_011_recordOptsTest_NoopSaveLayerDrawRestore, "011_NoopSaveLayerDrawRestore.skp");
+    raster(draw_012_recordOptsTest_NotOnlyAlphaPaintSaveLayer, "012_NotOnlyAlphaPaintSaveLayer.skp");
+    raster(draw_013_captureSaveLayerState_scaleOutside, "013_captureSaveLayerState_scaleOutside.skp");
+    raster(draw_014_captureSaveLayerState_scaleInside, "014_captureSaveLayerState_scaleInside.skp");
+    raster(draw_015_mergeSrcOverTree, "015_mergeSrcOverTree.skp");
+    raster(draw_017_TestClipRectIntersection, "017_TestClipRectIntersection.skp");
+    raster(draw_018_commonsScale, "018_CommonScale.skp");
 }

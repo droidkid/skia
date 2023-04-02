@@ -20,8 +20,6 @@ wp_to_url = {
     "carsvg": 'http://codinginparadise.org/projects/svgweb/samples/svg-files/car.svg',
     "gujarati_wiki": 'https://en.wikipedia.org/wiki/Gujarati_phonology',
     "the_verge": 'http://theverge.com/'
-
-
 }
 
 for webpage in wp_to_url:
@@ -32,4 +30,3 @@ for webpage in wp_to_url:
     copy_command = "for f in " + skp_dir + "/*.skp; do cp -- \"$f\" \""+skp_dir+ "_$(basename $f)\"; done"
     subprocess.run(copy_command, shell=True)
     subprocess.run("rm -r "+skp_dir, shell=True)
-
