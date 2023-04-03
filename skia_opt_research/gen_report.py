@@ -6,11 +6,11 @@ import argparse
 import skia_opt_metrics_pb2 as SkiaOptMetrics
 
 '''
-This script assumes that skp_opt_membench will dump the following files in a directory
-1. output a 000_summary_csv.txt
-2. For each skp in the above file, a <skp_name>_<optimization>_log.txt file which contains memory allocations per draw call.
+The script will write an index.html in the report directory generated as a result 
+of a skia_opt_membench run.
 
-The script will write an index.html in the report directory.
+This script assumes that the report directory has a benchmark.pb containing a proto of
+SkiaOptMetrics and summarizes those results to be rendered in a HTML template.
 
 Usage
 python gen_report.py -d <dir_from_membench>
@@ -33,7 +33,7 @@ proto_file.close()
 benchmark = SkiaOptMetrics.SkiaOptBenchmark()
 benchmark.ParseFromString(proto_data)
 
-opts = ['NO_OPT', 'SKIA_RECORD_OPTS', 'SKIA_RECORD_OPTS_2']
+non_skipass_opts = ['NO_OPT', 'SKIA_RECORD_OPTS', 'SKIA_RECORD_OPTS_2']
 skp_membench_results = []
 
 summary_result = {}
@@ -43,7 +43,7 @@ summary_result['ref_img_url'] = ('#')
 summary_result['skipass_log'] = ('#')
 summary_result['skipass_value'] = 0
 summary_result['skipass_link'] = '#'
-for opt in opts:
+for opt in non_skipass_opts:
     summary_result[opt] = {}
     summary_result[opt]['value'] = 0
     summary_result[opt]['link'] = '#'
@@ -70,6 +70,7 @@ for skp_benchmark in benchmark.skp_benchmark_runs:
         skipass_mem = int(opt_benchmark.malloc_allocated_bytes)
         summary_result['skipass_value'] += skipass_mem
 
+    # Now compare SKI_PASS results with other Optimizations.
     for opt_benchmark in skp_benchmark.optimization_benchmark_runs:
         opt = SkiaOptMetrics.Optimization.Name(opt_benchmark.optimization_type)
         if opt == 'SKI_PASS':
@@ -90,7 +91,7 @@ for skp_benchmark in benchmark.skp_benchmark_runs:
 
     skp_membench_results.append(skp_membench_result)
 
-for opt in opts:
+for opt in non_skipass_opts:
     mem = summary_result[opt]['value']
     skipass_mem = summary_result['skipass_value']
     summary_result[opt]['comp'] = "{:.1f}".format(100.0 * (mem-skipass_mem)/mem)
@@ -103,7 +104,7 @@ template_env = jinja2.Environment( loader=template_loader)
 template = template_env.get_template(report_template_filepath)
 template_vars = {
     "title": os.path.basename(args.report_dir),
-    "skp_membench_opts": opts,
+    "skp_membench_opts": non_skipass_opts,
     "skp_membench_results": skp_membench_results,
 }
 
