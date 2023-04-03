@@ -22,29 +22,59 @@ define_language! {
         "noOp" = NoOp,
         "blankSurface" = BlankSurface,
         "blankState" = BlankState, 
-        // ------ BLEND_MODE SYMBOLS BEGIN --------//
-        "blendMode_srcOver" = BlendMode_SrcOver,
-        "blendMode_src" = BlendMode_Src,
-        "blendMode_unknown" = BlendMode_Unknown,
-        // -------BLEND MODES SYMBOLS END --------//
-        // ------ CLIP_OP SYMBOLS BEGIN --------//
-        "clipOp_diff" = ClipOp_Diff,
-        "clipOp_intersect" = ClipOp_Intersect,
-        // -------CLIP OP SYMBOLS END --------//
-        // drawCommand(index, paint)
+
+        // ------ Skia translation operations start ------//
+        /* 
+            1. Concat: Sequentially apply draw commands.
+            (concat layer1 layer2) ->
+                <layer1 draw commands>
+                <layer2 draw commands>
+
+            2. Merge: Directly corresponds to SaveLayer.
+            (merge layer1 layer2 mergeParams) -> 
+                <layer1 draw commands>
+                save (IF mergeParams has state)
+                    <state commands>
+                    saveLayer(mergeParams)
+                        <layer2 drawCommands>
+                    restore()
+                restore()
+         
+
+            3. DrawCommand: Apply the drawCommand at index in reference SKP.
+                (drawCommand index paint)
+                    If paint has an alpha, modify the alpha 
+                    before applying the drawCommand.
+        */
+        "concat" = Concat([Id; 2]),
+        "merge" = Merge([Id; 3]),
         "drawCommand" = DrawCommand([Id; 2]),
-        // TODO: Split matrix and clip ops. Right now clips are a 'matrixOp'
-        // matrixOp(layer, matrixOpParams) -> return layer after applying transform on layer 
+        // ------ Skia translation operations end ------//
+
+        // ------ Virtual Ops (with Skia equivalent) --- //
         "matrixOp" = MatrixOp([Id; 2]),
         "concat44" = Concat44([Id; 2]),
-        // clipRect(layer, clipRectParams) -> return layer after applying clip on layer 
         "clipRect" = ClipRect([Id; 2]),
-        // concat(layer1, layer2) -> return layer resulting from sequential execution of
-        // instructions(layer1), instructions(layer2)
-        "concat" = Concat([Id; 2]),
-        // filter(exists)
-        "backdrop" = Backdrop([Id; 1]),
-        // ------ PAINT_PARAMS BEGIN --------//
+
+        // ------ Virtual Ops (with NO Skia equivalent) --- //
+        // (alpha layer value) -> apply transparency of value on layer
+        "alpha" = Alpha([Id; 2]), // alphaChannel, layer
+        // (srcOver dst src)
+        "srcOver" = SrcOver([Id; 2]),
+
+        "someFilterAndState" = SomeFilterAndState([Id; 2]),
+
+        // ----- Primitives and Parameter holders --- //
+        // (rect l t r b)
+        "rect" = Rect([Id; 4]),
+        // (bound exists? rect)
+        "bounds" = Bounds([Id; 2]),
+
+        /* paint(
+            color filter blender imageFilter colorFilter
+            pathEffect maskFilter shader
+        )
+        */
         "color" = Color([Id; 4]),
         "blender" = Blender([Id; 1]),
         "imageFilter" = ImageFilter([Id; 1]),
@@ -52,49 +82,27 @@ define_language! {
         "pathEffect" = PathEffect([Id; 1]),
         "maskFilter" = MaskFilter([Id; 1]),
         "shader" = Shader([Id; 1]),
-        // ------ PAINT_PARAMS END --------//
-		// paint(color, 
-        //      filter, 
-        //      blender,
-        //      imageFilter,
-        //      colorFilter,
-        //      pathEffect,
-        //      maskFilter,
-        //      shader
-        //  )
 		"paint" = Paint([Id; 7]),
-        // rect ( l, t, r, b )
-        "rect" = Rect([Id; 4]),
-        // bound (exists? rect)
-        "bounds" = Bounds([Id; 2]),
-        // merge(layer1, layer2, mergeParams())
-        // This translates directly to saveLayer command in Skia.
-        "merge" = Merge([Id; 3]),
-        // EGRAPH INTERNAL COMMANDS FOLLOW
-        // Below commands have no literal equivalent in Skia, and are only used for EGraph
-        // Extraction
-        // alpha(layer, value) -> apply transparency of value on layer
-        "alpha" = Alpha([Id; 2]), // alphaChannel, layer
-        // MergeParams([index, paint, backdrop, bounds, state])
+
+        // (backdrop ?exists)
+        "backdrop" = Backdrop([Id; 1]),
+        // (mergeParams index paint backdrop bounds state)
         "mergeParams" = MergeParams([Id; 5]),
-        // ClipParams
-        // ClipRectParams([bounds, clipOp, doAntiAlias])
+        // (clipRectParams bounds, clipOp, doAntiAlias)
         "clipRectParams" = ClipRectParams([Id; 3]),
-        // MatrixOpParams([index])  - eventually add other matrix stuff.
+        // (matrixOpParams index)
         "matrixOpParams" = MatrixOpParams([Id; 1]),
-        // 4x4 matrix
-        // TODO: Are we going to store 16 items?
+        // (m44 float1.. float16). Floats are store in column major order.
         "m44" = M44([Id; 16]),
-        "srcOver" = SrcOver([Id; 2]),
-        "someFilterAndState" = SomeFilterAndState([Id; 2]),
+
+        "blendMode_srcOver" = BlendMode_SrcOver,
+        "blendMode_src" = BlendMode_Src,
+        "blendMode_unknown" = BlendMode_Unknown,
+        "clipOp_diff" = ClipOp_Diff,
+        "clipOp_intersect" = ClipOp_Intersect,
     }
 }
 
-// TODO: Decide on a convention in writing rules 
-// Both of the below are equivalent:
-//    ?pathEffect
-//    (pathEffect ?pathEffectExists)
-// Right now the choice is arbitrary, there's also a choice of using Null.
 pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     // Trivial Rules, related to blank and identity.
     let mut rules = vec![
@@ -305,7 +313,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         (mergeParams
                             ?mergeIndex
                             (paint 
-                                (color ?A 0 0 0) 
+                                ?color
                                 (blender blendMode_srcOver)
                                 ?imageFilter
                                 ?colorFilter
@@ -325,7 +333,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             (mergeParams
                                 ?mergeIndex
                                 (paint 
-                                    (color ?A 0 0 0) 
+                                    ?color
                                     (blender blendMode_srcOver)
                                     ?imageFilter
                                     ?colorFilter
