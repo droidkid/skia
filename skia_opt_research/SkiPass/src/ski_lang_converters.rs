@@ -18,7 +18,7 @@ use crate::protos::{
 pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
     match bounds {
         Some(bounds) => {
-            let _boundsExist = expr.add(SkiLang::Exists(true));
+            let _boundsExist = expr.add(SkiLang::Bool(true));
 
             let left = ordered_float::NotNan::new(bounds.left).unwrap();
             let top = ordered_float::NotNan::new(bounds.top).unwrap();
@@ -41,12 +41,12 @@ pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bo
 pub fn bounds_proto_to_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
     match bounds {
         Some(_value) => {
-            let boundsExist = expr.add(SkiLang::Exists(true));
+            let boundsExist = expr.add(SkiLang::Bool(true));
             let rect = bounds_proto_to_rect_expr(expr, bounds);
             expr.add(SkiLang::Bounds([boundsExist, rect]))
         },
         None => {
-            let boundsExist = expr.add(SkiLang::Exists(false));
+            let boundsExist = expr.add(SkiLang::Bool(false));
             let noOp = expr.add(SkiLang::NoOp);
             expr.add(SkiLang::Bounds([boundsExist, noOp]))
         }
@@ -108,55 +108,55 @@ pub fn paint_proto_to_expr(expr: &mut RecExpr<SkiLang>, skPaint: &Option<SkPaint
 
     let image_filter = match &skPaint {
        	Some(skPaint) => {
-            let exists = expr.add(SkiLang::Exists(skPaint.image_filter.is_some()));
+            let exists = expr.add(SkiLang::Bool(skPaint.image_filter.is_some()));
             expr.add(SkiLang::ImageFilter([exists]))
        	},
        	None => {
-            let exists = expr.add(SkiLang::Exists(false));
+            let exists = expr.add(SkiLang::Bool(false));
             expr.add(SkiLang::ImageFilter([exists]))
         }
     };
 
     let color_filter = match &skPaint {
        	Some(skPaint) => {
-            let exists = expr.add(SkiLang::Exists(skPaint.color_filter.is_some()));
+            let exists = expr.add(SkiLang::Bool(skPaint.color_filter.is_some()));
             expr.add(SkiLang::ColorFilter([exists]))
        	},
        	None => {
-            let exists = expr.add(SkiLang::Exists(false));
+            let exists = expr.add(SkiLang::Bool(false));
             expr.add(SkiLang::ColorFilter([exists]))
         }
     };
 
     let path_effect = match &skPaint {
        	Some(skPaint) => {
-            let exists = expr.add(SkiLang::Exists(skPaint.path_effect.is_some()));
+            let exists = expr.add(SkiLang::Bool(skPaint.path_effect.is_some()));
             expr.add(SkiLang::PathEffect([exists]))
        	},
        	None => {
-            let exists = expr.add(SkiLang::Exists(false));
+            let exists = expr.add(SkiLang::Bool(false));
             expr.add(SkiLang::PathEffect([exists]))
         }
     };
 
     let mask_filter = match &skPaint {
        	Some(skPaint) => {
-            let exists = expr.add(SkiLang::Exists(skPaint.mask_filter.is_some()));
+            let exists = expr.add(SkiLang::Bool(skPaint.mask_filter.is_some()));
             expr.add(SkiLang::MaskFilter([exists]))
        	},
        	None => {
-            let exists = expr.add(SkiLang::Exists(false));
+            let exists = expr.add(SkiLang::Bool(false));
             expr.add(SkiLang::MaskFilter([exists]))
         }
     };
 
     let shader = match &skPaint {
        	Some(skPaint) => {
-            let exists = expr.add(SkiLang::Exists(skPaint.shader.is_some()));
+            let exists = expr.add(SkiLang::Bool(skPaint.shader.is_some()));
             expr.add(SkiLang::Shader([exists]))
        	},
        	None => {
-            let exists = expr.add(SkiLang::Exists(false));
+            let exists = expr.add(SkiLang::Bool(false));
             expr.add(SkiLang::Shader([exists]))
         }
     };
@@ -184,10 +184,10 @@ pub fn bounds_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> Option<Bounds> {
     let bounds: Option<Bounds> = match &expr[id] {
         SkiLang::Bounds(ids) => {
             match &expr[ids[0]] {
-                SkiLang::Exists(true) => {
+                SkiLang::Bool(true) => {
                     Some(unpack_rect_to_bounds(&expr, ids[1]))
                 },
-                SkiLang::Exists(false) => {
+                SkiLang::Bool(false) => {
                     None
                 },
                 _ => panic!("First param of bounds not exist flag")
@@ -227,10 +227,10 @@ pub fn unpack_float(expr: &RecExpr<SkiLang>, id: Id) -> f64 {
 
 pub fn get_exists_value(expr: &RecExpr<SkiLang>, id: Id) -> bool {
     match expr[id] {
-        SkiLang::Exists(value) => {
+        SkiLang::Bool(value) => {
             value
         },
-        _ => panic!("Not a SkiLang::Exists")
+        _ => panic!("Not a SkiLang::Bool")
     }
 }
 

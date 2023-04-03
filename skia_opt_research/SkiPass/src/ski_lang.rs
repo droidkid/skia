@@ -18,12 +18,9 @@ define_language! {
         // make sure to add a . (1.0 instead of 1)
         Num(i32),
         Float(ordered_float::NotNan<f64>),
-        // TODO: Rename to Bool
-        Exists(bool),
+        Bool(bool),
         "noOp" = NoOp,
-        // TODO: Rename to BlankSurface
-        "blank" = Blank,
-        // blankState
+        "blankSurface" = BlankSurface,
         "blankState" = BlankState, 
         // ------ BLEND_MODE SYMBOLS BEGIN --------//
         "blendMode_srcOver" = BlendMode_SrcOver,
@@ -101,16 +98,16 @@ define_language! {
 pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     // Trivial Rules, related to blank and identity.
     let mut rules = vec![
-        rewrite!("kill-blank-clip"; "(clipRect blank ?p)" => "blank"),
-        rewrite!("kill-blank-mOp"; "(matrixOp blank ?p)" => "blank"),
-        rewrite!("kill-blank-concat44"; "(concat44 blank ?p)" => "blank"),
-        rewrite!("kill-blank-concat-1"; "(concat blank ?a)" => "?a"),
-        rewrite!("kill-blank-concat-2"; "(concat ?a blank)" => "?a"),
+        rewrite!("kill-blankSurface-clip"; "(clipRect blankSurface ?p)" => "blankSurface"),
+        rewrite!("kill-blankSurface-mOp"; "(matrixOp blankSurface ?p)" => "blankSurface"),
+        rewrite!("kill-blankSurface-concat44"; "(concat44 blankSurface ?p)" => "blankSurface"),
+        rewrite!("kill-blankSurface-concat-1"; "(concat blankSurface ?a)" => "?a"),
+        rewrite!("kill-blankSurface-concat-2"; "(concat ?a blankSurface)" => "?a"),
         rewrite!("kill-noOp-alpha"; "(alpha 255 ?src)" => "?src"),
-        rewrite!("kill-merge-blank"; 
+        rewrite!("kill-merge-blankSurface"; 
                  "(merge 
                         ?layer 
-                        blank 
+                        blankSurface
                         (mergeParams
                             ?mergeIndex
                             (paint 

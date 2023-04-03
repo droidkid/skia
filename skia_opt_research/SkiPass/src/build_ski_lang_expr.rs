@@ -68,7 +68,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                     } else {
                         panic!("Unknown clipOp mode")
                     };
-                    let isAntiAlias = expr.add(SkiLang::Exists(clip_rect.do_anti_alias));
+                    let isAntiAlias = expr.add(SkiLang::Bool(clip_rect.do_anti_alias));
                     let clipRectParams = expr.add(SkiLang::ClipRectParams([clipOpRect, clipOp, isAntiAlias]));
                     drawStack.push((StackOp::ClipRect, clipRectParams));
                },
@@ -85,7 +85,7 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                    let paint = paint_proto_to_expr(expr, &save_layer.paint);
 
 
-                   let backdrop_exists = expr.add(SkiLang::Exists(save_layer.backdrop.is_some()));
+                   let backdrop_exists = expr.add(SkiLang::Bool(save_layer.backdrop.is_some()));
                    let backdrop = expr.add(SkiLang::Backdrop([backdrop_exists]));
 
                    let saveLayerBounds = bounds_proto_to_expr(expr, &save_layer.bounds);
@@ -151,7 +151,7 @@ fn reduceStack(
     from_restore: bool
 ) {
 
-    drawStack.push((StackOp::Surface, expr.add(SkiLang::Blank)));
+    drawStack.push((StackOp::Surface, expr.add(SkiLang::BlankSurface)));
     while drawStack.len() != 1 {
         let (e1_type, e1) = drawStack.pop().unwrap();
         let (e2_type, e2) = drawStack.pop().unwrap();
@@ -181,7 +181,7 @@ fn reduceStack(
                     }
                 }
 
-                let blank = expr.add(SkiLang::Blank);
+                let blank = expr.add(SkiLang::BlankSurface);
 
 				reduceStack(expr, drawStack, false);
                 let dst = drawStack.pop().unwrap().1;

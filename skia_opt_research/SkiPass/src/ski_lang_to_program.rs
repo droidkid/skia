@@ -34,7 +34,7 @@ pub fn expr_to_program(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstructio
 fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
     let node = &expr[id];
     match node {
-        SkiLang::Blank => {
+        SkiLang::BlankSurface => {
             SkiPassSurface {
                 instructions: vec![],
                 modified_matrix: false,
@@ -87,7 +87,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             };
 
             let do_anti_alias : bool = match &expr[clipRectParams[2]] {
-                SkiLang::Exists(val) => *val,
+                SkiLang::Bool(val) => *val,
                 _ => panic!("ClipOp third parameter is not bool (doAntiAlias)"),
             };
 
@@ -177,8 +177,8 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             let backdrop_exists = match &expr[mergeParamIds[2]] {
                 SkiLang::Backdrop(ids) => {
                     match &expr[ids[0]] {
-                        SkiLang::Exists(value) => *value,
-                        _ => panic!("Backdrop first param not Exists")
+                        SkiLang::Bool(value) => *value,
+                        _ => panic!("Backdrop first param not Bool")
                     }
                 },
                 _ => panic!("Merge params third parameter not backdrop")
