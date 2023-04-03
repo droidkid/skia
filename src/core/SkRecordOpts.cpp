@@ -317,7 +317,13 @@ void SkRecordOptimize2(SkRecord* record) {
     record->defrag();
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// SKI PASS //
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
+/**
+  * Given a draw command, extract the paint (if any) onto a ski_pass_proto::SkPaint.
+  */
 class SkRecordPaintExtractor {
 public:
     template <typename T>
@@ -377,15 +383,20 @@ private:
 };
 
 
+/**
+  * Given a SkRecords, construct it's ski_pass_proto::SkRecord instance (which is the input
+  * to the Rust optimizer).
+  * Must be called sequentially for all SkRecords in a SkRecord.
+  */
 class SkiPassRecordBuilder {
     public:
         SkiPassRecordBuilder(ski_pass_proto::SkRecord* skipass_record):
-            skipass_record(skipass_record), count(0) {}
+            skipass_record(skipass_record), record_index(0) {}
 
         template <typename T>
         void operator()(const T& command) {
             ski_pass_proto::SkRecords *records = skipass_record->add_records();
-            records->set_index(count++);
+            records->set_index(record_index++);
             ski_pass_proto::SkRecords::DrawCommand *draw_command = 
                 records->mutable_draw_command();
             draw_command->set_name(std::string(NameOf(command)));
@@ -394,7 +405,7 @@ class SkiPassRecordBuilder {
 
         void operator()(const SkRecords::SaveLayer& command) {
             ski_pass_proto::SkRecords *records = skipass_record->add_records();
-            records->set_index(count++);
+            records->set_index(record_index++);
 
             ski_pass_proto::SkRecords_SaveLayer *saveLayer = records->mutable_save_layer();
 
@@ -413,7 +424,7 @@ class SkiPassRecordBuilder {
 
         void operator()(const SkRecords::Concat44& command) {
             ski_pass_proto::SkRecords *records = skipass_record->add_records();
-            records->set_index(count++);
+            records->set_index(record_index++);
 
             ski_pass_proto::SkRecords_Concat44 *concat44 = records->mutable_concat44();
             ski_pass_proto::SkM44 *matrix = concat44->mutable_matrix();
@@ -426,19 +437,19 @@ class SkiPassRecordBuilder {
 
         void operator()(const SkRecords::Save& command) {
             ski_pass_proto::SkRecords *records = skipass_record->add_records();
-            records->set_index(count++);
+            records->set_index(record_index++);
             records->mutable_save();
         }
 
         void operator()(const SkRecords::Restore& command) {
             ski_pass_proto::SkRecords *records = skipass_record->add_records();
-            records->set_index(count++);
+            records->set_index(record_index++);
             records->mutable_restore();
         }
 
         void operator()(const SkRecords::ClipRect& command) {
             ski_pass_proto::SkRecords *records = skipass_record->add_records();
-            records->set_index(count++);
+            records->set_index(record_index++);
             auto clip_rect = records->mutable_clip_rect();
             auto bounds = clip_rect->mutable_bounds();
 
@@ -473,12 +484,15 @@ class SkiPassRecordBuilder {
 
     private:
         ski_pass_proto::SkRecord* skipass_record;
-        int count;
+        int record_index;
 };
 
-class SkRecordApplier {
+/**
+  * Given a draw command, apply it onto the canvas after modifying the draw command's alpha. 
+  */
+class SkRecordAlphaApplier {
 public:
-    SkRecordApplier(SkCanvas *canvas):
+    SkRecordAlphaApplier(SkCanvas *canvas):
         fDraw(canvas, nullptr, nullptr, 0, nullptr),
         canvas(canvas) {}
 
@@ -514,13 +528,20 @@ private:
     template <typename T> static T* AsPtr(T& x) { return &x; }
 };
 
+/**
+  * SkRecord *record: The record to optimize.
+  * SkCanvas *canvas: The canvas on which the optimized draw instructions will be applied on.
+  * log_fname: File path to dump SkiPass logs
+  */
 void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_fname) {
+    // Build SkiPassRecord Proto (input to rust optimizer).
     ski_pass_proto::SkRecord skipass_record;
     SkiPassRecordBuilder builder(&skipass_record);
     for (int i=0; i < record->count(); i++) {
         record->visit(i, builder);
     }
 
+    // Serialize and pass the proto onto to the rust optimizer.
     std::string skipass_record_serialized;
     skipass_record.SerializeToString(&skipass_record_serialized);
     SkiPassResultPtr result_ptr = ski_pass_optimize(
@@ -530,17 +551,18 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
     ski_pass_proto::SkiPassRunResult result;
     result.ParseFromString(result_data);
 
-    // WRITE RESULTS TO LOG.
-    // TODO: This flow can be cleaner.
-    FILE *fp = fopen(log_fname.c_str(), "w");
-    fprintf(fp, "%s", result.DebugString().c_str());
-    fclose(fp);
+    // Log the results to a file. 
+    // TODO: It might be cleaner to let the Rust side handle this.
+    FILE *skipass_log = fopen(log_fname.c_str(), "w");
+    fprintf(skipass_log, "%s", result.DebugString().c_str());
+    fclose(skipass_log);
 
-    SkRecordApplier applier(canvas);
+    SkRecordAlphaApplier alphaApplier(canvas);
+    // Apply the instructions passed on by the optimizer and write into SkRecord *record.
     for (auto instruction: result.program().instructions()) {
         if (instruction.has_copy_record()) {
-	        applier.setAlpha(instruction.copy_record().paint().color().alpha_u8());
-            record->mutate((int)(instruction.copy_record().index()), applier);
+	        alphaApplier.setAlpha(instruction.copy_record().paint().color().alpha_u8());
+            record->mutate((int)(instruction.copy_record().index()), alphaApplier);
         }
         if (instruction.has_save()) {
             canvas->save();
