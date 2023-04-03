@@ -16,9 +16,6 @@ use std::slice;
 use protos::{
     SkRecord, 
     SkiPassRunResult, 
-    SkiPassRunInfo,
-    ski_pass_run_info::SkiPassRunError,
-    ski_pass_run_info::SkiPassRunStatus,
 };
 use prost::Message;
 
@@ -35,21 +32,14 @@ pub extern "C" fn ski_pass_optimize(data_ptr: *const u8, len: size_t) -> SkiPass
         slice::from_raw_parts(data_ptr, len as usize)
     };
 
-    let mut skipass_run = SkiPassRunResult::default();
-
-    match SkRecord::decode(data_slice) {
+    let skipass_run = match SkRecord::decode(data_slice) {
         Ok(sk_record) => {
-            skipass_run = ski_pass::optimize(sk_record);
+            ski_pass::optimize(sk_record)
         }
         Err(_e) => {
-            let mut run_info = SkiPassRunInfo::default();
-            run_info.status = SkiPassRunStatus::Failed as i32;
-            run_info.error = Some(SkiPassRunError {
-                error_message: "Trouble decoding SkRecords proto bytes".to_string()
-            });
-            skipass_run.run_info = Some(run_info);
+            panic!("Decoding input proto from Skia failed");
         }
-    }
+    };
 
     let mut result_data: Vec<u8> = Vec::new();
     result_data.reserve(skipass_run.encoded_len());

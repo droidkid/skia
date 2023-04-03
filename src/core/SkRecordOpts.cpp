@@ -559,7 +559,7 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
 
     SkRecordAlphaApplier alphaApplier(canvas);
     // Apply the instructions passed on by the optimizer and write into SkRecord *record.
-    for (auto instruction: result.program().instructions()) {
+    for (auto instruction: result.optimized_program().instructions()) {
         if (instruction.has_copy_record()) {
 	        alphaApplier.setAlpha(instruction.copy_record().paint().color().alpha_u8());
             record->mutate((int)(instruction.copy_record().index()), alphaApplier);

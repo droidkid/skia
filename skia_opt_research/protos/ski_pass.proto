@@ -114,23 +114,7 @@ message SkRecord {
     repeated SkRecords records = 1;
 }
 
-message SkiPassRunInfo {
-    enum SkiPassRunStatus {
-        UNKONWN = 0;
-        OK = 1;
-        FAILED = 2;
-    }
-    SkiPassRunStatus status = 1;
-
-    // SkRecords that SkiPass didn't care about for this run.
-    repeated SkRecords ignored_records = 2;
-
-    message SkiPassRunError {
-        string error_message = 1;
-    }
-    SkiPassRunError error = 3;
-
-    // Debug info
+message SkiPassDebugInfo {
     string skilang_expr = 4;
     string extracted_skilang_expr = 5;
     SkRecord input_record = 6;
@@ -182,6 +166,6 @@ message SkiPassProgram {
 }
 
 message SkiPassRunResult {
-    SkiPassProgram program = 1;
-    SkiPassRunInfo run_info = 2;
+    SkiPassProgram optimized_program = 1; 
+    SkiPassDebugInfo debug_info = 2;
 }
