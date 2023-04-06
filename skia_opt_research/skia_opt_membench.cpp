@@ -91,17 +91,11 @@ void benchmark_optimization(
 
     SkRecord *record = &skp_record;
 
-    // Record the SkiPassRunResult proto into a log file.
-
-    // Optimize SkRecord.
     switch (optType) {
         case skia_opt_metrics::NO_OPT:
             break;
         case skia_opt_metrics::SKIA_RECORD_OPTS:
             SkRecordOptimize(record);
-            break;
-        case skia_opt_metrics::SKIA_RECORD_OPTS_2:
-            SkRecordOptimize2(record);
             break;
         case skia_opt_metrics::SKI_PASS:
     		std::string skipass_log_fname = 
@@ -205,7 +199,6 @@ int main(int argc, char** argv) {
         skp_benchmark->set_skp_name(FLAGS_skps[i]);
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::NO_OPT, skp_benchmark->add_optimization_benchmark_runs());
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::SKIA_RECORD_OPTS, skp_benchmark->add_optimization_benchmark_runs());
-        benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::SKIA_RECORD_OPTS_2, skp_benchmark->add_optimization_benchmark_runs());
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::SKI_PASS, skp_benchmark->add_optimization_benchmark_runs());
     }
 

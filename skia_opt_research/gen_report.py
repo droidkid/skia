@@ -33,7 +33,7 @@ proto_file.close()
 benchmark = SkiaOptMetrics.SkiaOptBenchmark()
 benchmark.ParseFromString(proto_data)
 
-non_skipass_opts = ['NO_OPT', 'SKIA_RECORD_OPTS', 'SKIA_RECORD_OPTS_2']
+non_skipass_opts = ['NO_OPT', 'SKIA_RECORD_OPTS']
 skp_membench_results = []
 
 summary_result = {}
