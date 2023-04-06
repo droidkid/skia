@@ -38,7 +38,6 @@ skp_membench_results = []
 
 summary_result = {}
 summary_result['name'] = 'SUMMARY'
-summary_result['json'] = ('#')
 summary_result['ref_img_url'] = ('#')
 summary_result['skipass_log'] = ('#')
 summary_result['skipass_value'] = 0
@@ -53,7 +52,6 @@ for skp_benchmark in benchmark.skp_benchmark_runs:
 
     skp_membench_result = {}
     skp_membench_result['name'] = skp_name
-    skp_membench_result['json'] = ('json/%s.json' % skp_name)
     skp_membench_result['skp_no_opt_url'] = ('%s_NO_OPT.skp' % skp_name)
     skp_membench_result['skp_ski_pass_url'] = ('%s_SKI_PASS.skp' % skp_name)
     skp_membench_result['ref_img_url'] = ("renders/%s.png" % skp_name)
