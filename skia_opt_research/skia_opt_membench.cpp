@@ -44,7 +44,8 @@
   */
 
 static DEFINE_string2(skps, r, "", ".skp files to run the mem bench on.");
-static DEFINE_string(out_dir, "", "directory to output .");
+static DEFINE_string(out_dir, "", "directory to output renders, logs and benchmark results");
+static DEFINE_string(benchmark_name, "", "Name of the benchmark, results will be stored in <out_dir>/<benchmark_name>.pb");
 
 static std::map<std::string, int> unsupported_draw_commands_count;
 
@@ -59,7 +60,7 @@ std::string getFileName(const char *filePath) {
 }
 
 void benchmark_optimization(
-        const char* skpName, 
+        const char* skpPath, 
         skia_opt_metrics::Optimization optType, 
         skia_opt_metrics::OptimizationBenchmark *benchmark) {
 
@@ -68,11 +69,11 @@ void benchmark_optimization(
 
     // Get SKP from file.
     std::unique_ptr<SkStream> stream;
-    stream = SkStream::MakeFromFile(skpName);
+    stream = SkStream::MakeFromFile(skpPath);
     sk_sp<SkPicture> src(SkPicture::MakeFromStream(stream.get()));
     if (!src) {
         benchmark->set_optimization_status(skia_opt_metrics::OptimizationStatus::FAILED);
-        fprintf(stderr, "Error loading %s Skp. Skipping.\n", skpName);
+        fprintf(stderr, "Error loading %s Skp. Skipping.\n", skpPath);
         return;
     }
 
@@ -100,7 +101,7 @@ void benchmark_optimization(
         case skia_opt_metrics::SKI_PASS:
     		std::string skipass_log_fname = 
         		outDir + "/" +
-        		getFileName(skpName) + "_" + 
+        		getFileName(skpPath) + "_" + 
         		skia_opt_metrics::Optimization_Name(optType) + 
         		"_SkiPassRunResult.txt";
             SkiPassOptimize(record, &skipass_recorder, skipass_log_fname);
@@ -116,7 +117,7 @@ void benchmark_optimization(
     // Record the analysis onto a canvas and log file.
     std::string optimization_log_fname = 
         outDir + "/" +
-        getFileName(skpName) + "_" + 
+        getFileName(skpPath) + "_" + 
         skia_opt_metrics::Optimization_Name(optType) + 
         "_log.txt";
     FILE *log_file = fopen(optimization_log_fname.c_str(), "w");
@@ -131,57 +132,41 @@ void benchmark_optimization(
     benchmark->set_malloc_allocated_bytes(analyzer.getTotalMallocBytes());
 
     // Render NO_OPT image for Diffing.
-    if (optType == skia_opt_metrics::NO_OPT) {
-        std::string path = 
-            outDir + 
-            "/renders/" + 
-            getFileName(skpName) + ".png";
-        SkFILEWStream file(path.c_str());
-        SkEncodeImage(&file, bitmap, SkEncodedImageFormat::kPNG, 100);
+    std::string img_path = outDir + 
+        // !! Make sure this directory exists !!
+        "/" + skia_opt_metrics::Optimization_Name(optType) + "_renders/" + 
+        getFileName(skpPath) + ".png";
+    SkFILEWStream img_file(img_path.c_str());
+    SkEncodeImage(&img_file, bitmap, SkEncodedImageFormat::kPNG, 100);
+
+    std::string opt_skp_path = 
+        outDir + 
+        "/" + skia_opt_metrics::Optimization_Name(optType) + "_renders/" + 
+        getFileName(skpPath) +  "_" +
+        skia_opt_metrics::Optimization_Name(optType) + 
+        ".skp";
+
+    // The original canvas was used to encode onto a PNG.
+    // To create a SKP, you need a canvas that was created from SkPictureRecorder.
+    // We fill the SKPCanvas by running it through SkpAnalyzer.
+    SkPictureRecorder recorder;
+    SkCanvas* skpCanvas = recorder.beginRecording({0, 0, SkScalar(w), SkScalar(h)});
+
+    // SkpAnalyzer logs memory, duration and draw commmand onto a file.
+    // We don't care about that here, so we redirect it to a sink. For this 
+    // case all we care about is draw commands being played onto a SkCanvas created
+    // from SkPictureRecorder.
+    FILE *sink = fopen("/dev/null", "w");
+    SkpAnalyzer analyzer2(skpCanvas, record->count(), sink);
+    for (int i = 0; i < record->count(); i++) {
+        record->visit(i, analyzer2);
     }
+    fclose(sink);
 
-    // Render SKI_PASS image for Diffing.
-    if (optType == skia_opt_metrics::SKI_PASS) {
-        std::string path = 
-            outDir + 
-            "/skipass_renders/" + 
-            getFileName(skpName) + ".png";
-        SkFILEWStream file(path.c_str());
-        SkEncodeImage(&file, bitmap, SkEncodedImageFormat::kPNG, 100);
-    }
-
-    // Render SKI_PASS and NO_OPT .skps. You can load these .skps onto debugger.skia.org
-    if (optType == skia_opt_metrics::SKI_PASS || optType == skia_opt_metrics::NO_OPT) {
-        std::string skp_path = 
-            outDir + 
-            "/" + 
-            getFileName(skpName) +  "_" +
-            skia_opt_metrics::Optimization_Name(optType) + 
-            ".skp";
-
-
-        // The original canvas was used to encode onto a PNG.
-        // To create a SKP, you need a canvas that was created from SkPictureRecorder.
-        // We fill the SKPCanvas by running it through SkpAnalyzer.
-        SkPictureRecorder recorder;
-        SkCanvas* skpCanvas = recorder.beginRecording({0, 0, SkScalar(w), SkScalar(h)});
-
-        // SkpAnalyzer logs memory, duration and draw commmand onto a file.
-        // We don't care about that here, so we redirect it to a sink. For this 
-        // case all we care about is draw commands being played onto a SkCanvas created
-        // from SkPictureRecorder.
-        FILE *sink = fopen("/dev/null", "w");
-        SkpAnalyzer analyzer2(skpCanvas, record->count(), sink);
-        for (int i = 0; i < record->count(); i++) {
-            record->visit(i, analyzer2);
-        }
-        fclose(sink);
-
-        sk_sp<SkPicture> picture = recorder.finishRecordingAsPicture();
-        sk_sp<SkData> skData = picture->serialize();
-        SkFILEWStream skpOut(skp_path.c_str());
-        (void)skpOut.write(skData->data(), skData->size());
-    }
+    sk_sp<SkPicture> optSkPicture = recorder.finishRecordingAsPicture();
+    sk_sp<SkData> optSkData = optSkPicture->serialize();
+    SkFILEWStream optSkpOut(opt_skp_path.c_str());
+    (void)optSkpOut.write(optSkData->data(), optSkData->size());
 }
 
 int main(int argc, char** argv) {
@@ -196,7 +181,7 @@ int main(int argc, char** argv) {
 
     for (int i=0; i < FLAGS_skps.size(); i++) {
         skia_opt_metrics::SkpBenchmark *skp_benchmark = benchmark.add_skp_benchmark_runs();
-        skp_benchmark->set_skp_name(FLAGS_skps[i]);
+        skp_benchmark->set_skp_name(getFileName(FLAGS_skps[i]));
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::NO_OPT, skp_benchmark->add_optimization_benchmark_runs());
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::SKIA_RECORD_OPTS, skp_benchmark->add_optimization_benchmark_runs());
         benchmark_optimization(FLAGS_skps[i], skia_opt_metrics::SKI_PASS, skp_benchmark->add_optimization_benchmark_runs());
@@ -204,7 +189,8 @@ int main(int argc, char** argv) {
 
     // Write the results to a file encoded as a protocol buffer.
     std::string benchmarkResultDir(FLAGS_out_dir[0]);
-    std::string benchmarkResult(benchmarkResultDir + "/benchmark.pb");
+    std::string benchmarkName(FLAGS_benchmark_name[0]);
+    std::string benchmarkResult(benchmarkResultDir + "/" + benchmarkName + ".pb");
     std::ofstream outStream(benchmarkResult, std::ofstream::out);
     benchmark.SerializeToOstream(&outStream);
 

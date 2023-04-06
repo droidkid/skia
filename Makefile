@@ -11,6 +11,7 @@ REPORT_TEMPLATE=./skia_opt_research/report_template.html
 # All skps will generated or copied over to ${SKPS}
 WEBPAGE_SKPS_DIR = ./skia_opt_research/webpage_skps
 SKPS = $(wildcard ./skia_opt_research/skps/*.skp)
+WEBPAGE_SKPS = $(wildcard ./skia_opt_research/webpage_skps/*.skp)
 SKP_DIR=./skia_opt_research/skps
 
 SKI_PASS_DIR=./skia_opt_research/SkiPass
@@ -24,8 +25,9 @@ PROTOS = $(wildcard ./skia_opt_research/protos/*.proto)
 
 # These variables must be relative to ${NIGHTLY_REPORT_DIR} so that the 
 # diff tool generates the correct relative paths.
-SKP_RENDERS = renders
-SKI_PASS_SKP_RENDERS = skipass_renders
+BASELINE_RENDERS = NO_OPT_renders
+SKI_PASS_SKP_RENDERS = SKI_PASS_renders
+EXISTING_OPTS_RENDERS = SKIA_RECORD_OPTS_renders
 DIFF_REPORT_DIR = diff
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = python
@@ -60,21 +62,24 @@ build-nightly: build-skipass gen-nightly gen-proto
 gen-skps: build-nightly
 	mkdir -p $(SKP_DIR)
 	$(BUILD_DIR)/skia_opt_gen_skps
-	cp ${WEBPAGE_SKPS_DIR}/* ${SKP_DIR}/
 
 local-nightly: clean-skp gen-skps build-nightly
 	mkdir -p $(NIGHTLY_REPORT_DIR)
-	mkdir -p ${NIGHTLY_REPORT_DIR}/$(SKP_RENDERS)
+	mkdir -p ${NIGHTLY_REPORT_DIR}/$(BASELINE_RENDERS)
 	mkdir -p ${NIGHTLY_REPORT_DIR}/$(SKI_PASS_SKP_RENDERS)
+	mkdir -p ${NIGHTLY_REPORT_DIR}/$(EXISTING_OPTS_RENDERS)
 	mkdir -p ${NIGHTLY_REPORT_DIR}/$(DIFF_REPORT_DIR)
+	mkdir -p ${NIGHTLY_REPORT_DIR}/$(DIFF_REPORT_DIR)/baseline_renders
+	mkdir -p ${NIGHTLY_REPORT_DIR}/$(DIFF_REPORT_DIR)/skipass_renders
 	mkdir -p ${NIGHTLY_REPORT_DIR}/${SKP_JSON_RENDERS}
-	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR)
-	# Generating diff report
-	cp -r ${NIGHTLY_REPORT_DIR}/${SKP_RENDERS} ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/renders
-	cp -r ${NIGHTLY_REPORT_DIR}/${SKI_PASS_SKP_RENDERS} ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/skipass_renders
+	$(BUILD_DIR)/skia_opt_membench --skps $(SKPS) --out_dir $(NIGHTLY_REPORT_DIR) --benchmark_name unit_testcases
+	$(BUILD_DIR)/skia_opt_membench --skps $(WEBPAGE_SKPS) --out_dir $(NIGHTLY_REPORT_DIR) --benchmark_name webpage
+	# Generating diff report. We copy to fix broken links in the final SkDiff report.    
+	cp -r ${NIGHTLY_REPORT_DIR}/${BASELINE_RENDERS}/*.png ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/baseline_renders
+	cp -r ${NIGHTLY_REPORT_DIR}/${SKI_PASS_SKP_RENDERS}/*.png ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR}/skipass_renders
 	cd ${NIGHTLY_REPORT_DIR}/${DIFF_REPORT_DIR} && \
-		$(BUILD_DIR)/skdiff renders skipass_renders report
-	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE)
+		$(BUILD_DIR)/skdiff baseline_renders skipass_renders report
+	$(REPORT_GENERATOR) -d $(NIGHTLY_REPORT_DIR) -t $(REPORT_TEMPLATE) -b 'unit_testcases webpage'
 
 nightly: clean local-nightly
 	nightly-results publish $(NIGHTLY_REPORT_DIR)
