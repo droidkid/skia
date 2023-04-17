@@ -1,4 +1,5 @@
 use egg::*;
+use parse_display::{Display, FromStr};
 
 use crate::protos::{
     Bounds
@@ -10,12 +11,22 @@ use crate::ski_lang_converters::{
     unpack_float
 };
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+#[display("[rect:l:{l},t:{t},r:{r},b:{b}]")]
+pub struct Rect {
+	pub l: ordered_float::NotNan<f64>,
+	pub t: ordered_float::NotNan<f64>,
+	pub r: ordered_float::NotNan<f64>,
+	pub b: ordered_float::NotNan<f64>,
+}
+
 define_language! {
     pub enum SkiLang {
         // NOTE: The order of Num and Float matters!
         // First all Nums are parsed, and then Floats. So if
         // you want to force a number to be parsed as a float,
         // make sure to add a . (1.0 instead of 1)
+		Rect(Rect),
         Num(i32),
         Float(ordered_float::NotNan<f64>),
         Bool(bool),
@@ -64,9 +75,6 @@ define_language! {
 
         "someFilterAndState" = SomeFilterAndState([Id; 2]),
 
-        // ----- Primitives and Parameter holders --- //
-        // (rect l t r b)
-        "rect" = Rect([Id; 4]),
         // (bound exists? rect)
         "bounds" = Bounds([Id; 2]),
 
@@ -723,8 +731,8 @@ impl Applier<SkiLang, ()> for FoldClipRect {
         let bounds1 = subst[self.bounds1];
         let bounds2 = subst[self.bounds2];
     
-        let bounds1_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds1), 4.into());
-        let bounds2_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds2), 4.into());
+        let bounds1_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds1), 0.into());
+        let bounds2_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds2), 0.into());
 
         let bounds_proto = bounds_intersection(bounds1_proto, bounds2_proto); 
         let mut bounds_expr = RecExpr::default();

@@ -1,5 +1,8 @@
 use egg::*;
-use crate::ski_lang::SkiLang;
+use crate::ski_lang::{
+	SkiLang,
+	Rect
+};
 
 use crate::protos::{
     SkM44,
@@ -15,22 +18,18 @@ use crate::protos::{
     sk_paint::Shader, 
 };
 
+use ordered_float::NotNan;
+
 pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
     match bounds {
         Some(bounds) => {
             let _boundsExist = expr.add(SkiLang::Bool(true));
-
-            let left = ordered_float::NotNan::new(bounds.left).unwrap();
-            let top = ordered_float::NotNan::new(bounds.top).unwrap();
-            let right = ordered_float::NotNan::new(bounds.right).unwrap();
-            let bottom = ordered_float::NotNan::new(bounds.bottom).unwrap();
-
-            let leftExpr = expr.add(SkiLang::Float(left));
-            let topExpr = expr.add(SkiLang::Float(top));
-            let rightExpr = expr.add(SkiLang::Float(right));
-            let bottomExpr = expr.add(SkiLang::Float(bottom));
-
-            expr.add(SkiLang::Rect([leftExpr, topExpr, rightExpr, bottomExpr]))
+            expr.add(SkiLang::Rect(Rect {
+				l: NotNan::new(bounds.left).unwrap(), 
+				t: NotNan::new(bounds.top).unwrap(), 
+				r: NotNan::new(bounds.right).unwrap(), 
+				b: NotNan::new(bounds.bottom).unwrap()
+			}))
         },
         None => {
             panic!("There is no Bounds Proto to unpack!");
@@ -200,16 +199,12 @@ pub fn bounds_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> Option<Bounds> {
 
 pub fn unpack_rect_to_bounds(expr: &RecExpr<SkiLang>, id: Id) -> Bounds {
     match &expr[id] {
-        SkiLang::Rect(ids) => {
-            let left = unpack_float(expr, ids[0]);
-            let top = unpack_float(expr, ids[1]);
-            let right = unpack_float(expr, ids[2]);
-            let bottom = unpack_float(expr, ids[3]);
+        SkiLang::Rect(rect) => {
             Bounds {
-                left,
-                top,
-                right,
-                bottom
+                left: *rect.l,
+                top: *rect.t,
+                right: *rect.r,
+				bottom: *rect.b 
             }
         },
         _ => panic!("This is not a rect! {}", &expr[id])
