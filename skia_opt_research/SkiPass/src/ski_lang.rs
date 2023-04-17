@@ -85,6 +85,20 @@ impl SkiLangM44 {
 	}
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+pub enum SkiLangClipRectMode {
+	Diff,
+	Intersect
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+#[display("[ClipRectParams::mode:{clipRectMode},bounds:{bounds},antiAlias:{doAntiAlias}]")]
+pub struct SkiLangClipRectParams {
+	pub clipRectMode: SkiLangClipRectMode,
+	pub bounds: SkiLangRect,
+	pub doAntiAlias: bool,
+}
+
 define_language! {
     pub enum SkiLang {
         // NOTE: The order of Num and Float matters!
@@ -93,6 +107,7 @@ define_language! {
         // make sure to add a . (1.0 instead of 1)
 		M44(SkiLangM44),
 		Rect(SkiLangRect),
+		ClipRectParams(SkiLangClipRectParams),
         Num(i32),
         Float(ordered_float::NotNan<f64>),
         Bool(bool),
@@ -162,16 +177,12 @@ define_language! {
         "backdrop" = Backdrop([Id; 1]),
         // (mergeParams index paint backdrop bounds state)
         "mergeParams" = MergeParams([Id; 5]),
-        // (clipRectParams bounds, clipOp, doAntiAlias)
-        "clipRectParams" = ClipRectParams([Id; 3]),
         // (matrixOpParams index)
         "matrixOpParams" = MatrixOpParams([Id; 1]),
 
         "blendMode_srcOver" = BlendMode_SrcOver,
         "blendMode_src" = BlendMode_Src,
         "blendMode_unknown" = BlendMode_Unknown,
-        "clipOp_diff" = ClipOp_Diff,
-        "clipOp_intersect" = ClipOp_Intersect,
     }
 }
 
@@ -460,17 +471,17 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         }
                     ),
         rewrite!("clipRect-intersect"; 
-                "(clipRect 
-                    (clipRect ?layer (clipRectParams ?bounds1 clipOp_intersect ?doAntiAlias)) 
-                    (clipRectParams ?bounds2 clipOp_intersect ?doAntiAlias)
-                )" =>  {
+                "(clipRect (clipRect ?layer ?innerClipRectParams) ?outerClipRectParams)" =>  {
                 FoldClipRect {
-                    bounds1: "?bounds1".parse().unwrap(),
-                    bounds2: "?bounds2".parse().unwrap(),
-                    merged_bounds: "?bounds".parse().unwrap(),
-                    expr: "(clipRect ?layer (clipRectParams ?bounds clipOp_intersect ?doAntiAlias))".parse().unwrap(),
+                    innerClipRectParams: "?innerClipRectParams".parse().unwrap(),
+                    outerClipRectParams: "?outerClipRectParams".parse().unwrap(),
+                    foldedClipRectParams: "?foldedClipRectParams".parse().unwrap(),
+                    expr: "(clipRect ?layer ?foldedClipRectParams)".parse().unwrap(),
                 }
-            }),
+            }
+
+
+			),
         ]);
 
         // Packing and Unpacking Filter and State.
@@ -766,23 +777,22 @@ impl Applier<SkiLang, ()> for FoldAlpha {
 }
 
 struct FoldClipRect {
-    bounds1: Var,
-    bounds2: Var,
-    merged_bounds: Var,
+    innerClipRectParams: Var,
+    outerClipRectParams: Var,
+    foldedClipRectParams: Var,
     expr: Pattern<SkiLang>
 }
 
-fn bounds_intersection(bounds1: Bounds, bounds2: Bounds) -> Bounds {
-    Bounds {
-        left: bounds1.left.max(bounds2.left),
-        top: bounds1.top.max(bounds2.top),
-        right: bounds1.right.min(bounds2.right),
-        bottom: bounds1.bottom.min(bounds2.bottom) 
+fn bounds_intersection(bounds1: &SkiLangRect, bounds2: &SkiLangRect) -> SkiLangRect {
+    SkiLangRect {
+        l: bounds1.l.max(bounds2.l),
+        t: bounds1.t.max(bounds2.t),
+        r: bounds1.r.min(bounds2.r),
+        b: bounds1.b.min(bounds2.b) 
     }
 }
 
 impl Applier<SkiLang, ()> for FoldClipRect {
-
     fn apply_one(
         &self, 
         egraph: &mut EGraph<SkiLang, ()>,
@@ -790,20 +800,37 @@ impl Applier<SkiLang, ()> for FoldClipRect {
         subst: &Subst, 
         searcher_pattern: Option<&PatternAst<SkiLang>>, 
         rule_name: Symbol) -> Vec<Id> {
+		let innerClipRectParamExpr = &egraph.id_to_expr(subst[self.innerClipRectParams]);
+        let innerClipRectParams = match &innerClipRectParamExpr[0.into()] {
+			SkiLang::ClipRectParams(value) => value,
+			_ => panic!("This is not a ClipRectParams")
+		};
 
-        let mut matched_expr: RecExpr<SkiLang> = egraph.id_to_expr(matched_id);
-        let bounds1 = subst[self.bounds1];
-        let bounds2 = subst[self.bounds2];
-    
-        let bounds1_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds1), 0.into());
-        let bounds2_proto = unpack_rect_to_bounds(&egraph.id_to_expr(bounds2), 0.into());
+		let outerClipRectParamExpr = &egraph.id_to_expr(subst[self.outerClipRectParams]);
+        let outerClipRectParams = match &outerClipRectParamExpr[0.into()] {
+			SkiLang::ClipRectParams(value) => value,
+			_ => panic!("This is not a ClipRectParams")
+		};
 
-        let bounds_proto = bounds_intersection(bounds1_proto, bounds2_proto); 
-        let mut bounds_expr = RecExpr::default();
-        let bounds = bounds_proto_to_rect_expr(&mut bounds_expr, &Some(bounds_proto));
-        
+		if innerClipRectParams.doAntiAlias != outerClipRectParams.doAntiAlias {
+			return vec![];
+		}
+
+		if innerClipRectParams.clipRectMode != SkiLangClipRectMode::Intersect ||
+			outerClipRectParams.clipRectMode != SkiLangClipRectMode::Intersect {
+			return vec![];
+		}
+
+		let mergedClipRectParams = SkiLang::ClipRectParams(SkiLangClipRectParams {
+			clipRectMode: innerClipRectParams.clipRectMode,
+			doAntiAlias: innerClipRectParams.doAntiAlias,
+			bounds: bounds_intersection(&innerClipRectParams.bounds, &outerClipRectParams.bounds)
+		});
+
         let mut subst = subst.clone();
-        subst.insert(self.merged_bounds, egraph.add_expr(&bounds_expr));
+		let mut expr = RecExpr::default();
+		expr.add(mergedClipRectParams);
+        subst.insert(self.foldedClipRectParams, egraph.add_expr(&expr));
         self.expr.apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
     }
 }

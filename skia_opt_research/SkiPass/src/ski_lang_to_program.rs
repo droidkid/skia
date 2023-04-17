@@ -19,7 +19,10 @@ use crate::protos::{
     ski_pass_instruction::Restore,
     ski_pass_instruction::ClipRect, 
 };
-use crate::ski_lang::SkiLang;
+use crate::ski_lang::{
+	SkiLangClipRectMode,
+	SkiLang
+};
 
 #[derive(Debug)]
 pub struct SkiPassSurface {
@@ -75,21 +78,21 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         SkiLang::ClipRect(ids) => {
             let mut targetSurface = build_program(&expr, ids[0]);
             let clipRectParams = match &expr[ids[1]] {
-                SkiLang::ClipRectParams(ids) => ids,
+                SkiLang::ClipRectParams(value) => value,
                 _ => panic!("ClipRect first param is not ClipRect")
             };
 
-            let bounds: Option<Bounds> = Some(unpack_rect_to_bounds(&expr, clipRectParams[0]));
-            let clip_op : i32 = match &expr[clipRectParams[1]] {
-                SkiLang::ClipOp_Intersect => ClipOp::Intersect.into(),
-                SkiLang::ClipOp_Diff => ClipOp::Difference.into(),
-                _ => panic!("ClipOp is invalid")
+            let bounds: Option<Bounds> = Some(Bounds{
+				left: *clipRectParams.bounds.l,
+				right: *clipRectParams.bounds.r,
+				top: *clipRectParams.bounds.t,
+				bottom: *clipRectParams.bounds.b,
+			});
+            let clip_op : i32 = match clipRectParams.clipRectMode {
+                SkiLangClipRectMode::Intersect => ClipOp::Intersect.into(),
+                SkiLangClipRectMode::Diff => ClipOp::Difference.into(),
             };
-
-            let do_anti_alias : bool = match &expr[clipRectParams[2]] {
-                SkiLang::Bool(val) => *val,
-                _ => panic!("ClipOp third parameter is not bool (doAntiAlias)"),
-            };
+            let do_anti_alias : bool = clipRectParams.doAntiAlias; 
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
             instructions.push(SkiPassInstruction {

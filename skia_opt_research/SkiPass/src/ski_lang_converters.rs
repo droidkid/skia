@@ -21,6 +21,22 @@ use crate::protos::{
 
 use ordered_float::NotNan;
 
+pub fn bounds_proto_to_rect(bounds: &Option<Bounds>) -> SkiLangRect {
+    match bounds {
+        Some(bounds) => {
+            SkiLangRect {
+				l: NotNan::new(bounds.left).unwrap(), 
+				t: NotNan::new(bounds.top).unwrap(), 
+				r: NotNan::new(bounds.right).unwrap(), 
+				b: NotNan::new(bounds.bottom).unwrap()
+			}
+        },
+        None => {
+            panic!("There is no Bounds Proto to unpack!");
+        }
+    }
+}
+
 pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
     match bounds {
         Some(bounds) => {

@@ -1,7 +1,13 @@
 use egg::*;
 
-use crate::ski_lang::SkiLang;
+use crate::ski_lang::{
+	SkiLang,
+	SkiLangRect,
+	SkiLangClipRectMode,
+	SkiLangClipRectParams,
+};
 use crate::ski_lang_converters::{
+	bounds_proto_to_rect,
     bounds_proto_to_expr,
     bounds_proto_to_rect_expr,
     bounds_expr_to_proto,
@@ -60,16 +66,21 @@ I: Iterator<Item = &'a SkRecords> + 'a,
                    }
                },
                Some(Command::ClipRect(clip_rect)) => {
-                    let clipOpRect = bounds_proto_to_rect_expr(expr, &clip_rect.bounds);
-                    let clipOp = if clip_rect.clip_op == ClipOp::Difference.into() {
-                        expr.add(SkiLang::ClipOp_Diff)
+                    let bounds = bounds_proto_to_rect(&clip_rect.bounds);
+                    let clipRectMode = if clip_rect.clip_op == ClipOp::Difference.into() {
+                        SkiLangClipRectMode::Diff
                     } else if clip_rect.clip_op == ClipOp::Intersect.into() {
-                        expr.add(SkiLang::ClipOp_Intersect)
+                        SkiLangClipRectMode::Intersect
                     } else {
                         panic!("Unknown clipOp mode")
                     };
-                    let isAntiAlias = expr.add(SkiLang::Bool(clip_rect.do_anti_alias));
-                    let clipRectParams = expr.add(SkiLang::ClipRectParams([clipOpRect, clipOp, isAntiAlias]));
+                    let doAntiAlias = clip_rect.do_anti_alias;
+                    let clipRectParams = expr.add(SkiLang::ClipRectParams(
+							SkiLangClipRectParams {
+								clipRectMode, 
+								bounds, 
+								doAntiAlias
+							}));
                     drawStack.push((StackOp::ClipRect, clipRectParams));
                },
                Some(Command::Concat44(concat44)) => {
