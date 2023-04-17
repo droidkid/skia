@@ -13,7 +13,7 @@ use crate::ski_lang_converters::{
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[rect:l:{l},t:{t},r:{r},b:{b}]")]
-pub struct Rect {
+pub struct SkiLangRect {
 	pub l: ordered_float::NotNan<f64>,
 	pub t: ordered_float::NotNan<f64>,
 	pub r: ordered_float::NotNan<f64>,
@@ -22,7 +22,7 @@ pub struct Rect {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[m44:{m00},{m01},{m02},{m03},{m04},{m05},{m06},{m07},{m08},{m09},{m10},{m11},{m12},{m13},{m14},{m15}]")]
-pub struct m44 {
+pub struct SkiLangM44 {
 	m00: ordered_float::NotNan<f64>,
 	m01: ordered_float::NotNan<f64>,
 	m02: ordered_float::NotNan<f64>,
@@ -41,9 +41,9 @@ pub struct m44 {
 	m15: ordered_float::NotNan<f64>,
 }
 
-impl m44 {
-	pub fn fromVec(v: Vec<ordered_float::NotNan<f64>>) -> m44 {
-		m44 {
+impl SkiLangM44 {
+	pub fn fromVec(v: Vec<ordered_float::NotNan<f64>>) -> SkiLangM44 {
+		SkiLangM44 {
 			m00: v[0],
 			m01: v[1],
 			m02: v[2],
@@ -91,8 +91,8 @@ define_language! {
         // First all Nums are parsed, and then Floats. So if
         // you want to force a number to be parsed as a float,
         // make sure to add a . (1.0 instead of 1)
-		M44(m44),
-		Rect(Rect),
+		M44(SkiLangM44),
+		Rect(SkiLangRect),
         Num(i32),
         Float(ordered_float::NotNan<f64>),
         Bool(bool),

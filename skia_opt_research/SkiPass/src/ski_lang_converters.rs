@@ -1,8 +1,8 @@
 use egg::*;
 use crate::ski_lang::{
 	SkiLang,
-	Rect,
-	m44
+	SkiLangRect,
+	SkiLangM44
 };
 
 use crate::protos::{
@@ -25,7 +25,7 @@ pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bo
     match bounds {
         Some(bounds) => {
             let _boundsExist = expr.add(SkiLang::Bool(true));
-            expr.add(SkiLang::Rect(Rect {
+            expr.add(SkiLang::Rect(SkiLangRect {
 				l: NotNan::new(bounds.left).unwrap(), 
 				t: NotNan::new(bounds.top).unwrap(), 
 				r: NotNan::new(bounds.right).unwrap(), 
@@ -371,7 +371,7 @@ pub fn skm44_to_expr(expr: &mut RecExpr<SkiLang>, skM44: &Option<SkM44>) -> Id {
                 ordered_float::NotNan::new(skM44.m[14]).unwrap(),
                 ordered_float::NotNan::new(skM44.m[15]).unwrap(),
             ];
-            expr.add(SkiLang::M44(m44::fromVec(mat)))
+            expr.add(SkiLang::M44(SkiLangM44::fromVec(mat)))
         },
         None => {
             panic!("Empty SkM44!");
