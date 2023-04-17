@@ -20,12 +20,78 @@ pub struct Rect {
 	pub b: ordered_float::NotNan<f64>,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+#[display("[m44:{m00},{m01},{m02},{m03},{m04},{m05},{m06},{m07},{m08},{m09},{m10},{m11},{m12},{m13},{m14},{m15}]")]
+pub struct m44 {
+	m00: ordered_float::NotNan<f64>,
+	m01: ordered_float::NotNan<f64>,
+	m02: ordered_float::NotNan<f64>,
+	m03: ordered_float::NotNan<f64>,
+	m04: ordered_float::NotNan<f64>,
+	m05: ordered_float::NotNan<f64>,
+	m06: ordered_float::NotNan<f64>,
+	m07: ordered_float::NotNan<f64>,
+	m08: ordered_float::NotNan<f64>,
+	m09: ordered_float::NotNan<f64>,
+	m10: ordered_float::NotNan<f64>,
+	m11: ordered_float::NotNan<f64>,
+	m12: ordered_float::NotNan<f64>,
+	m13: ordered_float::NotNan<f64>,
+	m14: ordered_float::NotNan<f64>,
+	m15: ordered_float::NotNan<f64>,
+}
+
+impl m44 {
+	pub fn fromVec(v: Vec<ordered_float::NotNan<f64>>) -> m44 {
+		m44 {
+			m00: v[0],
+			m01: v[1],
+			m02: v[2],
+			m03: v[3],
+			m04: v[4],
+			m05: v[5],
+			m06: v[6],
+			m07: v[7],
+			m08: v[8],
+			m09: v[9],
+			m10: v[10],
+			m11: v[11],
+			m12: v[12],
+			m13: v[13],
+			m14: v[14],
+			m15: v[15],
+		}
+	}
+
+	pub fn toVec(&self) -> Vec<f64> {
+		vec![
+			*self.m00,
+			*self.m01,
+			*self.m02,
+			*self.m03,
+			*self.m04,
+			*self.m05,
+			*self.m06,
+			*self.m07,
+			*self.m08,
+			*self.m09,
+			*self.m10,
+			*self.m11,
+			*self.m12,
+			*self.m13,
+			*self.m14,
+			*self.m15,
+		]
+	}
+}
+
 define_language! {
     pub enum SkiLang {
         // NOTE: The order of Num and Float matters!
         // First all Nums are parsed, and then Floats. So if
         // you want to force a number to be parsed as a float,
         // make sure to add a . (1.0 instead of 1)
+		M44(m44),
 		Rect(Rect),
         Num(i32),
         Float(ordered_float::NotNan<f64>),
@@ -100,8 +166,6 @@ define_language! {
         "clipRectParams" = ClipRectParams([Id; 3]),
         // (matrixOpParams index)
         "matrixOpParams" = MatrixOpParams([Id; 1]),
-        // (m44 float1.. float16). Floats are store in column major order.
-        "m44" = M44([Id; 16]),
 
         "blendMode_srcOver" = BlendMode_SrcOver,
         "blendMode_src" = BlendMode_Src,

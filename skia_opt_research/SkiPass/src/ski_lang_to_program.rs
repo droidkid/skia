@@ -269,11 +269,8 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
         SkiLang::BlankState => {
             vec![]
         },
-        SkiLang::M44(ids) => {
-            let mut m: Vec<f64> = vec![];
-            for id in ids {
-                m.push(unpack_float(expr, *id));
-            }
+        SkiLang::M44(m44) => {
+            let mut m: Vec<f64> = m44.toVec();
             let instruction = SkiPassInstruction {
                 instruction : Some(Instruction::Concat44(
                     Concat44 {
