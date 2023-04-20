@@ -10,6 +10,32 @@ use crate::protos::{
     sk_paint::Blender
 };
 
+define_language! {
+    pub enum SkiLang {
+        "noOp" = NoOp,
+        "blankSurface" = BlankSurface,
+        "blankState" = BlankState,
+        M44(SkiLangM44),
+        Rect(SkiLangRect),
+        ClipRectParams(SkiLangClipRectParams),
+        MatrixOpParams(SkiLangMatrixOpParams),
+        ApplyAlphaParams(SkiLangApplyAlphaParams),
+        Paint(SkiLangPaint),
+        DrawCommand(SkiLangDrawCommand),
+        MergeParams(SkiLangMergeParams),
+        "merge_params_with_state" = MergeParamsWithState([Id; 2]),
+        "apply_filter_with_state" = SomeFilterAndState([Id; 2]),
+        "concat" = Concat([Id; 2]),
+        "merge" = Merge([Id; 3]),
+        "matrixOp" = MatrixOp([Id; 2]),
+        "concat44" = Concat44([Id; 2]),
+        "clipRect" = ClipRect([Id; 2]),
+        "apply_alpha" = ApplyAlpha([Id; 2]), // alphaChannel, layer
+        "srcOver" = SrcOver([Id; 2]),
+    }
+}
+
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[rect:l:{l},t:{t},r:{r},b:{b}]")]
 pub struct SkiLangRect {
@@ -75,7 +101,7 @@ pub struct SkiLangM44 {
 }
 
 impl SkiLangM44 {
-    pub fn fromVec(v: Vec<ordered_float::NotNan<f64>>) -> SkiLangM44 {
+    pub fn from_vec(v: Vec<ordered_float::NotNan<f64>>) -> SkiLangM44 {
         SkiLangM44 {
             m00: v[0],
             m01: v[1],
@@ -96,32 +122,32 @@ impl SkiLangM44 {
         }
     }
 
-    pub fn toVec(&self) -> Vec<f64> {
+    pub fn as_vec(&self) -> Vec<f64> {
         vec![
             *self.m00, *self.m01, *self.m02, *self.m03, *self.m04, *self.m05, *self.m06, *self.m07,
             *self.m08, *self.m09, *self.m10, *self.m11, *self.m12, *self.m13, *self.m14, *self.m15,
         ]
     }
-    pub fn from_skm44_proto(skM44: &SkM44) -> SkiLangM44 {
-        let mut mat = vec![
-            ordered_float::NotNan::new(skM44.m[0]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[1]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[2]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[3]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[4]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[5]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[6]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[7]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[8]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[9]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[10]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[11]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[12]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[13]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[14]).unwrap(),
-            ordered_float::NotNan::new(skM44.m[15]).unwrap(),
+    pub fn from_skm44_proto(sk_m44: &SkM44) -> SkiLangM44 {
+        let mat = vec![
+            ordered_float::NotNan::new(sk_m44.m[0]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[1]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[2]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[3]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[4]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[5]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[6]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[7]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[8]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[9]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[10]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[11]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[12]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[13]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[14]).unwrap(),
+            ordered_float::NotNan::new(sk_m44.m[15]).unwrap(),
         ];
-        SkiLangM44::fromVec(mat)
+        SkiLangM44::from_vec(mat)
     }
 }
 
@@ -264,64 +290,6 @@ impl SkiLangPaint {
             mask_filter: None,
             shader: None 
         }
-    }
-}
-
-define_language! {
-    pub enum SkiLang {
-        M44(SkiLangM44),
-        Rect(SkiLangRect),
-        ClipRectParams(SkiLangClipRectParams),
-        MatrixOpParams(SkiLangMatrixOpParams),
-        ApplyAlphaParams(SkiLangApplyAlphaParams),
-        Paint(SkiLangPaint),
-        DrawCommand(SkiLangDrawCommand),
-        MergeParams(SkiLangMergeParams),
-        "merge_params_with_state" = MergeParamsWithState([Id; 2]),
-        "noOp" = NoOp,
-        "blankSurface" = BlankSurface,
-        "blankState" = BlankState,
-
-        // ------ Skia translation operations start ------//
-        /*
-            1. Concat: Sequentially apply draw commands.
-            (concat layer1 layer2) ->
-                <layer1 draw commands>
-                <layer2 draw commands>
-
-            2. Merge: Directly corresponds to SaveLayer.
-            (merge layer1 layer2 mergeParams) ->
-                <layer1 draw commands>
-                save (IF mergeParams has state)
-                    <state commands>
-                    saveLayer(mergeParams)
-                        <layer2 drawCommands>
-                    restore()
-                restore()
-
-
-            3. DrawCommand: Apply the drawCommand at index in reference SKP.
-                (drawCommand index paint)
-                    If paint has an alpha, modify the alpha
-                    before applying the drawCommand.
-        */
-        "concat" = Concat([Id; 2]),
-        "merge" = Merge([Id; 3]),
-        // ------ Skia translation operations end ------//
-
-        // ------ Virtual Ops (with Skia equivalent) --- //
-        "matrixOp" = MatrixOp([Id; 2]),
-        "concat44" = Concat44([Id; 2]),
-        "clipRect" = ClipRect([Id; 2]),
-
-        // ------ Virtual Ops (with NO Skia equivalent) --- //
-        // (alpha layer value) -> apply transparency of value on layer
-        "apply_alpha" = ApplyAlpha([Id; 2]), // alphaChannel, layer
-        // (srcOver dst src)
-        "srcOver" = SrcOver([Id; 2]),
-
-        // TODO: Rename to apply-filter-with-state
-        "someFilterAndState" = SomeFilterAndState([Id; 2]),
     }
 }
 

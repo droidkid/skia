@@ -3,7 +3,7 @@ use egg::*;
 use crate::protos::{
     ski_pass_instruction::ClipRect, ski_pass_instruction::Concat44,
     ski_pass_instruction::Instruction, ski_pass_instruction::Restore, ski_pass_instruction::Save,
-    ski_pass_instruction::SaveLayer, ski_pass_instruction::SkiPassCopyRecord, BlendMode, Bounds,
+    ski_pass_instruction::SaveLayer, ski_pass_instruction::SkiPassCopyRecord, Bounds,
     ClipOp, SkM44, SkiPassInstruction,
 };
 use crate::ski_lang::{SkiLang, SkiLangClipRectMode};
@@ -33,12 +33,12 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             }
         }
         SkiLang::MatrixOp(ids) => {
-            let mut targetSurface = build_program(&expr, ids[0]);
-            let mut matrixOpInstructions = to_instructions(&expr, ids[1]);
+            let mut target_surface = build_program(&expr, ids[0]);
+            let mut matrix_op_instructions = to_instructions(&expr, ids[1]);
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
-            instructions.append(&mut matrixOpInstructions);
-            instructions.append(&mut targetSurface.instructions);
+            instructions.append(&mut matrix_op_instructions);
+            instructions.append(&mut target_surface.instructions);
 
             SkiPassSurface {
                 instructions,
@@ -46,12 +46,12 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             }
         }
         SkiLang::Concat44(ids) => {
-            let mut targetSurface = build_program(&expr, ids[0]);
-            let mut matrixOpInstructions = to_instructions(&expr, ids[1]);
+            let mut target_surface = build_program(&expr, ids[0]);
+            let mut matrix_op_instructions = to_instructions(&expr, ids[1]);
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
-            instructions.append(&mut matrixOpInstructions);
-            instructions.append(&mut targetSurface.instructions);
+            instructions.append(&mut matrix_op_instructions);
+            instructions.append(&mut target_surface.instructions);
 
             SkiPassSurface {
                 instructions,
@@ -59,23 +59,23 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             }
         }
         SkiLang::ClipRect(ids) => {
-            let mut targetSurface = build_program(&expr, ids[0]);
-            let clipRectParams = match &expr[ids[1]] {
+            let mut target_surface = build_program(&expr, ids[0]);
+            let clip_rect_params = match &expr[ids[1]] {
                 SkiLang::ClipRectParams(value) => value,
                 _ => panic!("ClipRect first param is not ClipRect"),
             };
 
             let bounds: Option<Bounds> = Some(Bounds {
-                left: *clipRectParams.bounds.l,
-                right: *clipRectParams.bounds.r,
-                top: *clipRectParams.bounds.t,
-                bottom: *clipRectParams.bounds.b,
+                left: *clip_rect_params.bounds.l,
+                right: *clip_rect_params.bounds.r,
+                top: *clip_rect_params.bounds.t,
+                bottom: *clip_rect_params.bounds.b,
             });
-            let clip_op: i32 = match clipRectParams.clip_rect_mode {
+            let clip_op: i32 = match clip_rect_params.clip_rect_mode {
                 SkiLangClipRectMode::Intersect => ClipOp::Intersect.into(),
                 SkiLangClipRectMode::Diff => ClipOp::Difference.into(),
             };
-            let do_anti_alias: bool = clipRectParams.is_anti_aliased;
+            let do_anti_alias: bool = clip_rect_params.is_anti_aliased;
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
             instructions.push(SkiPassInstruction {
@@ -87,7 +87,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                     }
                 })),
             });
-            instructions.append(&mut targetSurface.instructions);
+            instructions.append(&mut target_surface.instructions);
 
             SkiPassSurface {
                 instructions,
@@ -234,7 +234,7 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
             vec![]
         }
         SkiLang::M44(m44) => {
-            let mut m: Vec<f64> = m44.toVec();
+            let m: Vec<f64> = m44.as_vec();
             let instruction = SkiPassInstruction {
                 instruction: Some(Instruction::Concat44(Concat44 {
                     matrix: Some(SkM44 { m }),
