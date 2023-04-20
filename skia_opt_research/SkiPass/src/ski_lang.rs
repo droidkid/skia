@@ -1,5 +1,9 @@
 use egg::*;
 use parse_display::{Display, FromStr};
+use crate::protos::{
+    SkPaint,
+    SkColor
+};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[rect:l:{l},t:{t},r:{r},b:{b}]")]
@@ -88,6 +92,71 @@ pub struct SkiLangDrawCommand {
     pub extra_alpha: i32
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+#[display("[Color::a:{a},r:{r},g:{g},b:{b}")]
+pub struct SkiLangColor {
+    pub a: i32,
+    pub r: i32,
+    pub g: i32,
+    pub b: i32
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+pub enum SkiLangBlendMode {
+    Src,
+    SrcOver,
+    Unknown
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+#[display("[Paint::color:{color}")]
+pub struct SkiLangPaint {
+    color : SkiLangColor,
+}
+
+impl SkiLangPaint {
+    pub fn from_proto(sk_record_paint: &Option<SkPaint>) -> SkiLangPaint {
+        let sk_record_paint = sk_record_paint.as_ref().unwrap();
+        let color = match &sk_record_paint.color {
+            Some(color) => {
+                SkiLangColor {
+                    a: color.alpha_u8,
+                    r: color.red_u8,
+                    g: color.green_u8,
+                    b: color.red_u8
+                }
+            }
+            None => {
+                SkiLangColor {
+                    a: 255,
+                    r: 0,
+                    g: 0, 
+                    b: 0
+                }
+            }
+        };
+        SkiLangPaint {
+            color
+        }
+    }
+    pub fn to_proto(&self) -> SkPaint {
+        SkPaint {
+            color: Some(SkColor{
+                alpha_u8: self.color.a,
+                red_u8: self.color.r,
+                green_u8: self.color.g,
+                blue_u8: self.color.b
+            }),
+            blender: None,
+            image_filter: None,
+            color_filter: None,
+            path_effect: None,
+            mask_filter: None,
+            shader: None
+        }
+    }
+}
+
 define_language! {
     pub enum SkiLang {
         // NOTE: The order of Num and Float matters!
@@ -98,6 +167,7 @@ define_language! {
         Rect(SkiLangRect),
         ClipRectParams(SkiLangClipRectParams),
         MatrixOpParams(SkiLangMatrixOpParams),
+        Paint(SkiLangPaint),
 
         Num(i32),
         Float(ordered_float::NotNan<f64>),
@@ -155,28 +225,23 @@ define_language! {
             pathEffect maskFilter shader
         )
         */
-        "color" = Color([Id; 4]),
         "blender" = Blender([Id; 1]),
         "imageFilter" = ImageFilter([Id; 1]),
         "colorFilter" = ColorFilter([Id; 1]),
         "pathEffect" = PathEffect([Id; 1]),
         "maskFilter" = MaskFilter([Id; 1]),
         "shader" = Shader([Id; 1]),
-        "paint" = Paint([Id; 7]),
 
         // (backdrop ?exists)
         "backdrop" = Backdrop([Id; 1]),
         // (mergeParams index paint backdrop bounds state)
         "mergeParams" = MergeParams([Id; 5]),
-
-        "blendMode_srcOver" = BlendMode_SrcOver,
-        "blendMode_src" = BlendMode_Src,
-        "blendMode_unknown" = BlendMode_Unknown,
     }
 }
 
 pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     // Trivial Rules, related to blank and identity.
+    /*
     let mut rules = vec![
         rewrite!("kill-blankSurface-clip"; "(clipRect blankSurface ?p)" => "blankSurface"),
         rewrite!("kill-blankSurface-mOp"; "(matrixOp blankSurface ?p)" => "blankSurface"),
@@ -703,7 +768,9 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                      "(alpha ?a (matrixOp ?layer ?params))" <=> "(matrixOp (alpha ?a ?layer) ?params)"),
         ].concat());
 
-    rules
+        */
+    // rules
+    vec![]
 }
 
 // This CostFn exists to prevent internal SkiLang functions (such as alpha) to never be extracted.

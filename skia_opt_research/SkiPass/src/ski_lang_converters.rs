@@ -54,6 +54,7 @@ pub fn bounds_proto_to_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>
     }
 }
 
+/*
 pub fn paint_proto_to_expr(expr: &mut RecExpr<SkiLang>, skPaint: &Option<SkPaint>) -> Id {
     let color = match &skPaint {
         Some(skPaint) => {
@@ -181,6 +182,7 @@ pub fn color_proto_to_expr(
     let b = expr.add(SkiLang::Num(bVal));
     expr.add(SkiLang::Color([a, r, g, b]))
 }
+*/
 
 pub fn bounds_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> Option<Bounds> {
     let bounds: Option<Bounds> = match &expr[id] {
@@ -220,6 +222,7 @@ pub fn get_exists_value(expr: &RecExpr<SkiLang>, id: Id) -> bool {
     }
 }
 
+/*
 pub fn get_blend_mode(expr: &RecExpr<SkiLang>, id: Id) -> i32 {
     match expr[id] {
         SkiLang::BlendMode_Src => BlendMode::Src.into(),
@@ -228,7 +231,9 @@ pub fn get_blend_mode(expr: &RecExpr<SkiLang>, id: Id) -> i32 {
         _ => panic!("Not a valid BlendMode"),
     }
 }
+*/
 
+/*
 pub fn paint_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkPaint {
     let paint_param_ids = match expr[id] {
         SkiLang::Paint(ids) => ids,
@@ -330,6 +335,7 @@ pub fn color_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> SkColor {
         }
     }
 }
+*/
 
 pub fn skm44_to_expr(expr: &mut RecExpr<SkiLang>, skM44: &Option<SkM44>) -> Id {
     match skM44 {

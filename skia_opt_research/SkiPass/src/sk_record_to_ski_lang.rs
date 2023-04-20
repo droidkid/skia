@@ -3,12 +3,13 @@ use egg::*;
 use crate::protos::{sk_records::Command, ClipOp, SkRecords};
 use crate::ski_lang::{
     SkiLang, 
+    SkiLangPaint,
     SkiLangClipRectMode, 
     SkiLangClipRectParams,
     SkiLangMatrixOpParams
 };
 use crate::ski_lang_converters::{
-    bounds_expr_to_proto, bounds_proto_to_expr, bounds_proto_to_rect, paint_proto_to_expr, skm44_to_expr,
+    bounds_expr_to_proto, bounds_proto_to_expr, bounds_proto_to_rect, skm44_to_expr,
 };
 
 pub struct SkiLangExpr {
@@ -56,8 +57,12 @@ where
                         }
                         _ => {
                             let draw_command_index = expr.add(SkiLang::Num(sk_record.index));
-                            let draw_command_paint = paint_proto_to_expr(expr, &draw_command.paint);
-                            let draw_op_command = expr.add(SkiLang::DrawCommand([draw_command_index, draw_command_paint]));
+                            let draw_command_paint = expr.add(SkiLang::Paint(
+                                SkiLangPaint::from_proto(&draw_command.paint)
+                            ));
+                            let draw_op_command = expr.add(SkiLang::DrawCommand(
+                                [draw_command_index, draw_command_paint])
+                            );
                             draw_command_stack.push((StackOp::Surface, draw_op_command));
                         }
                     },
@@ -88,9 +93,9 @@ where
                     }
                     Some(Command::SaveLayer(save_layer)) => {
                         let index = expr.add(SkiLang::Num(sk_record.index));
-
-                        let paint = paint_proto_to_expr(expr, &save_layer.paint);
-
+                        let paint = expr.add(SkiLang::Paint(
+                            SkiLangPaint::from_proto(&save_layer.paint)
+                        ));
                         let backdrop_exists =
                             expr.add(SkiLang::Bool(save_layer.backdrop.is_some()));
                         let backdrop = expr.add(SkiLang::Backdrop([backdrop_exists]));

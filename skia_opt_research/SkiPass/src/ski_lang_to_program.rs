@@ -162,7 +162,10 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 SkiLang::Num(index) => *index,
                 _ => panic!("Merge Params first parameter not index"),
             };
-            let paint = paint_expr_to_proto(expr, mergeParamIds[1]);
+            let paint = match &expr[mergeParamIds[1]] {
+                SkiLang::Paint(ski_lang_paint) => ski_lang_paint.to_proto(),
+                _ => panic!("Merge params second parameter is not paint")
+            };
             let backdrop_exists = match &expr[mergeParamIds[2]] {
                 SkiLang::Backdrop(ids) => match &expr[ids[0]] {
                     SkiLang::Bool(value) => *value,
@@ -280,9 +283,12 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
         SkiLang::DrawCommand(ids) => {
             let index = match &expr[ids[0]] {
                 SkiLang::Num(value) => *value,
-                _ => panic!(),
+                _ => panic!("First index of drawCommand is not an index"),
             };
-            let paint = paint_expr_to_proto(expr, ids[1]);
+            let paint = match &expr[ids[1]] {
+                SkiLang::Paint(ski_lang_paint) => ski_lang_paint.to_proto(),
+                _ => panic!("Second index of drawCommand is not paint"),
+            };
             let instruction = SkiPassInstruction {
                 // oneof -> Option of a Enum
                 instruction: Some(Instruction::CopyRecord(SkiPassCopyRecord {
