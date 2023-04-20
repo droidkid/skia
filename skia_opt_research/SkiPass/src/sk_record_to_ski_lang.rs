@@ -1,10 +1,9 @@
 use egg::*;
 
 use crate::protos::{sk_records::Command, ClipOp, SkRecords};
-use crate::ski_lang::{SkiLang, SkiLangClipRectMode, SkiLangClipRectParams, SkiLangRect};
+use crate::ski_lang::{SkiLang, SkiLangClipRectMode, SkiLangClipRectParams};
 use crate::ski_lang_converters::{
-    bounds_expr_to_proto, bounds_proto_to_expr, bounds_proto_to_rect, bounds_proto_to_rect_expr,
-    paint_proto_to_expr, skm44_to_expr,
+    bounds_expr_to_proto, bounds_proto_to_expr, bounds_proto_to_rect, paint_proto_to_expr, skm44_to_expr,
 };
 
 pub struct SkiLangExpr {
@@ -23,14 +22,23 @@ enum StackOp {
     SaveLayer,
 }
 
-pub fn build_expr<'a, I>(skRecordsIter: &mut I, expr: &mut RecExpr<SkiLang>) -> Id
+pub fn convert_sk_record_to_ski_lang_expr<'a, I>(sk_records: &mut I) -> RecExpr<SkiLang> 
+where
+    I: Iterator<Item = &'a SkRecords> + 'a,
+{
+    let mut expr = RecExpr::default();
+    build_expr(sk_records, &mut expr);
+    expr
+}
+
+fn build_expr<'a, I>(sk_records: &mut I, expr: &mut RecExpr<SkiLang>) -> Id
 where
     I: Iterator<Item = &'a SkRecords> + 'a,
 {
     let mut drawStack: Vec<(StackOp, Id)> = vec![];
     let _count = 0;
     loop {
-        match skRecordsIter.next() {
+        match sk_records.next() {
             Some(skRecords) => {
                 match &skRecords.command {
                     Some(Command::DrawCommand(draw_command)) => match draw_command.name.as_str() {
@@ -175,8 +183,6 @@ fn reduceStack(
                         _ => {}
                     }
                 }
-
-                let blank = expr.add(SkiLang::BlankSurface);
 
                 reduceStack(expr, drawStack, false);
                 let dst = drawStack.pop().unwrap().1;

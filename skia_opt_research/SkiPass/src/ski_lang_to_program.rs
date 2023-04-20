@@ -16,7 +16,8 @@ pub struct SkiPassSurface {
     modified_matrix: bool,
 }
 
-pub fn expr_to_program(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
+pub fn expr_to_program(expr: &RecExpr<SkiLang>) -> Vec<SkiPassInstruction> {
+    let id = (expr.as_ref().len()-1).into();
     build_program(expr, id).instructions
 }
 

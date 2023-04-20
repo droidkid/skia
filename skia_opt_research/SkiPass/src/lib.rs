@@ -1,4 +1,4 @@
-pub mod build_ski_lang_expr;
+pub mod sk_record_to_ski_lang;
 pub mod ski_lang;
 pub mod ski_lang_converters;
 pub mod ski_lang_to_program;
@@ -14,7 +14,7 @@ use libc::size_t;
 use std::slice;
 
 use prost::Message;
-use protos::{SkRecord, SkiPassRunResult};
+use protos::SkRecord;
 
 #[repr(C)]
 pub struct SkiPassResultPtr {
@@ -31,9 +31,7 @@ pub extern "C" fn ski_pass_optimize(data_ptr: *const u8, len: size_t) -> SkiPass
 
     let skipass_run = match SkRecord::decode(data_slice) {
         Ok(sk_record) => ski_pass::optimize(sk_record),
-        Err(_e) => {
-            panic!("Decoding input proto from Skia failed");
-        }
+        Err(_e) => panic!("Decoding input proto from Skia failed"),
     };
 
     let mut result_data: Vec<u8> = Vec::new();
