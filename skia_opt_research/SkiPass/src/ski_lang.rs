@@ -1,9 +1,10 @@
 use egg::*;
 use parse_display::{Display, FromStr};
 use crate::protos::{
+    Bounds,
+    BlendMode,
     SkPaint,
     SkColor,
-    BlendMode,
     sk_paint::ImageFilter,
     sk_paint::Blender
 };
@@ -15,6 +16,34 @@ pub struct SkiLangRect {
     pub t: ordered_float::NotNan<f64>,
     pub r: ordered_float::NotNan<f64>,
     pub b: ordered_float::NotNan<f64>,
+}
+
+impl SkiLangRect {
+    pub fn from_bounds_proto(bounds: &Bounds) -> SkiLangRect {
+        SkiLangRect {
+            l: ordered_float::NotNan::new(bounds.left).unwrap(),
+            t: ordered_float::NotNan::new(bounds.top).unwrap(),
+            r: ordered_float::NotNan::new(bounds.right).unwrap(),
+            b: ordered_float::NotNan::new(bounds.bottom).unwrap(),
+        }
+    }
+    pub fn to_proto(&self) -> Bounds {
+        Bounds {
+            left: *self.l,
+            right: *self.r,
+            top: *self.t,
+            bottom: *self.b
+        }
+    }
+
+    pub fn empty() -> SkiLangRect {
+        SkiLangRect {
+            l: ordered_float::NotNan::new(0.0).unwrap(),
+            t: ordered_float::NotNan::new(0.0).unwrap(),
+            r: ordered_float::NotNan::new(0.0).unwrap(),
+            b: ordered_float::NotNan::new(0.0).unwrap(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
@@ -114,9 +143,26 @@ pub enum SkiLangBlendMode {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[Paint::color:{color},blend_mode:{blend_mode},has_filters:{has_filters}")]
 pub struct SkiLangPaint {
-    color : SkiLangColor,
-    blend_mode: SkiLangBlendMode,
-    has_filters: bool
+    pub color : SkiLangColor,
+    pub blend_mode: SkiLangBlendMode,
+    pub has_filters: bool
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+#[display("[MergeParams::index:{index},paint:{paint},has_backdrop:{has_backdrop},has_bounds:{has_bounds},bounds:{bounds}")]
+pub struct SkiLangMergeParams {
+    pub index: i32,
+    pub paint: SkiLangPaint,
+    pub has_backdrop: bool,
+    // TODO: wrap this in a Option<bounds> once you have this working.
+    pub has_bounds: bool,
+    pub bounds: SkiLangRect,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+#[display("[alpha:{alpha}")]
+pub struct SkiLangApplyAlphaParams {
+    pub alpha: i32
 }
 
 impl SkiLangPaint {
@@ -201,20 +247,15 @@ impl SkiLangPaint {
 
 define_language! {
     pub enum SkiLang {
-        // NOTE: The order of Num and Float matters!
-        // First all Nums are parsed, and then Floats. So if
-        // you want to force a number to be parsed as a float,
-        // make sure to add a . (1.0 instead of 1)
         M44(SkiLangM44),
         Rect(SkiLangRect),
         ClipRectParams(SkiLangClipRectParams),
         MatrixOpParams(SkiLangMatrixOpParams),
+        ApplyAlphaParams(SkiLangApplyAlphaParams),
         Paint(SkiLangPaint),
         DrawCommand(SkiLangDrawCommand),
-
-        Num(i32),
-        Float(ordered_float::NotNan<f64>),
-        Bool(bool),
+        MergeParams(SkiLangMergeParams),
+        "merge_params_with_state" = MergeParamsWithState([Id; 2]),
         "noOp" = NoOp,
         "blankSurface" = BlankSurface,
         "blankState" = BlankState,
@@ -253,19 +294,12 @@ define_language! {
 
         // ------ Virtual Ops (with NO Skia equivalent) --- //
         // (alpha layer value) -> apply transparency of value on layer
-        "alpha" = Alpha([Id; 2]), // alphaChannel, layer
+        "apply_alpha" = ApplyAlpha([Id; 2]), // alphaChannel, layer
         // (srcOver dst src)
         "srcOver" = SrcOver([Id; 2]),
 
+        // TODO: Rename to apply-filter-with-state
         "someFilterAndState" = SomeFilterAndState([Id; 2]),
-
-        // (bound exists? rect)
-        "bounds" = Bounds([Id; 2]),
-
-        // (backdrop ?exists)
-        "backdrop" = Backdrop([Id; 1]),
-        // (mergeParams index paint backdrop bounds state)
-        "mergeParams" = MergeParams([Id; 5]),
     }
 }
 
@@ -813,7 +847,7 @@ impl CostFunction<SkiLang> for SkiLangCostFn {
         C: FnMut(Id) -> Self::Cost,
     {
         let op_cost = match enode {
-            SkiLang::Alpha(_ids) => (1, 0, 1),
+            SkiLang::ApplyAlpha(_ids) => (1, 0, 1),
             SkiLang::SomeFilterAndState(_ids) => (1, 0, 1),
             SkiLang::SrcOver(_ids) => (1, 0, 1),
             // TODO: We want a cost that is (number of layers, cost) and that depends on subtree size.
@@ -830,6 +864,7 @@ impl CostFunction<SkiLang> for SkiLangCostFn {
     }
 }
 
+/*
 struct FoldAlpha {
     layer_alpha: Var,
     draw_alpha: Var,
@@ -928,3 +963,4 @@ impl Applier<SkiLang, ()> for FoldClipRect {
             .apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
     }
 }
+*/

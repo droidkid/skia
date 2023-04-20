@@ -22,6 +22,7 @@ pub fn bounds_proto_to_rect(bounds: &Option<Bounds>) -> SkiLangRect {
     }
 }
 
+/*
 pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
     match bounds {
         Some(bounds) => {
@@ -38,7 +39,10 @@ pub fn bounds_proto_to_rect_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bo
         }
     }
 }
+*/
 
+
+/*
 pub fn bounds_proto_to_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>) -> Id {
     match bounds {
         Some(_value) => {
@@ -53,6 +57,7 @@ pub fn bounds_proto_to_expr(expr: &mut RecExpr<SkiLang>, bounds: &Option<Bounds>
         }
     }
 }
+*/
 
 /*
 pub fn paint_proto_to_expr(expr: &mut RecExpr<SkiLang>, skPaint: &Option<SkPaint>) -> Id {
@@ -184,6 +189,7 @@ pub fn color_proto_to_expr(
 }
 */
 
+/*
 pub fn bounds_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> Option<Bounds> {
     let bounds: Option<Bounds> = match &expr[id] {
         SkiLang::Bounds(ids) => match &expr[ids[0]] {
@@ -195,32 +201,7 @@ pub fn bounds_expr_to_proto(expr: &RecExpr<SkiLang>, id: Id) -> Option<Bounds> {
     };
     bounds
 }
-
-pub fn unpack_rect_to_bounds(expr: &RecExpr<SkiLang>, id: Id) -> Bounds {
-    match &expr[id] {
-        SkiLang::Rect(rect) => Bounds {
-            left: *rect.l,
-            top: *rect.t,
-            right: *rect.r,
-            bottom: *rect.b,
-        },
-        _ => panic!("This is not a rect! {}", &expr[id]),
-    }
-}
-
-pub fn unpack_float(expr: &RecExpr<SkiLang>, id: Id) -> f64 {
-    match &expr[id] {
-        SkiLang::Float(val) => **val,
-        _ => panic!("This is not a float!"),
-    }
-}
-
-pub fn get_exists_value(expr: &RecExpr<SkiLang>, id: Id) -> bool {
-    match expr[id] {
-        SkiLang::Bool(value) => value,
-        _ => panic!("Not a SkiLang::Bool"),
-    }
-}
+*/
 
 /*
 pub fn get_blend_mode(expr: &RecExpr<SkiLang>, id: Id) -> i32 {

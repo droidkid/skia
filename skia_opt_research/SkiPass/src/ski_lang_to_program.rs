@@ -149,48 +149,32 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 instructions.append(&mut dst.instructions);
             }
 
-            let mergeParamIds = match &expr[ids[2]] {
-                SkiLang::MergeParams(ids) => ids,
+            let (merge_params_id, state_expr_id) = match &expr[ids[2]] {
+                SkiLang::MergeParamsWithState(ids) => (ids[0], ids[1]),
                 _ => panic!("Merge parameter is not MergeParams"),
             };
 
-            let mut reconstructStateInstructions =
-                build_program(expr, mergeParamIds[4]).instructions;
-            reconstructStateInstructions.reverse();
+            let merge_params = match &expr[merge_params_id] {
+                SkiLang::MergeParams(merge_params) => merge_params,
+                _ => panic!("First argument of MergeParamsWithState not MergeParams")
+            };
 
-            let index = match &expr[mergeParamIds[0]] {
-                SkiLang::Num(index) => *index,
-                _ => panic!("Merge Params first parameter not index"),
-            };
-            let paint = match &expr[mergeParamIds[1]] {
-                SkiLang::Paint(ski_lang_paint) => ski_lang_paint.to_proto(),
-                _ => panic!("Merge params second parameter is not paint")
-            };
-            let backdrop_exists = match &expr[mergeParamIds[2]] {
-                SkiLang::Backdrop(ids) => match &expr[ids[0]] {
-                    SkiLang::Bool(value) => *value,
-                    _ => panic!("Backdrop first param not Bool"),
-                },
-                _ => panic!("Merge params third parameter not backdrop"),
-            };
-            let bounds = bounds_expr_to_proto(expr, mergeParamIds[3]);
+            let mut state_construction_instructions = build_program(expr, state_expr_id).instructions;
+            state_construction_instructions.reverse();
 
             let mut src_instructions: Vec<SkiPassInstruction> = vec![];
-            let can_reconstruct = !backdrop_exists
-                && paint.image_filter.is_none()
-                && paint.color_filter.is_none()
-                && paint.path_effect.is_none()
-                && paint.mask_filter.is_none()
-                && paint.shader.is_none()
-                && (paint.blender.is_none()
-                    || paint.blender.as_ref().unwrap().blend_mode == BlendMode::SrcOver.into());
+            let can_reconstruct = !merge_params.has_backdrop && !merge_params.paint.has_filters;
 
-            if !can_reconstruct {
+            if can_reconstruct {
                 src_instructions.push(SkiPassInstruction {
-                    instruction: Some(Instruction::CopyRecord(SkiPassCopyRecord {
-                        index,
-                        paint: Some(paint),
-                        alpha: 255,
+                    instruction: Some(Instruction::SaveLayer(SaveLayer {
+                        paint: Some(merge_params.paint.to_proto()),
+                        bounds: if merge_params.has_bounds {
+                            Some(merge_params.bounds.to_proto())
+                         } else {
+                            None
+                         },
+                        backdrop: None,
                     })),
                 });
                 src_instructions.append(&mut src.instructions);
@@ -199,10 +183,10 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 });
             } else {
                 src_instructions.push(SkiPassInstruction {
-                    instruction: Some(Instruction::SaveLayer(SaveLayer {
-                        paint: Some(paint),
-                        bounds,
-                        backdrop: None,
+                    instruction: Some(Instruction::CopyRecord(SkiPassCopyRecord {
+                        index: merge_params.index,
+                        paint: Some(merge_params.paint.to_proto()),
+                        alpha: 255,
                     })),
                 });
                 src_instructions.append(&mut src.instructions);
@@ -211,11 +195,11 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 });
             };
 
-            if reconstructStateInstructions.len() > 0 {
+            if state_construction_instructions.len() > 0 {
                 instructions.push(SkiPassInstruction {
                     instruction: Some(Instruction::Save(Save {})),
                 });
-                instructions.append(&mut reconstructStateInstructions);
+                instructions.append(&mut state_construction_instructions);
                 instructions.append(&mut src_instructions);
                 instructions.push(SkiPassInstruction {
                     instruction: Some(Instruction::Restore(Restore {})),
@@ -229,7 +213,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 modified_matrix: false,
             }
         }
-        SkiLang::Alpha(_ids) => {
+        SkiLang::ApplyAlpha(_ids) => {
             panic!("An Alpha survived extraction! THIS SHOULD NOT HAPPEN");
         }
         SkiLang::BlankState => SkiPassSurface {
@@ -264,16 +248,6 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
             let instruction = SkiPassInstruction {
                 instruction: Some(Instruction::CopyRecord(SkiPassCopyRecord {
                     index: matrix_op_params.index,
-                    alpha: 255,
-                    paint: None,
-                })),
-            };
-            vec![instruction]
-        }
-        SkiLang::Num(index) => {
-            let instruction = SkiPassInstruction {
-                instruction: Some(Instruction::CopyRecord(SkiPassCopyRecord {
-                    index: *index,
                     alpha: 255,
                     paint: None,
                 })),
