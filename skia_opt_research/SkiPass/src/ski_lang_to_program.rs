@@ -1,7 +1,5 @@
 use egg::*;
 
-use crate::ski_lang_converters::*;
-
 use crate::protos::{
     ski_pass_instruction::ClipRect, ski_pass_instruction::Concat44,
     ski_pass_instruction::Instruction, ski_pass_instruction::Restore, ski_pass_instruction::Save,

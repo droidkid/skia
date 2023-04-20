@@ -9,10 +9,8 @@ use crate::ski_lang::{
     SkiLangClipRectParams,
     SkiLangMatrixOpParams,
     SkiLangMergeParams,
-    SkiLangDrawCommand
-};
-use crate::ski_lang_converters::{
-    bounds_proto_to_rect, skm44_to_expr,
+    SkiLangDrawCommand,
+    SkiLangM44
 };
 
 pub struct SkiLangExpr {
@@ -69,7 +67,7 @@ where
                         }
                     },
                     Some(Command::ClipRect(clip_rect)) => {
-                        let bounds = bounds_proto_to_rect(&clip_rect.bounds);
+                        let bounds = SkiLangRect::from_bounds_proto(&clip_rect.bounds.as_ref().unwrap());
                         let clip_rect_mode = if clip_rect.clip_op == ClipOp::Difference.into() {
                             SkiLangClipRectMode::Diff
                         } else if clip_rect.clip_op == ClipOp::Intersect.into() {
@@ -87,7 +85,9 @@ where
                         draw_command_stack.push((StackOp::ClipRect, clipRectParams));
                     }
                     Some(Command::Concat44(concat44)) => {
-                        let m44 = skm44_to_expr(expr, &concat44.matrix);
+                        let m44 = expr.add(SkiLang::M44(
+                            SkiLangM44::from_skm44_proto(&concat44.matrix.as_ref().unwrap())
+                        ));
                         draw_command_stack.push((StackOp::Concat44, m44));
                     }
                     Some(Command::Save(_save)) => {

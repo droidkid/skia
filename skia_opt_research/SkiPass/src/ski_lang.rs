@@ -5,6 +5,7 @@ use crate::protos::{
     BlendMode,
     SkPaint,
     SkColor,
+    SkM44,
     sk_paint::ImageFilter,
     sk_paint::Blender
 };
@@ -100,6 +101,27 @@ impl SkiLangM44 {
             *self.m00, *self.m01, *self.m02, *self.m03, *self.m04, *self.m05, *self.m06, *self.m07,
             *self.m08, *self.m09, *self.m10, *self.m11, *self.m12, *self.m13, *self.m14, *self.m15,
         ]
+    }
+    pub fn from_skm44_proto(skM44: &SkM44) -> SkiLangM44 {
+        let mut mat = vec![
+            ordered_float::NotNan::new(skM44.m[0]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[1]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[2]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[3]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[4]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[5]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[6]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[7]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[8]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[9]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[10]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[11]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[12]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[13]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[14]).unwrap(),
+            ordered_float::NotNan::new(skM44.m[15]).unwrap(),
+        ];
+        SkiLangM44::fromVec(mat)
     }
 }
 
