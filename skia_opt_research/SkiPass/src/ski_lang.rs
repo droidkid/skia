@@ -1,102 +1,83 @@
 use egg::*;
 use parse_display::{Display, FromStr};
 
-use crate::protos::{
-    Bounds
-};
+use crate::protos::Bounds;
 use crate::ski_lang_converters::{
-    bounds_proto_to_expr,
-    bounds_proto_to_rect_expr,
-    unpack_rect_to_bounds,
-    unpack_float
+    bounds_proto_to_expr, bounds_proto_to_rect_expr, unpack_float, unpack_rect_to_bounds,
 };
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[rect:l:{l},t:{t},r:{r},b:{b}]")]
 pub struct SkiLangRect {
-	pub l: ordered_float::NotNan<f64>,
-	pub t: ordered_float::NotNan<f64>,
-	pub r: ordered_float::NotNan<f64>,
-	pub b: ordered_float::NotNan<f64>,
+    pub l: ordered_float::NotNan<f64>,
+    pub t: ordered_float::NotNan<f64>,
+    pub r: ordered_float::NotNan<f64>,
+    pub b: ordered_float::NotNan<f64>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[m44:{m00},{m01},{m02},{m03},{m04},{m05},{m06},{m07},{m08},{m09},{m10},{m11},{m12},{m13},{m14},{m15}]")]
 pub struct SkiLangM44 {
-	m00: ordered_float::NotNan<f64>,
-	m01: ordered_float::NotNan<f64>,
-	m02: ordered_float::NotNan<f64>,
-	m03: ordered_float::NotNan<f64>,
-	m04: ordered_float::NotNan<f64>,
-	m05: ordered_float::NotNan<f64>,
-	m06: ordered_float::NotNan<f64>,
-	m07: ordered_float::NotNan<f64>,
-	m08: ordered_float::NotNan<f64>,
-	m09: ordered_float::NotNan<f64>,
-	m10: ordered_float::NotNan<f64>,
-	m11: ordered_float::NotNan<f64>,
-	m12: ordered_float::NotNan<f64>,
-	m13: ordered_float::NotNan<f64>,
-	m14: ordered_float::NotNan<f64>,
-	m15: ordered_float::NotNan<f64>,
+    m00: ordered_float::NotNan<f64>,
+    m01: ordered_float::NotNan<f64>,
+    m02: ordered_float::NotNan<f64>,
+    m03: ordered_float::NotNan<f64>,
+    m04: ordered_float::NotNan<f64>,
+    m05: ordered_float::NotNan<f64>,
+    m06: ordered_float::NotNan<f64>,
+    m07: ordered_float::NotNan<f64>,
+    m08: ordered_float::NotNan<f64>,
+    m09: ordered_float::NotNan<f64>,
+    m10: ordered_float::NotNan<f64>,
+    m11: ordered_float::NotNan<f64>,
+    m12: ordered_float::NotNan<f64>,
+    m13: ordered_float::NotNan<f64>,
+    m14: ordered_float::NotNan<f64>,
+    m15: ordered_float::NotNan<f64>,
 }
 
 impl SkiLangM44 {
-	pub fn fromVec(v: Vec<ordered_float::NotNan<f64>>) -> SkiLangM44 {
-		SkiLangM44 {
-			m00: v[0],
-			m01: v[1],
-			m02: v[2],
-			m03: v[3],
-			m04: v[4],
-			m05: v[5],
-			m06: v[6],
-			m07: v[7],
-			m08: v[8],
-			m09: v[9],
-			m10: v[10],
-			m11: v[11],
-			m12: v[12],
-			m13: v[13],
-			m14: v[14],
-			m15: v[15],
-		}
-	}
+    pub fn fromVec(v: Vec<ordered_float::NotNan<f64>>) -> SkiLangM44 {
+        SkiLangM44 {
+            m00: v[0],
+            m01: v[1],
+            m02: v[2],
+            m03: v[3],
+            m04: v[4],
+            m05: v[5],
+            m06: v[6],
+            m07: v[7],
+            m08: v[8],
+            m09: v[9],
+            m10: v[10],
+            m11: v[11],
+            m12: v[12],
+            m13: v[13],
+            m14: v[14],
+            m15: v[15],
+        }
+    }
 
-	pub fn toVec(&self) -> Vec<f64> {
-		vec![
-			*self.m00,
-			*self.m01,
-			*self.m02,
-			*self.m03,
-			*self.m04,
-			*self.m05,
-			*self.m06,
-			*self.m07,
-			*self.m08,
-			*self.m09,
-			*self.m10,
-			*self.m11,
-			*self.m12,
-			*self.m13,
-			*self.m14,
-			*self.m15,
-		]
-	}
+    pub fn toVec(&self) -> Vec<f64> {
+        vec![
+            *self.m00, *self.m01, *self.m02, *self.m03, *self.m04, *self.m05, *self.m06, *self.m07,
+            *self.m08, *self.m09, *self.m10, *self.m11, *self.m12, *self.m13, *self.m14, *self.m15,
+        ]
+    }
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 pub enum SkiLangClipRectMode {
-	Diff,
-	Intersect
+    Diff,
+    Intersect,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[ClipRectParams::mode:{clipRectMode},bounds:{bounds},antiAlias:{doAntiAlias}]")]
 pub struct SkiLangClipRectParams {
-	pub clipRectMode: SkiLangClipRectMode,
-	pub bounds: SkiLangRect,
-	pub doAntiAlias: bool,
+    pub clipRectMode: SkiLangClipRectMode,
+    pub bounds: SkiLangRect,
+    pub doAntiAlias: bool,
 }
 
 define_language! {
@@ -105,25 +86,25 @@ define_language! {
         // First all Nums are parsed, and then Floats. So if
         // you want to force a number to be parsed as a float,
         // make sure to add a . (1.0 instead of 1)
-		M44(SkiLangM44),
-		Rect(SkiLangRect),
-		ClipRectParams(SkiLangClipRectParams),
+        M44(SkiLangM44),
+        Rect(SkiLangRect),
+        ClipRectParams(SkiLangClipRectParams),
         Num(i32),
         Float(ordered_float::NotNan<f64>),
         Bool(bool),
         "noOp" = NoOp,
         "blankSurface" = BlankSurface,
-        "blankState" = BlankState, 
+        "blankState" = BlankState,
 
         // ------ Skia translation operations start ------//
-        /* 
+        /*
             1. Concat: Sequentially apply draw commands.
             (concat layer1 layer2) ->
                 <layer1 draw commands>
                 <layer2 draw commands>
 
             2. Merge: Directly corresponds to SaveLayer.
-            (merge layer1 layer2 mergeParams) -> 
+            (merge layer1 layer2 mergeParams) ->
                 <layer1 draw commands>
                 save (IF mergeParams has state)
                     <state commands>
@@ -131,11 +112,11 @@ define_language! {
                         <layer2 drawCommands>
                     restore()
                 restore()
-         
+
 
             3. DrawCommand: Apply the drawCommand at index in reference SKP.
                 (drawCommand index paint)
-                    If paint has an alpha, modify the alpha 
+                    If paint has an alpha, modify the alpha
                     before applying the drawCommand.
         */
         "concat" = Concat([Id; 2]),
@@ -171,7 +152,7 @@ define_language! {
         "pathEffect" = PathEffect([Id; 1]),
         "maskFilter" = MaskFilter([Id; 1]),
         "shader" = Shader([Id; 1]),
-		"paint" = Paint([Id; 7]),
+        "paint" = Paint([Id; 7]),
 
         // (backdrop ?exists)
         "backdrop" = Backdrop([Id; 1]),
@@ -218,9 +199,8 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                 => "?layer"),
     ];
 
-
     // Merge related rules.
-    rules.extend( vec![
+    rules.extend(vec![
         // Kill NoOp - SaveLayer(nullptr, nullptr).
         rewrite!("kill-noOp-merge";
                  "(merge 
@@ -292,7 +272,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                         ) 
                   )"),
-
         // We can still merge if blendMode is src and alpha is 255.
         // This handles drawPaint being blendMode_src branch at
         // This rule corresponds to the killSaveLayer at line 203 in src/core/SkRecordOpts.cpp
@@ -344,12 +323,12 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                         )
                   )"),
-
     ]);
 
     // Virtual Op Bidirectional Rules.
-    rules.extend(vec![
-        rewrite!("alphaVirtualOp"; 
+    rules.extend(
+        vec![
+            rewrite!("alphaVirtualOp"; 
                  "(merge 
                         ?dst 
                         ?src 
@@ -368,8 +347,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?bounds
                             ?stateVars
                         )
-                    )" 
-                 <=> 
+                    )" <=> 
                  "(merge 
                         ?dst 
                         (alpha ?a ?src) 
@@ -389,7 +367,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             ?stateVars
                         )
                     )"),
-        rewrite!("srcOverVirtualOp"; 
+            rewrite!("srcOverVirtualOp"; 
                  "(merge 
                         ?layerA
                         ?layerB
@@ -430,13 +408,14 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                             )
                         ) 
                     )"),
-
-    ].concat());
+        ]
+        .concat(),
+    );
 
     // Folding VirtualOps
     rules.extend(vec![
-        rewrite!("fold-draw"; 
-                        "(alpha ?layer_alpha
+        rewrite!("fold-draw";
+            "(alpha ?layer_alpha
                                 (drawCommand 
                                     ?x 
                                     (paint
@@ -451,11 +430,11 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 )
                             )
                         " => {
-                            FoldAlpha {
-                                layer_alpha: "?layer_alpha".parse().unwrap(),
-                                draw_alpha: "?draw_alpha".parse().unwrap(),
-                                merged_alpha: "?merged_alpha".parse().unwrap(),
-                                expr: "(drawCommand 
+                FoldAlpha {
+                    layer_alpha: "?layer_alpha".parse().unwrap(),
+                    draw_alpha: "?draw_alpha".parse().unwrap(),
+                    merged_alpha: "?merged_alpha".parse().unwrap(),
+                    expr: "(drawCommand
                                     ?x 
                                     (paint
                                         (color ?merged_alpha ?r ?g ?b)
@@ -467,27 +446,27 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                         (shader false)
                                     )
                                 )".parse().unwrap(),
-                            }
-                        }
-                    ),
-        rewrite!("clipRect-intersect"; 
-                "(clipRect (clipRect ?layer ?innerClipRectParams) ?outerClipRectParams)" =>  {
-                FoldClipRect {
-                    innerClipRectParams: "?innerClipRectParams".parse().unwrap(),
-                    outerClipRectParams: "?outerClipRectParams".parse().unwrap(),
-                    foldedClipRectParams: "?foldedClipRectParams".parse().unwrap(),
-                    expr: "(clipRect ?layer ?foldedClipRectParams)".parse().unwrap(),
                 }
             }
+        ),
+        rewrite!("clipRect-intersect";
+            "(clipRect (clipRect ?layer ?innerClipRectParams) ?outerClipRectParams)" =>  {
+            FoldClipRect {
+                innerClipRectParams: "?innerClipRectParams".parse().unwrap(),
+                outerClipRectParams: "?outerClipRectParams".parse().unwrap(),
+                foldedClipRectParams: "?foldedClipRectParams".parse().unwrap(),
+                expr: "(clipRect ?layer ?foldedClipRectParams)".parse().unwrap(),
+            }
+        }
 
 
-			),
-        ]);
+        ),
+    ]);
 
-        // Packing and Unpacking Filter and State.
-        // This is not a bidirectional rule as information is lost when going one way.
-        rules.extend(vec![
-            rewrite!("killSomeFilterAndState";
+    // Packing and Unpacking Filter and State.
+    // This is not a bidirectional rule as information is lost when going one way.
+    rules.extend(vec![
+        rewrite!("killSomeFilterAndState";
                 "(someFilterAndState
                     ?layer
                     (mergeParams
@@ -506,7 +485,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         blankState
                      )
                 )" => "?layer"),
-            rewrite!("recreateSomeFilterAndState";
+        rewrite!("recreateSomeFilterAndState";
                 "?layer" =>
                 "(someFilterAndState
                     ?layer
@@ -525,9 +504,10 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         (bounds false noOp)
                         blankState
                 ))"),
-        ]);
+    ]);
 
-        rules.extend(vec![
+    rules.extend(
+        vec![
             rewrite!("popFilterOntoLayer";
                 "(someFilterAndState
                     ?layer
@@ -566,7 +546,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         ?stateParams
                     )
                 )"),
-
             rewrite!("popClipRectOntoLayer";
                 "(someFilterAndState
                     ?layer
@@ -604,7 +583,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         ?inner
                      )
                 )"),
-
             rewrite!("popConcatM44OntoLayer";
                 "(someFilterAndState
                     ?layer
@@ -679,18 +657,22 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                         ?inner
                      )
                 )"),
-        ].concat());
+        ]
+        .concat(),
+    );
 
-
-        rules.extend(vec![
+    rules.extend(
+        vec![
             rewrite!("rearrange-srcOver"; 
                     "(srcOver ?A (srcOver ?B ?C))" <=> "(srcOver (srcOver ?A ?B) ?C)"),
             rewrite!("concatIsSrcOver";
                      "(concat ?A ?B)" <=> "(srcOver ?A ?B)"),
-        ].concat());
+        ]
+        .concat(),
+    );
 
-        // Bidirectional rules to extract common clipRect, m44 and matrixOp operations over srcOver.
-        rules.extend(vec![
+    // Bidirectional rules to extract common clipRect, m44 and matrixOp operations over srcOver.
+    rules.extend(vec![
             rewrite!("extract-common-clip"; 
                  "(srcOver (clipRect ?A ?params) (clipRect ?B ?params))" <=> "(clipRect (srcOver ?A ?B) ?params)"),
 
@@ -701,8 +683,8 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                  "(srcOver (matrixOp ?A ?params) (matrixOp ?B ?params))" <=> "(matrixOp (srcOver ?A ?B) ?params)")
         ].concat());
 
-        // Alpha-Matrix Bidirectional rules
-        rules.extend(vec![
+    // Alpha-Matrix Bidirectional rules
+    rules.extend(vec![
             rewrite!("alpha-m44"; 
                      "(alpha ?a (concat44 ?layer ?params))" <=> "(concat44 (alpha ?a ?layer) ?params)"),
 
@@ -713,31 +695,33 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                      "(alpha ?a (matrixOp ?layer ?params))" <=> "(matrixOp (alpha ?a ?layer) ?params)"),
         ].concat());
 
-        rules
+    rules
 }
 
 // This CostFn exists to prevent internal SkiLang functions (such as alpha) to never be extracted.
 pub struct SkiLangCostFn;
 impl CostFunction<SkiLang> for SkiLangCostFn {
     // Number of virtual ops, number of layers, number of commands
-    type Cost=(i32, i32, i32);
+    type Cost = (i32, i32, i32);
     fn cost<C>(&mut self, enode: &SkiLang, mut costs: C) -> Self::Cost
-        where
-            C: FnMut(Id) -> Self::Cost
+    where
+        C: FnMut(Id) -> Self::Cost,
     {
         let op_cost = match enode {
             SkiLang::Alpha(_ids) => (1, 0, 1),
             SkiLang::SomeFilterAndState(_ids) => (1, 0, 1),
             SkiLang::SrcOver(_ids) => (1, 0, 1),
             // TODO: We want a cost that is (number of layers, cost) and that depends on subtree size.
-            SkiLang::Merge(_ids) => (0, 1, 1), 
-            _ => (0, 0, 1)
+            SkiLang::Merge(_ids) => (0, 1, 1),
+            _ => (0, 0, 1),
         };
-        enode.fold(op_cost, |sum, id| (
-                sum.0 + costs(id).0, 
+        enode.fold(op_cost, |sum, id| {
+            (
+                sum.0 + costs(id).0,
                 sum.1 + costs(id).1,
-                sum.2 + costs(id).2
-        ))
+                sum.2 + costs(id).2,
+            )
+        })
     }
 }
 
@@ -745,34 +729,36 @@ struct FoldAlpha {
     layer_alpha: Var,
     draw_alpha: Var,
     merged_alpha: Var,
-    expr: Pattern<SkiLang>
+    expr: Pattern<SkiLang>,
 }
 
 impl Applier<SkiLang, ()> for FoldAlpha {
     fn apply_one(
-        &self, 
+        &self,
         egraph: &mut EGraph<SkiLang, ()>,
-        matched_id: Id, 
-        subst: &Subst, 
-        searcher_pattern: Option<&PatternAst<SkiLang>>, 
-        rule_name: Symbol) -> Vec<Id> {
+        matched_id: Id,
+        subst: &Subst,
+        searcher_pattern: Option<&PatternAst<SkiLang>>,
+        rule_name: Symbol,
+    ) -> Vec<Id> {
         let matched_expr: RecExpr<SkiLang> = egraph.id_to_expr(matched_id);
         let layer_alpha_id = subst[self.layer_alpha];
         let draw_alpha_id = subst[self.draw_alpha];
-        let layer_alpha :i32 = match egraph.id_to_expr(layer_alpha_id)[0.into()] {
+        let layer_alpha: i32 = match egraph.id_to_expr(layer_alpha_id)[0.into()] {
             SkiLang::Num(val) => val,
-            _ => panic!("Not a valid alpha value")
+            _ => panic!("Not a valid alpha value"),
         };
-        let draw_alpha :i32 = match egraph.id_to_expr(draw_alpha_id)[0.into()] {
+        let draw_alpha: i32 = match egraph.id_to_expr(draw_alpha_id)[0.into()] {
             SkiLang::Num(val) => val,
-            _ => panic!("Not a valid alpha value")
+            _ => panic!("Not a valid alpha value"),
         };
         let mut merged_alpha_value = (layer_alpha * draw_alpha) / 255;
         let merged_alpha = SkiLang::Num(merged_alpha_value);
 
         let mut subst = subst.clone();
         subst.insert(self.merged_alpha, egraph.add(merged_alpha));
-        self.expr.apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
+        self.expr
+            .apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
     }
 }
 
@@ -780,7 +766,7 @@ struct FoldClipRect {
     innerClipRectParams: Var,
     outerClipRectParams: Var,
     foldedClipRectParams: Var,
-    expr: Pattern<SkiLang>
+    expr: Pattern<SkiLang>,
 }
 
 fn bounds_intersection(bounds1: &SkiLangRect, bounds2: &SkiLangRect) -> SkiLangRect {
@@ -788,49 +774,52 @@ fn bounds_intersection(bounds1: &SkiLangRect, bounds2: &SkiLangRect) -> SkiLangR
         l: bounds1.l.max(bounds2.l),
         t: bounds1.t.max(bounds2.t),
         r: bounds1.r.min(bounds2.r),
-        b: bounds1.b.min(bounds2.b) 
+        b: bounds1.b.min(bounds2.b),
     }
 }
 
 impl Applier<SkiLang, ()> for FoldClipRect {
     fn apply_one(
-        &self, 
+        &self,
         egraph: &mut EGraph<SkiLang, ()>,
-        matched_id: Id, 
-        subst: &Subst, 
-        searcher_pattern: Option<&PatternAst<SkiLang>>, 
-        rule_name: Symbol) -> Vec<Id> {
-		let innerClipRectParamExpr = &egraph.id_to_expr(subst[self.innerClipRectParams]);
+        matched_id: Id,
+        subst: &Subst,
+        searcher_pattern: Option<&PatternAst<SkiLang>>,
+        rule_name: Symbol,
+    ) -> Vec<Id> {
+        let innerClipRectParamExpr = &egraph.id_to_expr(subst[self.innerClipRectParams]);
         let innerClipRectParams = match &innerClipRectParamExpr[0.into()] {
-			SkiLang::ClipRectParams(value) => value,
-			_ => panic!("This is not a ClipRectParams")
-		};
+            SkiLang::ClipRectParams(value) => value,
+            _ => panic!("This is not a ClipRectParams"),
+        };
 
-		let outerClipRectParamExpr = &egraph.id_to_expr(subst[self.outerClipRectParams]);
+        let outerClipRectParamExpr = &egraph.id_to_expr(subst[self.outerClipRectParams]);
         let outerClipRectParams = match &outerClipRectParamExpr[0.into()] {
-			SkiLang::ClipRectParams(value) => value,
-			_ => panic!("This is not a ClipRectParams")
-		};
+            SkiLang::ClipRectParams(value) => value,
+            _ => panic!("This is not a ClipRectParams"),
+        };
 
-		if innerClipRectParams.doAntiAlias != outerClipRectParams.doAntiAlias {
-			return vec![];
-		}
+        if innerClipRectParams.doAntiAlias != outerClipRectParams.doAntiAlias {
+            return vec![];
+        }
 
-		if innerClipRectParams.clipRectMode != SkiLangClipRectMode::Intersect ||
-			outerClipRectParams.clipRectMode != SkiLangClipRectMode::Intersect {
-			return vec![];
-		}
+        if innerClipRectParams.clipRectMode != SkiLangClipRectMode::Intersect
+            || outerClipRectParams.clipRectMode != SkiLangClipRectMode::Intersect
+        {
+            return vec![];
+        }
 
-		let mergedClipRectParams = SkiLang::ClipRectParams(SkiLangClipRectParams {
-			clipRectMode: innerClipRectParams.clipRectMode,
-			doAntiAlias: innerClipRectParams.doAntiAlias,
-			bounds: bounds_intersection(&innerClipRectParams.bounds, &outerClipRectParams.bounds)
-		});
+        let mergedClipRectParams = SkiLang::ClipRectParams(SkiLangClipRectParams {
+            clipRectMode: innerClipRectParams.clipRectMode,
+            doAntiAlias: innerClipRectParams.doAntiAlias,
+            bounds: bounds_intersection(&innerClipRectParams.bounds, &outerClipRectParams.bounds),
+        });
 
         let mut subst = subst.clone();
-		let mut expr = RecExpr::default();
-		expr.add(mergedClipRectParams);
+        let mut expr = RecExpr::default();
+        expr.add(mergedClipRectParams);
         subst.insert(self.foldedClipRectParams, egraph.add_expr(&expr));
-        self.expr.apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
+        self.expr
+            .apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
     }
 }

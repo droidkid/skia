@@ -3,18 +3,13 @@ use std::error::Error;
 
 use std::fmt::Write;
 
-use crate::protos;
-use crate::protos::{
-    SkRecord,
-    SkiPassProgram, 
-    SkiPassDebugInfo,
-    SkiPassRunResult, 
-};
-use crate::ski_lang::SkiLang;
-use crate::ski_lang::make_rules;
-use crate::ski_lang::SkiLangCostFn;
 use crate::build_ski_lang_expr::build_expr;
 use crate::build_ski_lang_expr::SkiLangExpr;
+use crate::protos;
+use crate::protos::{SkRecord, SkiPassDebugInfo, SkiPassProgram, SkiPassRunResult};
+use crate::ski_lang::make_rules;
+use crate::ski_lang::SkiLang;
+use crate::ski_lang::SkiLangCostFn;
 use crate::ski_lang_to_program::expr_to_program;
 
 pub fn optimize(record: SkRecord) -> SkiPassRunResult {
@@ -40,11 +35,10 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
     }
 }
 
-
 fn run_eqsat_and_extract(
     expr: &RecExpr<SkiLang>,
-    debug_info: &mut protos::SkiPassDebugInfo
-    ) -> Result<SkiLangExpr, Box<dyn Error>> {
+    debug_info: &mut protos::SkiPassDebugInfo,
+) -> Result<SkiLangExpr, Box<dyn Error>> {
     let runner = Runner::default()
         .with_explanations_enabled()
         .with_expr(expr)
@@ -64,4 +58,3 @@ fn run_eqsat_and_extract(
         id,
     })
 }
-

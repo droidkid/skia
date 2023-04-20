@@ -1,23 +1,20 @@
-#[macro_export]
-pub mod ski_pass;
+pub mod build_ski_lang_expr;
 pub mod ski_lang;
 pub mod ski_lang_converters;
-pub mod build_ski_lang_expr;
 pub mod ski_lang_to_program;
+#[macro_export]
+pub mod ski_pass;
 pub mod protos {
     include!(concat!(env!("OUT_DIR"), "/ski_pass_proto.rs"));
 }
 
 extern crate libc;
-use libc::size_t;
 use ffi_utils;
+use libc::size_t;
 use std::slice;
 
-use protos::{
-    SkRecord, 
-    SkiPassRunResult, 
-};
 use prost::Message;
+use protos::{SkRecord, SkiPassRunResult};
 
 #[repr(C)]
 pub struct SkiPassResultPtr {
@@ -27,15 +24,13 @@ pub struct SkiPassResultPtr {
 
 #[no_mangle]
 pub extern "C" fn ski_pass_optimize(data_ptr: *const u8, len: size_t) -> SkiPassResultPtr {
-    let data_slice : &[u8]= unsafe {
+    let data_slice: &[u8] = unsafe {
         assert!(!data_ptr.is_null());
         slice::from_raw_parts(data_ptr, len as usize)
     };
 
     let skipass_run = match SkRecord::decode(data_slice) {
-        Ok(sk_record) => {
-            ski_pass::optimize(sk_record)
-        }
+        Ok(sk_record) => ski_pass::optimize(sk_record),
         Err(_e) => {
             panic!("Decoding input proto from Skia failed");
         }
@@ -55,4 +50,3 @@ pub extern "C" fn free_ski_pass_result(result: SkiPassResultPtr) {
         ffi_utils::vec_from_raw_parts(result.ptr, result.len);
     }
 }
-
