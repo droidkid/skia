@@ -16,6 +16,12 @@ pub struct SkiLangRect {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+#[display("[matrixOp::index:{index}")]
+pub struct SkiLangMatrixOpParams {
+    pub index: i32
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[m44:{m00},{m01},{m02},{m03},{m04},{m05},{m06},{m07},{m08},{m09},{m10},{m11},{m12},{m13},{m14},{m15}]")]
 pub struct SkiLangM44 {
     m00: ordered_float::NotNan<f64>,
@@ -89,6 +95,7 @@ define_language! {
         M44(SkiLangM44),
         Rect(SkiLangRect),
         ClipRectParams(SkiLangClipRectParams),
+        MatrixOpParams(SkiLangMatrixOpParams),
         Num(i32),
         Float(ordered_float::NotNan<f64>),
         Bool(bool),
@@ -158,8 +165,6 @@ define_language! {
         "backdrop" = Backdrop([Id; 1]),
         // (mergeParams index paint backdrop bounds state)
         "mergeParams" = MergeParams([Id; 5]),
-        // (matrixOpParams index)
-        "matrixOpParams" = MatrixOpParams([Id; 1]),
 
         "blendMode_srcOver" = BlendMode_SrcOver,
         "blendMode_src" = BlendMode_Src,

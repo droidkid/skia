@@ -1,7 +1,12 @@
 use egg::*;
 
 use crate::protos::{sk_records::Command, ClipOp, SkRecords};
-use crate::ski_lang::{SkiLang, SkiLangClipRectMode, SkiLangClipRectParams};
+use crate::ski_lang::{
+    SkiLang, 
+    SkiLangClipRectMode, 
+    SkiLangClipRectParams,
+    SkiLangMatrixOpParams
+};
 use crate::ski_lang_converters::{
     bounds_expr_to_proto, bounds_proto_to_expr, bounds_proto_to_rect, paint_proto_to_expr, skm44_to_expr,
 };
@@ -42,8 +47,11 @@ where
                 match &sk_record.command {
                     Some(Command::DrawCommand(draw_command)) => match draw_command.name.as_str() {
                         "ClipPath" | "ClipRRect" => {
-                            let matrix_op_index = expr.add(SkiLang::Num(sk_record.index));
-                            let matrix_op_params = expr.add(SkiLang::MatrixOpParams([matrix_op_index]));
+                            let matrix_op_params = expr.add(SkiLang::MatrixOpParams(
+                                SkiLangMatrixOpParams {
+                                    index: sk_record.index
+                                }
+                            ));
                             draw_command_stack.push((StackOp::MatrixOp, matrix_op_params));
                         }
                         _ => {

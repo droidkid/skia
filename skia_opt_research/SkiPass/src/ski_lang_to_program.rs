@@ -257,16 +257,13 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
             };
             vec![instruction]
         }
-        SkiLang::MatrixOpParams(ids) => {
-            let instruction = match &expr[ids[0]] {
-                SkiLang::Num(index) => SkiPassInstruction {
-                    instruction: Some(Instruction::CopyRecord(SkiPassCopyRecord {
-                        index: *index,
-                        alpha: 255,
-                        paint: None,
-                    })),
-                },
-                _ => panic!("MatrixParams not constructed correctly"),
+        SkiLang::MatrixOpParams(matrix_op_params) => {
+            let instruction = SkiPassInstruction {
+                instruction: Some(Instruction::CopyRecord(SkiPassCopyRecord {
+                    index: matrix_op_params.index,
+                    alpha: 255,
+                    paint: None,
+                })),
             };
             vec![instruction]
         }
