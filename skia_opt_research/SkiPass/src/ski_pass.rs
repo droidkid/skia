@@ -14,10 +14,9 @@ pub fn optimize(record: SkRecord) -> SkiPassRunResult {
         Ok(optimized_expr) => {
             let mut optimized_program = SkiPassProgram::default();
             optimized_program.instructions = expr_to_program(&optimized_expr);
-
-            let mut skiPassRunResult = SkiPassRunResult::default();
-            skiPassRunResult.optimized_program = Some(optimized_program);
-            skiPassRunResult
+            let mut ski_pass_run_result = SkiPassRunResult::default();
+            ski_pass_run_result.optimized_program = Some(optimized_program);
+            ski_pass_run_result 
         }
         Err(_e) => {
             panic!("Failed to run eqsat and extraction");
