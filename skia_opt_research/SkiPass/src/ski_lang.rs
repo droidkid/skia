@@ -1,11 +1,6 @@
 use egg::*;
 use parse_display::{Display, FromStr};
 
-use crate::protos::Bounds;
-use crate::ski_lang_converters::{
-    bounds_proto_to_expr, bounds_proto_to_rect_expr, unpack_float, unpack_rect_to_bounds,
-};
-
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
 #[display("[rect:l:{l},t:{t},r:{r},b:{b}]")]
 pub struct SkiLangRect {
@@ -79,11 +74,18 @@ pub enum SkiLangClipRectMode {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
-#[display("[ClipRectParams::mode:{clipRectMode},bounds:{bounds},antiAlias:{doAntiAlias}]")]
+#[display("[ClipRectParams::mode:{clip_rect_mode},bounds:{bounds},antiAlias:{is_anti_aliased}]")]
 pub struct SkiLangClipRectParams {
-    pub clipRectMode: SkiLangClipRectMode,
+    pub clip_rect_mode: SkiLangClipRectMode,
     pub bounds: SkiLangRect,
-    pub doAntiAlias: bool,
+    pub is_anti_aliased: bool,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
+#[display("[DrawCommand::index:{index},extra_alpha:{extra_alpha}]")]
+pub struct SkiLangDrawCommand {
+    pub index: i32,
+    pub extra_alpha: i32
 }
 
 define_language! {
@@ -96,6 +98,7 @@ define_language! {
         Rect(SkiLangRect),
         ClipRectParams(SkiLangClipRectParams),
         MatrixOpParams(SkiLangMatrixOpParams),
+
         Num(i32),
         Float(ordered_float::NotNan<f64>),
         Bool(bool),
@@ -804,19 +807,19 @@ impl Applier<SkiLang, ()> for FoldClipRect {
             _ => panic!("This is not a ClipRectParams"),
         };
 
-        if innerClipRectParams.doAntiAlias != outerClipRectParams.doAntiAlias {
+        if innerClipRectParams.is_anti_aliased != outerClipRectParams.is_anti_aliased {
             return vec![];
         }
 
-        if innerClipRectParams.clipRectMode != SkiLangClipRectMode::Intersect
-            || outerClipRectParams.clipRectMode != SkiLangClipRectMode::Intersect
+        if innerClipRectParams.clip_rect_mode != SkiLangClipRectMode::Intersect
+            || outerClipRectParams.clip_rect_mode != SkiLangClipRectMode::Intersect
         {
             return vec![];
         }
 
         let mergedClipRectParams = SkiLang::ClipRectParams(SkiLangClipRectParams {
-            clipRectMode: innerClipRectParams.clipRectMode,
-            doAntiAlias: innerClipRectParams.doAntiAlias,
+            clip_rect_mode: innerClipRectParams.clip_rect_mode,
+            is_anti_aliased: innerClipRectParams.is_anti_aliased,
             bounds: bounds_intersection(&innerClipRectParams.bounds, &outerClipRectParams.bounds),
         });
 

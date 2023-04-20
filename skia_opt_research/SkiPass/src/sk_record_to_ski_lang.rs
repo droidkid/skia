@@ -63,19 +63,19 @@ where
                     },
                     Some(Command::ClipRect(clip_rect)) => {
                         let bounds = bounds_proto_to_rect(&clip_rect.bounds);
-                        let clipRectMode = if clip_rect.clip_op == ClipOp::Difference.into() {
+                        let clip_rect_mode = if clip_rect.clip_op == ClipOp::Difference.into() {
                             SkiLangClipRectMode::Diff
                         } else if clip_rect.clip_op == ClipOp::Intersect.into() {
                             SkiLangClipRectMode::Intersect
                         } else {
                             panic!("Unknown clipOp mode")
                         };
-                        let doAntiAlias = clip_rect.do_anti_alias;
+                        let is_anti_aliased = clip_rect.do_anti_alias;
                         let clipRectParams =
                             expr.add(SkiLang::ClipRectParams(SkiLangClipRectParams {
-                                clipRectMode,
+                                clip_rect_mode,
                                 bounds,
-                                doAntiAlias,
+                                is_anti_aliased
                             }));
                         draw_command_stack.push((StackOp::ClipRect, clipRectParams));
                     }

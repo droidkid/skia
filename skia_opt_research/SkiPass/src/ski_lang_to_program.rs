@@ -73,11 +73,11 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 top: *clipRectParams.bounds.t,
                 bottom: *clipRectParams.bounds.b,
             });
-            let clip_op: i32 = match clipRectParams.clipRectMode {
+            let clip_op: i32 = match clipRectParams.clip_rect_mode {
                 SkiLangClipRectMode::Intersect => ClipOp::Intersect.into(),
                 SkiLangClipRectMode::Diff => ClipOp::Difference.into(),
             };
-            let do_anti_alias: bool = clipRectParams.doAntiAlias;
+            let do_anti_alias: bool = clipRectParams.is_anti_aliased;
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
             instructions.push(SkiPassInstruction {
