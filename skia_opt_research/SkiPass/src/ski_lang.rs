@@ -2,7 +2,10 @@ use egg::*;
 use parse_display::{Display, FromStr};
 use crate::protos::{
     SkPaint,
-    SkColor
+    SkColor,
+    BlendMode,
+    sk_paint::ImageFilter,
+    sk_paint::Blender
 };
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
@@ -109,9 +112,11 @@ pub enum SkiLangBlendMode {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
-#[display("[Paint::color:{color}")]
+#[display("[Paint::color:{color},blend_mode:{blend_mode},has_filters:{has_filters}")]
 pub struct SkiLangPaint {
     color : SkiLangColor,
+    blend_mode: SkiLangBlendMode,
+    has_filters: bool
 }
 
 impl SkiLangPaint {
@@ -135,11 +140,46 @@ impl SkiLangPaint {
                 }
             }
         };
+
+        let blend_mode = match &sk_record_paint.blender {
+            Some(blender) => {
+                if blender.blend_mode == BlendMode::SrcOver.into() {
+                    SkiLangBlendMode::SrcOver
+                } else if blender.blend_mode == BlendMode::Src.into() {
+                    SkiLangBlendMode::Src
+                } else {
+                    SkiLangBlendMode::Unknown
+                }
+            },
+            None => SkiLangBlendMode::SrcOver,
+        };
+
+        let mut has_filters = false;
+        has_filters = has_filters || sk_record_paint.image_filter.is_some();
+        has_filters = has_filters || sk_record_paint.color_filter.is_some();
+        has_filters = has_filters || sk_record_paint.path_effect.is_some();
+        has_filters = has_filters || sk_record_paint.mask_filter.is_some();
+        has_filters = has_filters || sk_record_paint.shader.is_some();
+
         SkiLangPaint {
-            color
+            color,
+            blend_mode,
+            has_filters
         }
     }
     pub fn to_proto(&self) -> SkPaint {
+        let blend_mode = match self.blend_mode {
+            SkiLangBlendMode::Src => BlendMode::Src.into(),
+            SkiLangBlendMode::SrcOver => BlendMode::SrcOver.into(),
+            SkiLangBlendMode::Unknown => BlendMode::Unknown.into(),
+        };
+        // TODO: Just have one field 'has_filters' in the proto too.
+        let image_filter = if self.has_filters {
+            Some(ImageFilter {} )
+        } else {
+            None
+        };
+
         SkPaint {
             color: Some(SkColor{
                 alpha_u8: self.color.a,
@@ -147,12 +187,14 @@ impl SkiLangPaint {
                 green_u8: self.color.g,
                 blue_u8: self.color.b
             }),
-            blender: None,
-            image_filter: None,
+            blender: Some(Blender {
+                blend_mode
+            }),
+            image_filter,
             color_filter: None,
             path_effect: None,
             mask_filter: None,
-            shader: None
+            shader: None 
         }
     }
 }
@@ -219,18 +261,6 @@ define_language! {
 
         // (bound exists? rect)
         "bounds" = Bounds([Id; 2]),
-
-        /* paint(
-            color filter blender imageFilter colorFilter
-            pathEffect maskFilter shader
-        )
-        */
-        "blender" = Blender([Id; 1]),
-        "imageFilter" = ImageFilter([Id; 1]),
-        "colorFilter" = ColorFilter([Id; 1]),
-        "pathEffect" = PathEffect([Id; 1]),
-        "maskFilter" = MaskFilter([Id; 1]),
-        "shader" = Shader([Id; 1]),
 
         // (backdrop ?exists)
         "backdrop" = Backdrop([Id; 1]),
