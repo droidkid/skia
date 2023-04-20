@@ -89,10 +89,10 @@ pub struct SkiLangClipRectParams {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
-#[display("[DrawCommand::index:{index},extra_alpha:{extra_alpha}]")]
+#[display("[DrawCommand::index:{index},paint:{paint}]")]
 pub struct SkiLangDrawCommand {
     pub index: i32,
-    pub extra_alpha: i32
+    pub paint: SkiLangPaint
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
@@ -210,6 +210,7 @@ define_language! {
         ClipRectParams(SkiLangClipRectParams),
         MatrixOpParams(SkiLangMatrixOpParams),
         Paint(SkiLangPaint),
+        DrawCommand(SkiLangDrawCommand),
 
         Num(i32),
         Float(ordered_float::NotNan<f64>),
@@ -243,7 +244,6 @@ define_language! {
         */
         "concat" = Concat([Id; 2]),
         "merge" = Merge([Id; 3]),
-        "drawCommand" = DrawCommand([Id; 2]),
         // ------ Skia translation operations end ------//
 
         // ------ Virtual Ops (with Skia equivalent) --- //

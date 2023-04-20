@@ -6,7 +6,8 @@ use crate::ski_lang::{
     SkiLangPaint,
     SkiLangClipRectMode, 
     SkiLangClipRectParams,
-    SkiLangMatrixOpParams
+    SkiLangMatrixOpParams,
+    SkiLangDrawCommand
 };
 use crate::ski_lang_converters::{
     bounds_expr_to_proto, bounds_proto_to_expr, bounds_proto_to_rect, skm44_to_expr,
@@ -56,14 +57,13 @@ where
                             draw_command_stack.push((StackOp::MatrixOp, matrix_op_params));
                         }
                         _ => {
-                            let draw_command_index = expr.add(SkiLang::Num(sk_record.index));
-                            let draw_command_paint = expr.add(SkiLang::Paint(
-                                SkiLangPaint::from_proto(&draw_command.paint)
+                            let draw_command = expr.add(SkiLang::DrawCommand(
+                                SkiLangDrawCommand{
+                                    index: sk_record.index,
+                                    paint: SkiLangPaint::from_proto(&draw_command.paint),
+                                }
                             ));
-                            let draw_op_command = expr.add(SkiLang::DrawCommand(
-                                [draw_command_index, draw_command_paint])
-                            );
-                            draw_command_stack.push((StackOp::Surface, draw_op_command));
+                            draw_command_stack.push((StackOp::Surface, draw_command));
                         }
                     },
                     Some(Command::ClipRect(clip_rect)) => {

@@ -280,21 +280,13 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
             };
             vec![instruction]
         }
-        SkiLang::DrawCommand(ids) => {
-            let index = match &expr[ids[0]] {
-                SkiLang::Num(value) => *value,
-                _ => panic!("First index of drawCommand is not an index"),
-            };
-            let paint = match &expr[ids[1]] {
-                SkiLang::Paint(ski_lang_paint) => ski_lang_paint.to_proto(),
-                _ => panic!("Second index of drawCommand is not paint"),
-            };
+        SkiLang::DrawCommand(draw_command) => {
             let instruction = SkiPassInstruction {
-                // oneof -> Option of a Enum
                 instruction: Some(Instruction::CopyRecord(SkiPassCopyRecord {
-                    index,
+                    index: draw_command.index,
+                    paint: Some(draw_command.paint.to_proto()),
+                    // TODO: Remove alpha
                     alpha: 255,
-                    paint: Some(paint),
                 })),
             };
             vec![instruction]
