@@ -2,7 +2,10 @@ use egg::*;
 use crate::ski_lang::{
     SkiLang,
     SkiLangBlendMode,
-    SkiLangApplyAlphaParams
+    SkiLangApplyAlphaParams,
+    SkiLangRect,
+    SkiLangClipRectMode,
+    SkiLangClipRectParams
 };
 
 pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
@@ -19,7 +22,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                 ?layer blankSurface 
                 (merge_params_with_state 
                     ?merge_params ?state_ops))" => "?layer"
-            if merge_is_simple_src_over("?merge_params")
+            if merge_is_only_src_over("?merge_params")
         ),
         rewrite!("kill-noOp-merge";  
             "(merge ?dst ?src ?merge_params_with_state)" => "(concat ?dst ?src)"
@@ -41,7 +44,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 ?merge_params_without_alpha ?state_ops)
                         )".parse().unwrap(),
             }
-         } if merge_is_simple_src_over("?merge_params")),
+         } if merge_is_only_src_over("?merge_params")),
          rewrite!("alpha-virtual-op-revert";
             "(merge
                 ?dst (apply_alpha ?alpha_params ?src)
@@ -59,7 +62,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                     alpha_params: "?alpha_params".parse().unwrap(),
                     merge_params_with_alpha: "?merge_params_with_alpha".parse().unwrap()
                 }
-            } if merge_is_simple_src_over("?merge_params")
+            } if merge_is_only_src_over("?merge_params")
         ),
         rewrite!("fold-alpha";
             "(apply_alpha ?alpha_params ?src)" => {
@@ -70,12 +73,33 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                     expr: "?draw_command".parse().unwrap()
                 }
             }
+        ),
+        rewrite!("fold-clipRect";
+            "(clipRect (clipRect ?surface ?innerClipRectParams) ?outerClipRectParams)"
+             => {
+                FoldClipRect {
+                    inner_clip_rect_params: "?innerClipRectParams".parse().unwrap(),
+                    outer_clip_rect_params: "?outerClipRectParams".parse().unwrap(),
+                    folded_clip_rect_params: "?foldedClipRectParams".parse().unwrap(),
+                    expr: "(clipRect ?surface ?foldedClipRectParams)".parse().unwrap(),
+                }
+            }
         )
     ];
+    rules.extend(vec![
+        rewrite!("src-over";
+            "(merge ?dst ?src (merge_params_with_state ?merge_params ?state_ops))" <=>
+            "(srcOver 
+                ?dst 
+                (apply_filter_with_state 
+                    ?src 
+                    (merge_params_with_state ?merge_params ?state_ops)))"
+         if merge_is_src_over("?merge_params"))
+    ].concat());
     rules
 }
 
-fn merge_is_simple_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>, Id, &Subst) -> bool {
+fn merge_is_only_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>, Id, &Subst) -> bool {
     let var: Var = var.parse().unwrap();
     move |egraph, _, subst| {
         let merge_params_expr = egraph.id_to_expr(subst[var]);
@@ -87,6 +111,19 @@ fn merge_is_simple_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, (
         merge_params.paint.blend_mode == SkiLangBlendMode::SrcOver 
         && !merge_params.paint.has_filters
         && !merge_params.has_backdrop
+    }
+}
+
+fn merge_is_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>, Id, &Subst) -> bool {
+    let var: Var = var.parse().unwrap();
+    move |egraph, _, subst| {
+        let merge_params_expr = egraph.id_to_expr(subst[var]);
+        let root = merge_params_expr.as_ref().last().unwrap();
+        let merge_params = match root {
+            SkiLang::MergeParams(merge_params) => merge_params,
+            _ => panic!("first id of merge_params_with_state is not merge_params")
+        };
+        merge_params.paint.blend_mode == SkiLangBlendMode::SrcOver 
     }
 }
 
@@ -219,7 +256,6 @@ impl Applier<SkiLang, ()> for FoldAlpha {
         searcher_pattern: Option<&PatternAst<SkiLang>>,
         rule_name: Symbol,
     ) -> Vec<Id> {
-        let matched_expr  = egraph.id_to_expr(matched_id);
         let alpha_params_expr = egraph.id_to_expr(subst[self.alpha_params]);
         let root = alpha_params_expr.as_ref().last().unwrap();
         let alpha_params = match root {
@@ -250,5 +286,68 @@ impl Applier<SkiLang, ()> for FoldAlpha {
             egraph.add(SkiLang::DrawCommand(folded_draw_command))
         );
         self.expr.apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
+    }
+}
+
+struct FoldClipRect {
+    inner_clip_rect_params: Var,
+    outer_clip_rect_params: Var,
+    folded_clip_rect_params: Var,
+    expr: Pattern<SkiLang>,
+}
+
+fn bounds_intersection(bounds1: &SkiLangRect, bounds2: &SkiLangRect) -> SkiLangRect {
+    SkiLangRect {
+        l: bounds1.l.max(bounds2.l),
+        t: bounds1.t.max(bounds2.t),
+        r: bounds1.r.min(bounds2.r),
+        b: bounds1.b.min(bounds2.b),
+    }
+}
+
+impl Applier<SkiLang, ()> for FoldClipRect {
+    fn apply_one(
+        &self,
+        egraph: &mut EGraph<SkiLang, ()>,
+        matched_id: Id,
+        subst: &Subst,
+        searcher_pattern: Option<&PatternAst<SkiLang>>,
+        rule_name: Symbol,
+    ) -> Vec<Id> {
+        let inner_params_expr = &egraph.id_to_expr(subst[self.inner_clip_rect_params]);
+        let root = &inner_params_expr.as_ref().last().unwrap();
+        let inner_params = match root {
+            SkiLang::ClipRectParams(value) => value,
+            _ => panic!("This is not a ClipRectParams"),
+        };
+
+        let outer_params_expr = &egraph.id_to_expr(subst[self.outer_clip_rect_params]);
+        let root = &outer_params_expr.as_ref().last().unwrap(); 
+        let outer_params = match root {
+            SkiLang::ClipRectParams(value) => value,
+            _ => panic!("This is not a ClipRectParams"),
+        };
+
+        if inner_params.is_anti_aliased != outer_params.is_anti_aliased {
+            return vec![];
+        }
+
+        if inner_params.clip_rect_mode != SkiLangClipRectMode::Intersect
+            || outer_params.clip_rect_mode != SkiLangClipRectMode::Intersect {
+            return vec![];
+        }
+
+        let merged_params = SkiLang::ClipRectParams(SkiLangClipRectParams {
+            clip_rect_mode: inner_params.clip_rect_mode,
+            is_anti_aliased: inner_params.is_anti_aliased,
+            bounds: bounds_intersection(&inner_params.bounds, &outer_params.bounds),
+        });
+
+        let mut subst = subst.clone();
+        let mut expr = RecExpr::default();
+        expr.add(merged_params);
+        subst.insert(self.folded_clip_rect_params, egraph.add_expr(&expr));
+        self.expr
+            .apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
     }
 }
