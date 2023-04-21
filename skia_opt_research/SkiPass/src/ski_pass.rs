@@ -4,8 +4,8 @@ use std::error::Error;
 use crate::protos::{SkRecord, SkiPassProgram, SkiPassRunResult};
 use crate::sk_record_to_ski_lang::convert_sk_record_to_ski_lang_expr;
 use crate::ski_lang::SkiLang;
+use crate::ski_lang_rules::make_rules;
 use crate::ski_lang::SkiLangCostFn;
-use crate::ski_lang::make_rules;
 use crate::ski_lang_to_program::expr_to_program;
 
 pub fn optimize(record: SkRecord) -> SkiPassRunResult {

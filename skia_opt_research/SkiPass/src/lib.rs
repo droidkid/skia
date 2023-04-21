@@ -1,5 +1,6 @@
 pub mod sk_record_to_ski_lang;
 pub mod ski_lang;
+pub mod ski_lang_rules;
 pub mod ski_lang_to_program;
 #[macro_export]
 pub mod ski_pass;

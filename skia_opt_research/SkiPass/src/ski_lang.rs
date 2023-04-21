@@ -74,7 +74,7 @@ impl SkiLangRect {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
-#[display("[matrixOp::index:{index}")]
+#[display("[matrixOp::index:{index}]")]
 pub struct SkiLangMatrixOpParams {
     pub index: i32
 }
@@ -173,7 +173,7 @@ pub struct SkiLangDrawCommand {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
-#[display("[Color::a:{a},r:{r},g:{g},b:{b}")]
+#[display("[Color::a:{a},r:{r},g:{g},b:{b}]")]
 pub struct SkiLangColor {
     pub a: i32,
     pub r: i32,
@@ -189,7 +189,7 @@ pub enum SkiLangBlendMode {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
-#[display("[Paint::color:{color},blend_mode:{blend_mode},has_filters:{has_filters}")]
+#[display("[Paint::color:{color},blend_mode:{blend_mode},has_filters:{has_filters}]")]
 pub struct SkiLangPaint {
     pub color : SkiLangColor,
     pub blend_mode: SkiLangBlendMode,
@@ -197,7 +197,7 @@ pub struct SkiLangPaint {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
-#[display("[MergeParams::index:{index},paint:{paint},has_backdrop:{has_backdrop},has_bounds:{has_bounds},bounds:{bounds}")]
+#[display("[MergeParams::index:{index},paint:{paint},has_backdrop:{has_backdrop},has_bounds:{has_bounds},bounds:{bounds}]")]
 pub struct SkiLangMergeParams {
     pub index: i32,
     pub paint: SkiLangPaint,
@@ -208,7 +208,7 @@ pub struct SkiLangMergeParams {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
-#[display("[alpha:{alpha}")]
+#[display("[alpha:{alpha}]")]
 pub struct SkiLangApplyAlphaParams {
     pub alpha: i32
 }
@@ -293,7 +293,6 @@ impl SkiLangPaint {
     }
 }
 
-pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     // Trivial Rules, related to blank and identity.
     /*
     let mut rules = vec![
@@ -824,8 +823,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
 
         */
     // rules
-    vec![]
-}
 
 // This CostFn exists to prevent internal SkiLang functions (such as alpha) to never be extracted.
 pub struct SkiLangCostFn;
