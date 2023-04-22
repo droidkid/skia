@@ -2,7 +2,6 @@ pub mod sk_record_to_ski_lang;
 pub mod ski_lang;
 pub mod ski_lang_rules;
 pub mod ski_lang_to_program;
-#[macro_export]
 pub mod ski_pass;
 pub mod protos {
     include!(concat!(env!("OUT_DIR"), "/ski_pass_proto.rs"));
@@ -36,10 +35,15 @@ pub extern "C" fn ski_pass_optimize(data_ptr: *const u8, len: size_t) -> SkiPass
 
     let mut result_data: Vec<u8> = Vec::new();
     result_data.reserve(skipass_run.encoded_len());
-    skipass_run.encode(&mut result_data);
-
-    let (ptr, len) = ffi_utils::vec_into_raw_parts(result_data);
-    SkiPassResultPtr { ptr, len }
+    match skipass_run.encode(&mut result_data) {
+        Ok(()) => {
+            let (ptr, len) = ffi_utils::vec_into_raw_parts(result_data);
+            SkiPassResultPtr { ptr, len }
+        },
+        Err(_) => {
+            panic!("Failed to encode result data")
+        }
+    }
 }
 
 #[no_mangle]

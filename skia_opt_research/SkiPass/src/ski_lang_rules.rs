@@ -370,7 +370,6 @@ impl Applier<SkiLang, ()> for FoldAlpha {
             _ => panic!("Not ApplyAlpha")
         };
         let mut draw_command = None;
-        let surface = egraph.id_to_expr(subst[self.src]);
         for e in &egraph[subst[self.src]].nodes {
             match e {
                 SkiLang::DrawCommand(draw_command_node) => {
