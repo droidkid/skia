@@ -22,7 +22,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                 ?layer blankSurface 
                 (merge_params_with_state 
                     ?merge_params ?state_ops))" => "?layer"
-            if merge_is_only_src_over("?merge_params")
+            if merge_params_is_only_src_over("?merge_params")
         ),
         rewrite!("kill-noOp-merge";  
             "(merge ?dst ?src ?merge_params_with_state)" => "(concat ?dst ?src)"
@@ -44,7 +44,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                                 ?merge_params_without_alpha ?state_ops)
                         )".parse().unwrap(),
             }
-         } if merge_is_only_src_over("?merge_params")),
+         } if merge_params_is_only_src_over("?merge_params")),
          rewrite!("alpha-virtual-op-revert";
             "(merge
                 ?dst (apply_alpha ?alpha_params ?src)
@@ -62,7 +62,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                     alpha_params: "?alpha_params".parse().unwrap(),
                     merge_params_with_alpha: "?merge_params_with_alpha".parse().unwrap()
                 }
-            } if merge_is_only_src_over("?merge_params")
+            } if merge_params_is_only_src_over("?merge_params")
         ),
         rewrite!("fold-alpha";
             "(apply_alpha ?alpha_params ?src)" => {
@@ -84,6 +84,22 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                     expr: "(clipRect ?surface ?foldedClipRectParams)".parse().unwrap(),
                 }
             }
+        ),
+        rewrite!("kill-apply-filter-and-state";
+            "(apply_filter_with_state 
+                ?surface ?merge_params_with_state)" 
+                => "(?surface)" 
+                if merge_is_src_over_and_paint_is_opaque_and_no_state_and_no_bounds("?merge_params_with_state")
+        ),
+        rewrite!("add-dummy-filter-and-state";
+            "?surface" => 
+            "(apply_filter_with_state 
+                ?surface
+                (merge_params_with_state 
+                    [MergeParams::index:-1,paint:[Paint::color:[Color::a:255,r:0,g:0,b:0],blend_mode:SrcOver,has_filters:false],has_backdrop:false,has_bounds:false,bounds:[rect:l:0,t:0,r:0,b:0]]
+                    blankState
+                )
+            )"
         )
     ];
     rules.extend(vec![
@@ -94,12 +110,87 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                 (apply_filter_with_state 
                     ?src 
                     (merge_params_with_state ?merge_params ?state_ops)))"
-         if merge_is_src_over("?merge_params"))
+         if merge_params_is_src_over("?merge_params")),
+        rewrite!("seperate-filter-and-state";
+            "(apply_filter_with_state ?layer 
+                (merge_params_with_state ?merge_params ?state_ops))"
+            <=>
+            "(apply_filter_with_state 
+                (apply_filter_with_state 
+                    ?layer 
+                    (merge_params_with_state ?merge_params blankState))
+                (merge_params_with_state
+                    [MergeParams::index:-1,paint:[Paint::color:[Color::a:255,r:0,g:0,b:0],blend_mode:SrcOver,has_filters:false],has_backdrop:false,has_bounds:false,bounds:[rect:l:0,t:0,r:0,b:0]]
+                    ?state_ops))"),
+        rewrite!("pop-clip-rect";
+            "(apply_filter_with_state 
+                ?layer
+                (merge_params_with_state 
+                    ?merge_params 
+                    (clipRect ?inner_expr ?clip_rect_params)
+                )
+            )" <=>
+            "(apply_filter_with_state
+                (clipRect ?layer ?clip_rect_params)
+                (merge_params_with_state
+                    ?merge_params
+                    ?inner_expr
+                )
+            )" if merge_params_is_only_src_over_and_no_bounds("?merge_params")
+        ),
+        rewrite!("pop-concatm44";
+            "(apply_filter_with_state 
+                ?layer
+                (merge_params_with_state 
+                    ?merge_params 
+                    (concat44 ?inner_expr ?params)
+                )
+            )" <=>
+            "(apply_filter_with_state
+                (concat44 ?layer ?params)
+                (merge_params_with_state
+                    ?merge_params
+                    ?inner_expr
+                )
+            )" if merge_params_is_only_src_over_and_no_bounds("?merge_params")
+        ),
+        rewrite!("pop-matrixOp";
+            "(apply_filter_with_state 
+                ?layer
+                (merge_params_with_state 
+                    ?merge_params 
+                    (matrixOp ?inner_expr ?params)
+                )
+            )" <=>
+            "(apply_filter_with_state
+                (matrixOp ?layer ?params)
+                (merge_params_with_state
+                    ?merge_params
+                    ?inner_expr
+                )
+            )" if merge_params_is_only_src_over_and_no_bounds("?merge_params")
+        ),
+        rewrite!("rearrange-srcOver"; 
+            "(srcOver ?A (srcOver ?B ?C))" <=> "(srcOver (srcOver ?A ?B) ?C)"),
+        rewrite!("concatIsSrcOver";
+            "(concat ?A ?B)" <=> "(srcOver ?A ?B)"),
+        rewrite!("extract-common-clip"; 
+            "(srcOver (clipRect ?A ?params) (clipRect ?B ?params))" <=> "(clipRect (srcOver ?A ?B) ?params)"),
+        rewrite!("extract-common-m44"; 
+            "(srcOver (concat44 ?A ?params) (concat44 ?B ?params))" <=> "(concat44 (srcOver ?A ?B) ?params)"),
+        rewrite!("extract-common-matrixOp"; 
+            "(srcOver (matrixOp ?A ?params) (matrixOp ?B ?params))" <=> "(matrixOp (srcOver ?A ?B) ?params)"),
+        rewrite!("alpha-m44"; 
+            "(apply_alpha ?a (concat44 ?layer ?params))" <=> "(concat44 (apply_alpha ?a ?layer) ?params)"),
+        rewrite!("alpha-clipRect"; 
+            "(apply_alpha ?a (clipRect ?layer ?params))" <=> "(clipRect (apply_alpha ?a ?layer) ?params)"),
+        rewrite!("alpha-matrixOp"; 
+            "(apply_alpha ?a (matrixOp ?layer ?params))" <=> "(matrixOp (apply_alpha ?a ?layer) ?params)"),
     ].concat());
     rules
 }
 
-fn merge_is_only_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>, Id, &Subst) -> bool {
+fn merge_params_is_only_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>, Id, &Subst) -> bool {
     let var: Var = var.parse().unwrap();
     move |egraph, _, subst| {
         let merge_params_expr = egraph.id_to_expr(subst[var]);
@@ -114,7 +205,7 @@ fn merge_is_only_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>
     }
 }
 
-fn merge_is_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>, Id, &Subst) -> bool {
+fn merge_params_is_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>, Id, &Subst) -> bool {
     let var: Var = var.parse().unwrap();
     move |egraph, _, subst| {
         let merge_params_expr = egraph.id_to_expr(subst[var]);
@@ -124,6 +215,22 @@ fn merge_is_src_over(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>, Id,
             _ => panic!("first id of merge_params_with_state is not merge_params")
         };
         merge_params.paint.blend_mode == SkiLangBlendMode::SrcOver 
+    }
+}
+
+fn merge_params_is_only_src_over_and_no_bounds(var: &'static str) -> impl Fn(&mut EGraph<SkiLang, ()>, Id, &Subst) -> bool {
+    let var: Var = var.parse().unwrap();
+    move |egraph, _, subst| {
+        let merge_params_expr = egraph.id_to_expr(subst[var]);
+        let root = merge_params_expr.as_ref().last().unwrap();
+        let merge_params = match root {
+            SkiLang::MergeParams(merge_params) => merge_params,
+            _ => panic!("first id of merge_params_with_state is not merge_params")
+        };
+        merge_params.paint.blend_mode == SkiLangBlendMode::SrcOver 
+        && !merge_params.paint.has_filters
+        && !merge_params.has_backdrop
+        && !merge_params.has_bounds
     }
 }
 
@@ -274,7 +381,6 @@ impl Applier<SkiLang, ()> for FoldAlpha {
             };
         }
         if draw_command.is_none() {
-            println!("Not a Draw Command!");
             return vec![];
         }
         let draw_command = draw_command.unwrap();
