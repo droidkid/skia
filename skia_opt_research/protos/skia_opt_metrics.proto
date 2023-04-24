@@ -20,6 +20,7 @@ message OptimizationBenchmark {
     Optimization optimization_type = 1;
     OptimizationStatus optimization_status = 2;
     uint64 malloc_allocated_bytes = 3; // Valid only if optimization_status == SUCCESS
+    uint64 optimization_duration_nano = 4;
 }
 
 message SkpBenchmark {

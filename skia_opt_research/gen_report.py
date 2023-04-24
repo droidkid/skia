@@ -80,6 +80,7 @@ def build_benchmark_template_vars(benchmark_name):
             opt_mem = int(opt_benchmark.malloc_allocated_bytes) 
             skp[opt] = {}
             skp[opt]['bytes'] = pretty_byte_str(opt_mem)
+            skp[opt]['duration'] = opt_benchmark.optimization_duration_nano
             skp[opt]['log'] = ('./%s_%s_log.txt' % (skp['name'], opt)) 
             skp[opt]['img'] = ('./%s_renders/%s.png' % (opt, skp['name'])) 
             skp[opt]['skp'] = ('./%s_renders/%s_%s.skp' % (opt, skp['name'], opt)) 

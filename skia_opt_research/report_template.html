@@ -62,7 +62,35 @@
             
         </table>
         {% endfor %}
+        <p/>
 
+        <h2> Duration (nano seconds) </h2>
+
+        {% for benchmark in benchmarks %}
+        <p/>
+        <h4> TestCases: {{ benchmark['title'] }}</h4>
+        <table>
+            <tr>
+                <th> Image </th>
+            {% for opt in skp_membench_opts %}
+                <th> {{skp_membench_opts[opt]['display_name']}} </th>
+            {% endfor %}
+            </tr>
+            {% for skp in benchmark['skps'] if skp['NO_OPT']['bytes'] != '0' %}
+            <tr>
+                <td><a href="{{ skp['ref_img_url']}}"> {{ skp['display_name'] }} </a> <br/>
+                </td>
+                {% for opt in skp_membench_opts %}
+                    <td class="num_cell"> 
+                        {{skp[opt]['duration']}} 
+                    </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+            </tr>
+            
+        </table>
+        {% endfor %}
         <p/>
 
 

@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <fstream>
+#include <chrono>
 
 #include <google/protobuf/descriptor.h>
 
@@ -90,8 +91,8 @@ void benchmark_optimization(
     SkRecord skipass_record;
     SkRecorder skipass_recorder(&skipass_record, w, h);
 
+    auto optimize_start = std::chrono::high_resolution_clock::now();
     SkRecord *record = &skp_record;
-
     switch (optType) {
         case skia_opt_metrics::NO_OPT:
             break;
@@ -108,6 +109,9 @@ void benchmark_optimization(
             record = &skipass_record;
             break;
     }
+    auto optimize_end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(optimize_end-optimize_start);
+    benchmark->set_optimization_duration_nano(duration.count());
 
     // Create a Canvas.
     SkBitmap bitmap;
