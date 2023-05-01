@@ -114,10 +114,10 @@ message SkRecord {
     repeated SkRecords records = 1;
 }
 
-message SkiPassDebugInfo {
-    string skilang_expr = 4;
-    string extracted_skilang_expr = 5;
-    SkRecord input_record = 6;
+message SkiPassDurationInfo {
+    uint64 sk_record_ski_lang_duration_nano = 1;
+    uint64 eqsat_duration_nano = 2;
+    uint64 ski_lang_to_instructions_duration_nano = 3;
 }
 
 /*
@@ -167,5 +167,5 @@ message SkiPassProgram {
 
 message SkiPassRunResult {
     SkiPassProgram optimized_program = 1; 
-    SkiPassDebugInfo debug_info = 2;
+    SkiPassDurationInfo duration_info = 2;
 }

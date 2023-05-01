@@ -9,6 +9,7 @@
 #define SkRecordOpts_DEFINED
 
 #include "src/core/SkRecord.h"
+#include "skia_opt_research/skia_opt_metrics.pb.h"
 
 // Run all optimizations in recommended order.
 void SkRecordOptimize(SkRecord*);
@@ -29,6 +30,6 @@ void SkRecordMergeSvgOpacityAndFilterLayers(SkRecord*);
 // Experimental optimizers
 void SkRecordOptimize2(SkRecord*);
 
-void SkiPassOptimize(SkRecord* , SkCanvas *, const std::string &);
+void SkiPassOptimize(SkRecord* , SkCanvas *, skia_opt_metrics::SkiPassMetrics *);
 
 #endif//SkRecordOpts_DEFINED

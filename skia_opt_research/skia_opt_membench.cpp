@@ -100,12 +100,7 @@ void benchmark_optimization(
             SkRecordOptimize(record);
             break;
         case skia_opt_metrics::SKI_PASS:
-    		std::string skipass_log_fname = 
-        		outDir + "/" +
-        		getFileName(skpPath) + "_" + 
-        		skia_opt_metrics::Optimization_Name(optType) + 
-        		"_SkiPassRunResult.txt";
-            SkiPassOptimize(record, &skipass_recorder, skipass_log_fname);
+            SkiPassOptimize(record, &skipass_recorder, benchmark->mutable_ski_pass_metrics());
             record = &skipass_record;
             break;
     }

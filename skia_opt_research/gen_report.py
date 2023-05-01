@@ -71,10 +71,7 @@ def build_benchmark_template_vars(benchmark_name):
         skp = {}
         skp['name'] = skp_name
         skp['display_name'] = skp_name[:-4] if skp_name.endswith('.skp') else skp_name
-        skp['skp_no_opt_url'] = ('%s_NO_OPT.skp' % skp_name)
-        skp['skp_ski_pass_url'] = ('%s_SKI_PASS.skp' % skp_name)
         skp['ref_img_url'] = ("NO_OPT_renders/%s.png" % skp_name)
-        skp['skipass_log'] = ('./%s_SKI_PASS_SkiPassRunResult.txt' % (skp_name))
         for opt_benchmark in skp_benchmark.optimization_benchmark_runs:
             opt = SkiaOptMetrics.Optimization.Name(opt_benchmark.optimization_type)
             opt_mem = int(opt_benchmark.malloc_allocated_bytes) 
@@ -84,6 +81,19 @@ def build_benchmark_template_vars(benchmark_name):
             skp[opt]['log'] = ('./%s_%s_log.txt' % (skp['name'], opt)) 
             skp[opt]['img'] = ('./%s_renders/%s.png' % (opt, skp['name'])) 
             skp[opt]['skp'] = ('./%s_renders/%s_%s.skp' % (opt, skp['name'], opt)) 
+            if opt == 'SKI_PASS':
+                skp[opt]['sk_record_to_ski_lang_duration'] = opt_benchmark.ski_pass_metrics.sk_record_ski_lang_duration_nano
+                skp[opt]['sk_record_to_ski_lang_duration_%'] = (opt_benchmark.ski_pass_metrics.sk_record_ski_lang_duration_nano/skp[opt]['duration']) * 100.0
+                skp[opt]['eqsat_duration'] = opt_benchmark.ski_pass_metrics.eqsat_duration_nano
+                skp[opt]['eqsat_duration_%'] = (opt_benchmark.ski_pass_metrics.eqsat_duration_nano/skp[opt]['duration']) * 100.0
+                skp[opt]['ski_lang_to_instructions_duration_nano'] = opt_benchmark.ski_pass_metrics.ski_lang_to_instructions_duration_nano
+                skp[opt]['ski_lang_to_instructions_duration_nano_%'] = (opt_benchmark.ski_pass_metrics.ski_lang_to_instructions_duration_nano/skp[opt]['duration']) * 100.0
+                skp[opt]['inside_rust'] = (skp[opt]['sk_record_to_ski_lang_duration'] + 
+                         skp[opt]['eqsat_duration'] +
+                    skp[opt]['ski_lang_to_instructions_duration_nano'] )
+                skp[opt]['outside_rust'] = skp[opt]['duration'] - skp[opt]['inside_rust']
+                skp[opt]['outside_rust_%'] = skp[opt]['outside_rust']/skp[opt]['duration'] * 100.0
+                pass
             summary[opt]['bytes'] += opt_mem
         skp_results.append(skp)
 

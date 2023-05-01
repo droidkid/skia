@@ -533,7 +533,7 @@ private:
   * SkCanvas *canvas: The canvas on which the optimized draw instructions will be applied on.
   * log_fname: File path to dump SkiPass logs
   */
-void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_fname) {
+void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, skia_opt_metrics::SkiPassMetrics *metrics) {
     // Build SkiPassRecord Proto (input to rust optimizer).
     ski_pass_proto::SkRecord skipass_record;
     SkiPassRecordBuilder builder(&skipass_record);
@@ -551,11 +551,9 @@ void SkiPassOptimize(SkRecord* record, SkCanvas *canvas, const std::string &log_
     ski_pass_proto::SkiPassRunResult result;
     result.ParseFromString(result_data);
 
-    // Log the results to a file. 
-    // TODO: It might be cleaner to let the Rust side handle this.
-    FILE *skipass_log = fopen(log_fname.c_str(), "w");
-    fprintf(skipass_log, "%s", result.DebugString().c_str());
-    fclose(skipass_log);
+    metrics->set_sk_record_ski_lang_duration_nano(result.duration_info().sk_record_ski_lang_duration_nano());
+    metrics->set_eqsat_duration_nano(result.duration_info().eqsat_duration_nano());
+    metrics->set_ski_lang_to_instructions_duration_nano(result.duration_info().ski_lang_to_instructions_duration_nano());
 
     SkRecordAlphaApplier alphaApplier(canvas);
     // Apply the instructions passed on by the optimizer and write into SkRecord *record.

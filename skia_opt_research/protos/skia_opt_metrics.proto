@@ -16,11 +16,18 @@ enum Optimization {
     SKI_PASS = 4;
 }
 
+message SkiPassMetrics {
+    uint64 sk_record_ski_lang_duration_nano = 1;
+    uint64 eqsat_duration_nano = 2;
+    uint64 ski_lang_to_instructions_duration_nano = 3;
+}
+
 message OptimizationBenchmark {
     Optimization optimization_type = 1;
     OptimizationStatus optimization_status = 2;
     uint64 malloc_allocated_bytes = 3; // Valid only if optimization_status == SUCCESS
     uint64 optimization_duration_nano = 4;
+    SkiPassMetrics ski_pass_metrics = 5;
 }
 
 message SkpBenchmark {
@@ -28,16 +35,6 @@ message SkpBenchmark {
     repeated OptimizationBenchmark optimization_benchmark_runs = 2;
 }
 
-
-message SkiPassSummary {
-    message UnsupportedDrawCommandStats {
-        string draw_command = 1;
-        int32 count = 2;
-    };
-    repeated UnsupportedDrawCommandStats unsupported_draw_commands = 1;
-}
-
 message SkiaOptBenchmark {
     repeated SkpBenchmark skp_benchmark_runs = 1;
-    SkiPassSummary ski_pass_summary = 2;
 }
