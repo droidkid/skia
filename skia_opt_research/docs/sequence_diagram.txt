@@ -1,11 +1,11 @@
 title SkiPassOptimize
 
-participantgroup  C++ Skia Code base
+participantgroup  Skia (C\++)
 participant User
 participant SkRecordOpts.h
 end 
 
-participantgroup SkiPass 
+participantgroup SkiPass (Rust)
 
 participant lib.rs
 participant ski_pass.rs
@@ -13,7 +13,7 @@ participant sk_record_to_ski_lang.rs
 participant ski_lang_to_program.rs
 end 
 
-participant egg
+participant e-graph (egg)
 
 User->SkRecordOpts.h: SkRecord and SkCanvas
 SkRecordOpts.h->lib.rs:     Serialize SkRecord
@@ -26,6 +26,4 @@ ski_pass.rs->ski_lang_to_program.rs: Parse SkiLang back into SkRecord mutation i
 ski_lang_to_program.rs->ski_pass.rs: List of SkRecord Mutation Instructions (SkProgram)
 ski_pass.rs->lib.rs:SkProgram
 lib.rs->SkRecordOpts.h:      Serialize SkProgram
-SkRecordOpts.h->User:Deserialize SkProgram and \n apply mutations.\nSkCanvas holds optimized SkRecord
-
-
+SkRecordOpts.h->User:Deserialize SkProgram\n Build optimized SkRecord in SkCanvas 
