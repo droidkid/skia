@@ -11,7 +11,7 @@ use crate::ski_lang::{SkiLang, SkiLangClipRectMode};
 #[derive(Debug)]
 pub struct SkiPassSurface {
     instructions: Vec<SkiPassInstruction>,
-    modified_matrix: bool,
+    modified_state: bool,
 }
 
 pub fn expr_to_program(expr: &RecExpr<SkiLang>) -> Vec<SkiPassInstruction> {
@@ -24,12 +24,12 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
     match node {
         SkiLang::BlankSurface => SkiPassSurface {
             instructions: vec![],
-            modified_matrix: false,
+            modified_state: false,
         },
         SkiLang::DrawCommand(_ids) => {
             SkiPassSurface {
                 instructions: to_instructions(&expr, id), // NOTE: id, not ids[0] -> we are parsing the command, not its args
-                modified_matrix: false,
+                modified_state: false,
             }
         }
         SkiLang::MatrixOp(ids) => {
@@ -42,7 +42,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
 
             SkiPassSurface {
                 instructions,
-                modified_matrix: true,
+                modified_state: true,
             }
         }
         SkiLang::Concat44(ids) => {
@@ -55,7 +55,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
 
             SkiPassSurface {
                 instructions,
-                modified_matrix: true,
+                modified_state: true,
             }
         }
         SkiLang::ClipRect(ids) => {
@@ -91,7 +91,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
 
             SkiPassSurface {
                 instructions,
-                modified_matrix: true,
+                modified_state: true,
             }
         }
         // Not to be confused with Concat44 (which is a state matrix multiplication)
@@ -101,7 +101,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
 
-            if p1.modified_matrix {
+            if p1.modified_state {
                 instructions.push(SkiPassInstruction {
                     instruction: Some(Instruction::Save(Save {})),
                 });
@@ -113,7 +113,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 instructions.append(&mut p1.instructions);
             }
 
-            if p2.modified_matrix {
+            if p2.modified_state {
                 instructions.push(SkiPassInstruction {
                     instruction: Some(Instruction::Save(Save {})),
                 });
@@ -127,7 +127,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
 
             SkiPassSurface {
                 instructions,
-                modified_matrix: false,
+                modified_state: false,
             }
         }
         SkiLang::Merge(ids) => {
@@ -135,7 +135,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             let mut src = build_program(&expr, ids[1]);
 
             let mut instructions: Vec<SkiPassInstruction> = vec![];
-            if dst.modified_matrix {
+            if dst.modified_state {
                 instructions.push(SkiPassInstruction {
                     instruction: Some(Instruction::Save(Save {})),
                 });
@@ -206,7 +206,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
 
             SkiPassSurface {
                 instructions,
-                modified_matrix: false,
+                modified_state: false,
             }
         }
         SkiLang::ApplyAlpha(_ids) => {
@@ -214,7 +214,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         }
         SkiLang::BlankState => SkiPassSurface {
             instructions: vec![],
-            modified_matrix: false,
+            modified_state: false,
         },
         _ => {
             panic!("Badly constructed Recexpr {:?} ", node);
