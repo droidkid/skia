@@ -221,9 +221,7 @@ fn reduce_stack(
 }
 
 fn reduce_stack_to_state_expr(expr: &mut RecExpr<SkiLang>, state_stack: &mut Vec<(StackOp, Id)>) {
-    state_stack.reverse();
     state_stack.push((StackOp::State, expr.add(SkiLang::BlankState)));
-
     while state_stack.len() != 1 {
         let (e1_type, e1) = state_stack.pop().unwrap();
         let (e2_type, e2) = state_stack.pop().unwrap();

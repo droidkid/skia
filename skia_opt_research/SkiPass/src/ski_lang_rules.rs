@@ -100,8 +100,26 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                     blankState
                 )
             )"
-        )
+        ),
+        rewrite!("apply-state-directly";
+            "(apply_filter_with_state
+                ?layer
+                (merge_params_with_state ?merge_params ?state_ops)
+            )" => {
+                ApplyStateOnLayer {
+                    layer: "?layer".parse().unwrap(),
+                    state_ops: "?state_ops".parse().unwrap(),
+                    layer_with_state: "?layer_with_state".parse().unwrap(),
+                    expr: "(apply_filter_with_state
+                        ?layer_with_state
+                        (merge_params_with_state ?merge_params blankState)
+                    )".parse().unwrap(),
+                }
+            }
+            if merge_params_is_only_src_over_and_no_bounds("?merge_params")
+        ),
     ];
+
     rules.extend(vec![
         rewrite!("src-over";
             "(merge ?dst ?src (merge_params_with_state ?merge_params ?state_ops))" <=>
@@ -122,54 +140,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                 (merge_params_with_state
                     [MergeParams::index:-1,paint:[Paint::color:[Color::a:255,r:0,g:0,b:0],blend_mode:SrcOver,has_filters:false],has_backdrop:false,has_bounds:false,bounds:[rect:l:0,t:0,r:0,b:0]]
                     ?state_ops))"),
-        rewrite!("pop-clip-rect";
-            "(apply_filter_with_state 
-                ?layer
-                (merge_params_with_state 
-                    ?merge_params 
-                    (clipRect ?inner_expr ?clip_rect_params)
-                )
-            )" <=>
-            "(apply_filter_with_state
-                (clipRect ?layer ?clip_rect_params)
-                (merge_params_with_state
-                    ?merge_params
-                    ?inner_expr
-                )
-            )" if merge_params_is_only_src_over_and_no_bounds("?merge_params")
-        ),
-        rewrite!("pop-concatm44";
-            "(apply_filter_with_state 
-                ?layer
-                (merge_params_with_state 
-                    ?merge_params 
-                    (concat44 ?inner_expr ?params)
-                )
-            )" <=>
-            "(apply_filter_with_state
-                (concat44 ?layer ?params)
-                (merge_params_with_state
-                    ?merge_params
-                    ?inner_expr
-                )
-            )" if merge_params_is_only_src_over_and_no_bounds("?merge_params")
-        ),
-        rewrite!("pop-matrixOp";
-            "(apply_filter_with_state 
-                ?layer
-                (merge_params_with_state 
-                    ?merge_params 
-                    (matrixOp ?inner_expr ?params)
-                )
-            )" <=>
-            "(apply_filter_with_state
-                (matrixOp ?layer ?params)
-                (merge_params_with_state
-                    ?merge_params
-                    ?inner_expr
-                )
-            )" if merge_params_is_only_src_over_and_no_bounds("?merge_params")
-        ),
         rewrite!("rearrange-srcOver"; 
             "(srcOver ?A (srcOver ?B ?C))" <=> "(srcOver (srcOver ?A ?B) ?C)"),
         rewrite!("concatIsSrcOver";
@@ -452,6 +422,33 @@ impl Applier<SkiLang, ()> for FoldClipRect {
         let mut expr = RecExpr::default();
         expr.add(merged_params);
         subst.insert(self.folded_clip_rect_params, egraph.add_expr(&expr));
+        self.expr
+            .apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
+    }
+}
+
+struct ApplyStateOnLayer {
+    layer: Var,
+    state_ops: Var,
+    layer_with_state: Var,
+    expr: Pattern<SkiLang>,
+}
+
+impl Applier<SkiLang, ()> for ApplyStateOnLayer {
+    fn apply_one(
+        &self,
+        egraph: &mut EGraph<SkiLang, ()>,
+        matched_id: Id,
+        subst: &Subst,
+        searcher_pattern: Option<&PatternAst<SkiLang>>,
+        rule_name: Symbol,
+    ) -> Vec<Id> {
+        let state_ops_expr = &egraph.id_to_expr(subst[self.state_ops]).pretty(0);
+        let layer_expr = &egraph.id_to_expr(subst[self.layer]).pretty(0);
+        let layer_with_state: RecExpr<SkiLang> = state_ops_expr.replace("blankState", &layer_expr).parse().unwrap();
+
+        let mut subst = subst.clone();
+        subst.insert(self.layer_with_state, egraph.add_expr(&layer_with_state));
         self.expr
             .apply_one(egraph, matched_id, &subst, searcher_pattern, rule_name)
     }

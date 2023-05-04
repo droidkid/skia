@@ -158,8 +158,6 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
             };
 
             let mut state_construction_instructions = build_program(expr, state_expr_id).instructions;
-            state_construction_instructions.reverse();
-
             let mut src_instructions: Vec<SkiPassInstruction> = vec![];
             let can_reconstruct = !merge_params.has_backdrop && !merge_params.paint.has_filters;
 

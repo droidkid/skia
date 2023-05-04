@@ -400,6 +400,7 @@ void draw_017_TestClipRectIntersection(SkCanvas *canvas) {
     canvas->drawRect(SkRect::MakeLTRB(10, 310, 500, 400), p);
 }
 
+
 /*
    This test is to show that our optimizer outputs
 
@@ -449,6 +450,19 @@ void draw_018_commonsScale(SkCanvas *canvas) {
     canvas->restore();
 }
 
+void draw_019_testSaveLayerStateCaptureOrder(SkCanvas *canvas) {
+    SkPaint paint;
+    paint.setColor(SK_ColorBLUE);
+    SkPaint lPaint;
+    lPaint.setAlphaf(0.5);
+
+  	canvas->scale(2.0, 0.5);
+    canvas->clipRect(SkRect::MakeWH(90, 80));
+    canvas->saveLayer(nullptr, &lPaint);
+        canvas->drawCircle(100, 100, 60, paint);
+    canvas->restore();
+}
+
 
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
@@ -471,4 +485,5 @@ int main(int argc, char **argv) {
     raster(draw_015_mergeSrcOverTree, "015_mergeSrcOverTree.skp");
     raster(draw_017_TestClipRectIntersection, "017_TestClipRectIntersection.skp");
     raster(draw_018_commonsScale, "018_CommonScale.skp");
+    raster(draw_019_testSaveLayerStateCapture, "019_testSaveLayerStateCapture.skp");
 }
