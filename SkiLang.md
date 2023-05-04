@@ -1,7 +1,5 @@
 # SkiLang
 
-TODO: SkiLang should be it's own doc. It's pretty large.
-
 TODO: Add a one liner about each command
 
 ## SkiLang Operators
@@ -40,23 +38,23 @@ drawRectC
 ---- SkiLang -----
 
 (concat
-	(concat
-		drawRectA
-		(ClipRect drawRectB)
-	)
-	(ClipRect (Scale  drawRectC) )
+    (concat
+        drawRectA
+        (ClipRect drawRectB)
+    )
+    (ClipRect (Scale  drawRectC) )
 )
 
 OR (Rewrite rules!)
 
 (concat
-	drawRectA
-	(ClipRect
-		(concat
-			drawRectB
-			(Scale drawRectC)
-		)
-	)
+    drawRectA
+    (ClipRect
+        (concat
+            drawRectB
+            (Scale drawRectC)
+        )
+    )
 )
 ```
 
@@ -69,37 +67,37 @@ drawRectA
 ClipRect
 drawRectB
 Save
-	Scale 2.0
-	drawRectC
+    Scale 2.0
+    drawRectC
 Restore
 drawRectD
 
 ---- SkiLang -----
 
 (concat
-	(concat
-		(concat
-			drawRectA
-			(ClipRect drawRectB)
-		)
-		(ClipRect (Scale  drawRectC ) )
-	)
-	(ClipRect drawRectD)
+    (concat
+        (concat
+            drawRectA
+            (ClipRect drawRectB)
+        )
+        (ClipRect (Scale  drawRectC ) )
+    )
+    (ClipRect drawRectD)
 )
 
 OR (Rewrite rules!)
 
 (concat
-	drawRectA
-	(ClipRect
-		(concat
-			(concat
-				drawRectB
-				(Scale drawRectC)
-			)
-			drawRectD
-		)
-	)
+    drawRectA
+    (ClipRect
+        (concat
+            (concat
+                drawRectB
+                (Scale drawRectC)
+            )
+            drawRectD
+        )
+    )
 )
 ```
 
@@ -111,21 +109,21 @@ OR (Rewrite rules!)
 
 drawRectA
 SaveLayer(merge:srcOver, bounds)
-	drawRectB
-	drawRectC
+    drawRectB
+    drawRectC
 Restore
 drawRectC
 
 ---- SkiLang -----
 
 (concat
-	(merge
-		drawRectA
-		(concat drawRectB drawRectC)
-		[srcOver, bounds]
-		blankState
-	)
-	drawRectC
+    (merge
+        drawRectA
+        (concat drawRectB drawRectC)
+        [srcOver, bounds]
+        blankState
+    )
+    drawRectC
 )
 
 ```
@@ -137,42 +135,42 @@ ClipRect
 Scale 2.0
 drawRectB
 SaveLayer(merge:srcOver, bounds, gauss_blur)
-	Translate (x, y)
-	drawRectC
-	drawRectD
+    Translate (x, y)
+    drawRectC
+    drawRectD
 Restore
 drawRectE
 
 ---- SkiLang -----
 
 (concat
-	(merge
-		(concat drawRectA (Clip (Scale (drawRectB))))
-		(translate
-			(concat drawRectB drawRectC)
-		)
-		[srcOver, bounds, gauss_blur]
-		(ClipRect (Scale (~)))
-	)
-	(ClipRect (Scale drawRectC) )
+    (merge
+        (concat drawRectA (Clip (Scale (drawRectB))))
+        (translate
+            (concat drawRectB drawRectC)
+        )
+        [srcOver, bounds, gauss_blur]
+        (ClipRect (Scale (~)))
+    )
+    (ClipRect (Scale drawRectC) )
 )
 
 ---- IF WE HAD VIRTUAL OPS FOR srcOver, bounds, gauss_blur ---
 
 (srcOver
-	(srcOver
-		drawRectA
+    (srcOver
+        drawRectA
 
-		(ClipRect
-		(Scale
-		(ClipRectToLayerBounds
-		(GaussBlur
-			(Translate
-				(concat drawRectB drawRectC)
-			)
-		))))
-	)
-	(ClipRect(Scale( drawRectC) ))
+        (ClipRect
+        (Scale
+        (ClipRectToLayerBounds
+        (GaussBlur
+            (Translate
+                (concat drawRectB drawRectC)
+            )
+        ))))
+    )
+    (ClipRect(Scale( drawRectC) ))
 )
 
 
@@ -183,14 +181,14 @@ Mainly because we don't have a rewrite rule that says
 
 ```
 (merge
-	dst
-	clipRect src
-	[mergeParams.., noBounds]
+    dst
+    clipRect src
+    [mergeParams.., noBounds]
 ) ->
 (merge
-	dst,
-	src
-	[mergeParams.., clipRectBounds]
+    dst,
+    src
+    [mergeParams.., clipRectBounds]
 )
 ```
 

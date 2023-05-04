@@ -36,24 +36,24 @@ ClipRect
 Scale 2.0
 drawRectB
 SaveLayer(merge:srcOver, bounds, gauss_blur)
-	Translate (x, y)
-	drawRectC
-	drawRectD
+    Translate (x, y)
+    drawRectC
+    drawRectD
 Restore
 drawRectE
 
 ---- SkiLang -----
 
 (concat
-	(merge
-		(concat drawRectA (Clip (Scale (drawRectB))))
-		(translate
-			(concat drawRectB drawRectC)
-		)
-		[srcOver, bounds, gauss_blur]
-		(ClipRect (Scale (~)))
-	)
-	(ClipRect (Scale drawRectC) )
+    (merge
+        (concat drawRectA (Clip (Scale (drawRectB))))
+        (translate
+            (concat drawRectB drawRectC)
+        )
+        [srcOver, bounds, gauss_blur]
+        (ClipRect (Scale (~)))
+    )
+    (ClipRect (Scale drawRectC) )
 )
 ```
 
@@ -85,10 +85,10 @@ SkiPass uses protobufs to facilitate interop between Rust and C++. The [protobuf
 
 The SkiPass code is responsible for
 
-1. [Constructing a SkiLang expression](skia_opt_reserach/SkiPass/sk_record_to_ski_lang.rs) from a SkRecord. 
+1. [Constructing a SkiLang expression](skia_opt_reserach/SkiPass/src/sk_record_to_ski_lang.rs) from a SkRecord. 
 2. Running Equality Saturation via egg using [rewrite rules](skia_opt_research/SkiPass/ski_lang_rules.rs).
 
-3. [Constructing instructions](skia_opt_research/ski_lang_to_program.rs) which SkRecordOpts can use to construct the optimized SkRecord.
+3. [Constructing instructions](skia_opt_research/SkiPass/src/ski_lang_to_program.rs) which SkRecordOpts can use to construct the optimized SkRecord.
 
 
 ## Benchmark Details
