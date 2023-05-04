@@ -55,7 +55,6 @@ where
     };
 
     loop {
-        println!("{}", egraph.id_to_expr(canvas_state.surface_id).pretty(40));
         match sk_records.next() {
             Some(sk_record) => {
                 match &sk_record.command {
