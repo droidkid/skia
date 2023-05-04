@@ -9,7 +9,9 @@ make local-nightly # Generates report in ./skia_opt_research/out
 ```
 
 
-## High Level Overview
+## SkiPass Details 
+
+### High Level Overview
 
 ![image](./skia_opt_research/docs/overview.png)
 
@@ -17,13 +19,14 @@ In Skia, a [SkPicture](https://api.skia.org/classSkPicture.html) or SKP, is a re
 
 SkiPass converts a sequential list of draw commands in a SKP to a functional representation, which we call SkiLang of the final image rendered by the SKP. This functional representation is optimized using [egg](https://github.com/egraphs-good/egg), a e-graph library using a collection of simple equivalence functional rules. 
 
-## SkiLang and SkiPass
+### SkiPassOptimize Flow
 
-TODO: explain SkRecord to SkiLang
+![image](./skia_opt_research/docs/SkiPassOptimize.png)
 
-TODO: explain SkiPass optimize phase (show some simple functional equivalence)
 
-TODO: explain SkiLang back to SkRecords
+TODO: Add in locations of the above participant files 
+
+TODO: Show some example SkiLang translations and optimizations 
 
 ## Benchmark Details
 
