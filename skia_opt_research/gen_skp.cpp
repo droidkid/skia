@@ -468,6 +468,7 @@ int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
     initializeEventTracingForTools();
 
+/*
     raster(draw_000_simpleDraw, "000_simpleDraw.skp");
     raster(draw_001_saveLayerRect,"001_saveLayerRect.skp");
     raster(draw_002_blankSaveLayer, "002_blankSaveLayer.skp");
@@ -485,5 +486,6 @@ int main(int argc, char **argv) {
     raster(draw_015_mergeSrcOverTree, "015_mergeSrcOverTree.skp");
     raster(draw_017_TestClipRectIntersection, "017_TestClipRectIntersection.skp");
     raster(draw_018_commonsScale, "018_CommonScale.skp");
-    raster(draw_019_testSaveLayerStateCapture, "019_testSaveLayerStateCapture.skp");
+    */
+    raster(draw_019_testSaveLayerStateCaptureOrder, "019_testSaveLayerStateCapture.skp");
 }
