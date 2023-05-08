@@ -1,10 +1,6 @@
-# SkiLang
+# SkiLang Examples
 
-NOTE: This is not exact SkiLang.
-
-Add a table for SkiLang Ops to Skia, and another table for VirtualOps
-
-## SkiLang Operators
+Not exact SkiLang, but gives a good idea of SkiLang.
 
 ### Concat
 
