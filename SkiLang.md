@@ -1,6 +1,5 @@
 # SkiLang
 
-TODO: Add a one liner about each command
 
 ## SkiLang Operators
 
@@ -176,13 +175,12 @@ drawRectE
 
 ```
 
-TODO: Why is ClipToBounds separate from ClipRect? They could be merged. 
+Why is ClipToBounds separate from ClipRect? They could be merged. 
 Mainly because we don't have a rewrite rule that says
-
 ```
 (merge
     dst
-    clipRect src
+    (clipRect src clipRectBounds)
     [mergeParams.., noBounds]
 ) ->
 (merge
@@ -232,6 +230,3 @@ Mainly because we don't have a rewrite rule that says
 
 ```
 
-#### NoOp SaveLayer Rules
-
-TODO:
