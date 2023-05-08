@@ -93,19 +93,27 @@ The SkiPass code is responsible for
 
 ## Benchmark Details
 
-TODO: How is memory measured? (mention we don't count memory reuse currently)
-TODO: Also mention that SkRecordOpts is disabled manually to get a correct comparison.
+![image](skia_opt_research/docs/benchmark.png)
+
+[Benchmark Report](http://nightly.cs.washington.edu/reports/skia/1683325742/)
+
+### Measuring Memory
+Memory is measured by adding an integer counter to [SkMalloc](include/private/SkMalloc.h#L146). This is reset per benchmark SKP in [SkpAnalyzer](./skia_opt_research/skp_analyzer.h).
+
+Reallocations (Free and reuse the same allocated bytes) are counted as a new allocation. 
 
 ### TestCases
 
-UnitTestCases
-WebPages
-TODO: Add instructions on adding a new webpage or unit test case.
+* [Unit Test Cases](./skia_opt_research/gen_skp.cpp)
+* [WebPage SKPs](./skia_opt_research/webpage_skps/)
+
+Use [SkFiddle](https://fiddle.skia.org) as a way to quickly prototype new unit test cases.
+
+To extract a new WebPage SKP, use this [script](./gen_webpage_skps.py). 
 
 ### Debugging Tips
 
-TODO: Use SKP + debugger.skia.org.
-
+Links to SKP files are present in the report. Open these up in [Skia Debugger](https://debugger.skia.org) for more information.
 
 -------------
 (Below follows the original Skia README)

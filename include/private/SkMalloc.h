@@ -140,7 +140,7 @@ static inline int sk_careful_memcmp(const void* a, const void* b, size_t len) {
 }
 
 #ifdef SK_MALLOC_LOGGING
-// chesetti: I'm sure there's a better way to do this than declare a global static.
+// TODO: I'm sure there's a better way to do this than declare a global static.
 // Using this until we actually need something better.
 // Obviously this is not thread safe, and users are expected to reset this as needed. 
     extern uint64_t malloc_byte_accumlator;
