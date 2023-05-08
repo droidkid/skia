@@ -24,41 +24,30 @@ SkiPass converts a sequential list of draw commands in a SKP to a functional rep
 
 SkiLang is a functional representation of SkRecord Draw Commands. 
 
-Below is an example of equivalent SkRecord and SkiLang representations. 
+#### SkiLang operators that directly translate to the Skia API
 
-**For more examples and a more detailed overview of SkiLang, checkout the [SkiLang README](SkiLang.md).**
+|SkiLang Operator| Skia Translation |
+|----------------|-------------|
+|(drawCommand ...)  | Corresponds to all draw commands not listed below. |
+|(concat surface1 surface2) | Concatenate the instructions of surface2 with surface1 |
+|(concat44 ...)   |  Translates to `concat44()` |
+|(clipRect ...) | Translates to a `clipRect` Skia. | 
+|(matrixOp ...) |  Translates to stateOps that SkiLang does not support (`clipRRect`, `clipPath`) |
+|(merge dst src mergeParams) | Translates to a `saveLayer(bounds, paint)` call in Skia. 
 
-```
----- SkRecord ----
+#### SkiLang Virtual Ops
 
-drawRectA
-ClipRect
-Scale 2.0
-drawRectB
-SaveLayer(merge:srcOver, bounds, gauss_blur)
-    Translate (x, y)
-    drawRectC
-    drawRectD
-Restore
-drawRectE
-
----- SkiLang -----
-
-(concat
-    (merge
-        (concat drawRectA (Clip (Scale (drawRectB))))
-        (translate
-            (concat drawRectB drawRectC)
-        )
-        [srcOver, bounds, gauss_blur]
-        (ClipRect (Scale (~)))
-    )
-    (ClipRect (Scale drawRectC) )
-)
-```
+Virtual Ops are SkiLang operators that don't have a direct SkiLang translation, but are useful for rewrite rules.
 
 
+|SkiLang Operator | Description |
+|-----------------|-------------|
+|(srcOver dst src)| Merge src onto dst using [srcOver](https://api.skia.org/SkBlendMode_8h.html#ad96d76accb8ff5f3eafa29b91f7a25f0aaf4170d00ece11896f697ccda0745dff) blend mode   |
+|(apply_alpha surface alpha)| Apply an opacity of alpha onto surface |
 
+A few virtual ops that are used internally not listed above. These exist mainly because we do not support the entirety of Skia's API.
+
+For more examples on SkiLang to Skia translation [check here](SkiLang.md).
 
 ### SkiPass optimize path
 
