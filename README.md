@@ -32,7 +32,7 @@ SkiLang is a functional representation of SkRecord Draw Commands.
 |(concat surface1 surface2) | Concatenate the instructions of surface2 with surface1 |
 |(concat44 ...)   |  Translates to `concat44()` |
 |(clipRect ...) | Translates to a `clipRect` Skia. | 
-|(matrixOp ...) |  Translates to stateOps that SkiLang does not support (`clipRRect`, `clipPath`) |
+|(otherStateOp ...) |  Translates to stateOps that SkiLang does not support (`clipRRect`, `clipPath`) |
 |(merge dst src mergeParams) | Translates to a `saveLayer(bounds, paint)` call in Skia. 
 
 #### SkiLang Virtual Ops
