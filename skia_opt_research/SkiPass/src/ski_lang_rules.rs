@@ -9,25 +9,66 @@ use crate::ski_lang::{
 };
 
 pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
-    let mut rules = vec![
-        rewrite!("kill-blankSurface-clip"; "(clipRect blankSurface ?p)" => "blankSurface"),
-        rewrite!("kill-blankSurface-mOp"; "(matrixOp blankSurface ?p)" => "blankSurface"),
-        rewrite!("kill-blankSurface-concat44"; "(concat44 blankSurface ?p)" => "blankSurface"),
-        rewrite!("kill-blankSurface-concat-1"; "(concat blankSurface ?a)" => "?a"),
-        rewrite!("kill-blankSurface-concat-2"; "(concat ?a blankSurface)" => "?a"),
-        rewrite!("kill-blank-alpha"; "(apply_alpha ?p blankSurface)" => "blankSurface"),
-        rewrite!("kill-noOp-alpha"; "(apply_alpha ([alpha:255]) ?src)" => "?src"),
-        rewrite!("kill-merge-blankSurface";  
+    let mut rules = vec![];
+
+    // BlankSurface Rules
+    rules.extend([
+        rewrite!("blankSurface-clip"; "(clipRect blankSurface ?p)" => "blankSurface"),
+        rewrite!("blankSurface-mOp"; "(matrixOp blankSurface ?p)" => "blankSurface"),
+        rewrite!("blankSurface-concat44"; "(concat44 blankSurface ?p)" => "blankSurface"),
+        rewrite!("blankSurface-concat-1"; "(concat blankSurface ?a)" => "?a"),
+        rewrite!("blankSurface-concat-2"; "(concat ?a blankSurface)" => "?a"),
+        rewrite!("blank-alpha"; "(apply_alpha ?p blankSurface)" => "blankSurface"),
+        rewrite!("merge-blankSurface";  
             "(merge 
                 ?layer blankSurface 
                 (merge_params_with_state 
                     ?merge_params ?state_ops))" => "?layer"
             if merge_params_is_only_src_over("?merge_params")
-        ),
+    )]);
+
+    // Effectively NoOp Rules
+    rules.extend([
+        rewrite!("kill-noOp-alpha"; "(apply_alpha ([alpha:255]) ?src)" => "?src"),
         rewrite!("kill-noOp-merge";  
             "(merge ?dst ?src ?merge_params_with_state)" => "(concat ?dst ?src)"
             if merge_is_src_over_and_paint_is_opaque_and_no_state_and_no_bounds("?merge_params_with_state")
         ),
+        rewrite!("kill-apply-filter-and-state";
+            "(apply_filter_with_state 
+                ?surface ?merge_params_with_state)" 
+                => "(?surface)" 
+                if merge_is_src_over_and_paint_is_opaque_and_no_state_and_no_bounds("?merge_params_with_state")
+        ),
+    ]);
+
+    // Fold Rules
+    rules.extend([
+        rewrite!("fold-alpha";
+            "(apply_alpha ?alpha_params ?src)" => {
+                FoldAlpha {
+                    alpha_params: "?alpha_params".parse().unwrap(),
+                    src: "?src".parse().unwrap(),
+                    folded_draw_command: "?draw_command".parse().unwrap(),
+                    expr: "?draw_command".parse().unwrap()
+                }
+            }
+        ),
+        rewrite!("fold-clipRect";
+            "(clipRect (clipRect ?surface ?innerClipRectParams) ?outerClipRectParams)"
+             => {
+                FoldClipRect {
+                    inner_clip_rect_params: "?innerClipRectParams".parse().unwrap(),
+                    outer_clip_rect_params: "?outerClipRectParams".parse().unwrap(),
+                    folded_clip_rect_params: "?foldedClipRectParams".parse().unwrap(),
+                    expr: "(clipRect ?surface ?foldedClipRectParams)".parse().unwrap(),
+                }
+            }
+        ),
+    ]);
+
+    // VirtualOp Rules (pack and unpack 'merge' into VirtualOps)
+    rules.extend([
         rewrite!("extract-alpha-virtual-op";
             "(merge 
                 ?dst ?src
@@ -64,43 +105,6 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                 }
             } if merge_params_is_only_src_over("?merge_params")
         ),
-        rewrite!("fold-alpha";
-            "(apply_alpha ?alpha_params ?src)" => {
-                FoldAlpha {
-                    alpha_params: "?alpha_params".parse().unwrap(),
-                    src: "?src".parse().unwrap(),
-                    folded_draw_command: "?draw_command".parse().unwrap(),
-                    expr: "?draw_command".parse().unwrap()
-                }
-            }
-        ),
-        rewrite!("fold-clipRect";
-            "(clipRect (clipRect ?surface ?innerClipRectParams) ?outerClipRectParams)"
-             => {
-                FoldClipRect {
-                    inner_clip_rect_params: "?innerClipRectParams".parse().unwrap(),
-                    outer_clip_rect_params: "?outerClipRectParams".parse().unwrap(),
-                    folded_clip_rect_params: "?foldedClipRectParams".parse().unwrap(),
-                    expr: "(clipRect ?surface ?foldedClipRectParams)".parse().unwrap(),
-                }
-            }
-        ),
-        rewrite!("kill-apply-filter-and-state";
-            "(apply_filter_with_state 
-                ?surface ?merge_params_with_state)" 
-                => "(?surface)" 
-                if merge_is_src_over_and_paint_is_opaque_and_no_state_and_no_bounds("?merge_params_with_state")
-        ),
-        rewrite!("add-dummy-filter-and-state";
-            "?surface" => 
-            "(apply_filter_with_state 
-                ?surface
-                (merge_params_with_state 
-                    [MergeParams::index:-1,paint:[Paint::color:[Color::a:255,r:0,g:0,b:0],blend_mode:SrcOver,has_filters:false],has_backdrop:false,has_bounds:false,bounds:[rect:l:0,t:0,r:0,b:0]]
-                    blankState
-                )
-            )"
-        ),
         rewrite!("apply-state-directly";
             "(apply_filter_with_state
                 ?layer
@@ -110,7 +114,8 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                     layer: "?layer".parse().unwrap(),
                     state_ops: "?state_ops".parse().unwrap(),
                     layer_with_state: "?layer_with_state".parse().unwrap(),
-                    expr: "(apply_filter_with_state
+                    expr: 
+                    "(apply_filter_with_state
                         ?layer_with_state
                         (merge_params_with_state ?merge_params blankState)
                     )".parse().unwrap(),
@@ -118,8 +123,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
             }
             if merge_params_is_only_src_over_and_no_bounds("?merge_params")
         ),
-    ];
-
+    ]);
     rules.extend(vec![
         rewrite!("src-over";
             "(merge ?dst ?src (merge_params_with_state ?merge_params ?state_ops))" <=>
@@ -140,16 +144,29 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                 (merge_params_with_state
                     [MergeParams::index:-1,paint:[Paint::color:[Color::a:255,r:0,g:0,b:0],blend_mode:SrcOver,has_filters:false],has_backdrop:false,has_bounds:false,bounds:[rect:l:0,t:0,r:0,b:0]]
                     ?state_ops))"),
+    ].concat());
+
+
+    // SrcOver Rules
+    rules.extend(vec![
         rewrite!("rearrange-srcOver"; 
             "(srcOver ?A (srcOver ?B ?C))" <=> "(srcOver (srcOver ?A ?B) ?C)"),
         rewrite!("concatIsSrcOver";
             "(concat ?A ?B)" <=> "(srcOver ?A ?B)"),
+    ].concat());
+
+    // Combine common param rules.
+    rules.extend(vec![
         rewrite!("extract-common-clip"; 
             "(srcOver (clipRect ?A ?params) (clipRect ?B ?params))" <=> "(clipRect (srcOver ?A ?B) ?params)"),
         rewrite!("extract-common-m44"; 
             "(srcOver (concat44 ?A ?params) (concat44 ?B ?params))" <=> "(concat44 (srcOver ?A ?B) ?params)"),
         rewrite!("extract-common-matrixOp"; 
             "(srcOver (matrixOp ?A ?params) (matrixOp ?B ?params))" <=> "(matrixOp (srcOver ?A ?B) ?params)"),
+    ].concat());
+
+    // Alpha-StateOp Commutativity Rules 
+    rules.extend(vec![
         rewrite!("alpha-m44"; 
             "(apply_alpha ?a (concat44 ?layer ?params))" <=> "(concat44 (apply_alpha ?a ?layer) ?params)"),
         rewrite!("alpha-clipRect"; 
