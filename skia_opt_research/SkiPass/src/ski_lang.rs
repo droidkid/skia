@@ -30,6 +30,7 @@ define_language! {
         "matrixOp" = MatrixOp([Id; 2]),
         "concat44" = Concat44([Id; 2]),
         "clipRect" = ClipRect([Id; 2]),
+        "apply_state" = ApplyState([Id; 2]), // alphaChannel, layer
         "apply_alpha" = ApplyAlpha([Id; 2]), // alphaChannel, layer
         "srcOver" = SrcOver([Id; 2]),
     }
@@ -304,6 +305,7 @@ impl CostFunction<SkiLang> for SkiLangCostFn {
     {
         let op_cost = match enode {
             SkiLang::ApplyAlpha(_ids) => (1, 0, 1),
+            SkiLang::ApplyState(_ids) => (1, 0, 1),
             SkiLang::SomeFilterAndState(_ids) => (1, 0, 1),
             SkiLang::SrcOver(_ids) => (1, 0, 1),
             // TODO: We want a cost that is (number of layers, cost) and that depends on subtree size.

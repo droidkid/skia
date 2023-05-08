@@ -43,6 +43,7 @@ fn run_eqsat_and_extract(expr: &RecExpr<SkiLang>) -> Result<RecExpr<SkiLang>, Bo
     let runner = Runner::default()
         .with_explanations_enabled()
         .with_expr(expr)
+        .with_node_limit(1000_000)
         .run(&make_rules());
     let root = runner.roots[0];
     let extractor = Extractor::new(&runner.egraph, SkiLangCostFn);

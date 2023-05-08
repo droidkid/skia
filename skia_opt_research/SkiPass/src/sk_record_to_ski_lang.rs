@@ -52,10 +52,9 @@ where
                     },
                     Some(Command::Save(_)) => {
                         let inner_surface = build_expr(sk_records, egraph);
-                        let inner_surface_with_curr_state = egraph.add_expr(&apply_state_on_layer(
-                            egraph.id_to_expr(inner_surface),
-                            egraph.id_to_expr(canvas_state.state_id)
-                        ));
+                        let inner_surface_with_curr_state = egraph.add(
+                            SkiLang::ApplyState([inner_surface, canvas_state.state_id])
+                        );
                         let next_surface = egraph.add(
                             SkiLang::Concat([
                                 canvas_state.surface_id,
@@ -119,24 +118,18 @@ fn handle_draw_command(
 
     match sk_command {
         Command::Concat44(concat44) => {
-            let blank_state = egraph.add(SkiLang::BlankState);
             let concat44_params = egraph.add(SkiLang::M44(
                 SkiLangM44::from_skm44_proto(&concat44.matrix.as_ref().unwrap())
             ));
-            let op = egraph.add(
+            next_state_op = egraph.add(
                 SkiLang::Concat44([
-                    blank_state,
+                    state_op,
                     concat44_params
                 ])
             );
-            next_state_op = egraph.add_expr(&extend_state_op(
-                egraph.id_to_expr(state_op),
-                egraph.id_to_expr(op)
-            ));
 
         },
         Command::ClipRect(clip_rect) => {
-            let blank_state = egraph.add(SkiLang::BlankState);
             let bounds = SkiLangRect::from_bounds_proto(&clip_rect.bounds.as_ref().unwrap());
             let clip_rect_mode = 
                 if clip_rect.clip_op == ClipOp::Difference.into() {
@@ -154,33 +147,24 @@ fn handle_draw_command(
                     is_anti_aliased
                 }
             ));
-            let op = egraph.add(
+            next_state_op = egraph.add(
                 SkiLang::ClipRect([
-                    blank_state,
+                    state_op,
                     clip_rect_params
                 ])
             );
-            next_state_op = egraph.add_expr(&extend_state_op(
-                egraph.id_to_expr(state_op),
-                egraph.id_to_expr(op)
-            ));
         },
         Command::DrawCommand(draw_command) => match draw_command.name.as_str() {
             "ClipPath" | "ClipRRect" => {
                 let matrix_op_params = egraph.add(SkiLang::MatrixOpParams(
                     SkiLangMatrixOpParams {index}
                 ));
-                let blank_state = egraph.add(SkiLang::BlankState);
-                let op = egraph.add(
+                next_state_op = egraph.add(
                     SkiLang::Concat44([
-                        blank_state,
+                        state_op,
                         matrix_op_params, 
                     ])
                 );
-                next_state_op = egraph.add_expr(&extend_state_op(
-                    egraph.id_to_expr(state_op),
-                    egraph.id_to_expr(op)
-                ));
             }
             _ => {
                 let draw_command = egraph.add(SkiLang::DrawCommand(
@@ -189,11 +173,9 @@ fn handle_draw_command(
                         paint: SkiLangPaint::from_proto(&draw_command.paint),
                     }
                 ));
-                let draw_command_with_state_expr = apply_state_on_layer(
-                    egraph.id_to_expr(draw_command),
-                    egraph.id_to_expr(state_op)
+                let draw_command_with_state = egraph.add(
+                    SkiLang::ApplyState([draw_command, state_op])
                 );
-                let draw_command_with_state = egraph.add_expr(&draw_command_with_state_expr);
                 next_surface = egraph.add(SkiLang::Concat([surface, draw_command_with_state]));
             }
         },
@@ -203,22 +185,4 @@ fn handle_draw_command(
         state_id: next_state_op,
         surface_id:next_surface 
     }
-}
-
-fn apply_state_on_layer(
-    layer_expr: RecExpr<SkiLang>,
-    state_op_expr: RecExpr<SkiLang>
-) -> RecExpr<SkiLang> {
-    let state_op_string = state_op_expr.pretty(0);
-    let layer_string = layer_expr.pretty(0);
-    state_op_string.replace("blankState", &layer_string).parse().unwrap()
-}
-
-fn extend_state_op(
-    state_op_expr: RecExpr<SkiLang>,
-    op_expr: RecExpr<SkiLang>
-) -> RecExpr<SkiLang> {
-    let state_op_string = state_op_expr.pretty(0);
-    let op_expr = op_expr.pretty(0);
-    state_op_string.replace("blankState", &op_expr).parse().unwrap()
 }

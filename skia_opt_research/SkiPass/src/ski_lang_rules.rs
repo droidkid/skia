@@ -105,25 +105,62 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                 }
             } if merge_params_is_only_src_over("?merge_params")
         ),
-        rewrite!("apply-state-directly";
+    ]);
+
+    rules.extend(vec![
+        rewrite!("apply-clipRect-directly";
             "(apply_filter_with_state
                 ?layer
-                (merge_params_with_state ?merge_params ?state_ops)
-            )" => {
-                ApplyStateOnLayer {
-                    layer: "?layer".parse().unwrap(),
-                    state_ops: "?state_ops".parse().unwrap(),
-                    layer_with_state: "?layer_with_state".parse().unwrap(),
-                    expr: 
-                    "(apply_filter_with_state
-                        ?layer_with_state
-                        (merge_params_with_state ?merge_params blankState)
-                    )".parse().unwrap(),
-                }
-            }
+                (merge_params_with_state 
+                    ?merge_params 
+                    (clipRect ?state ?params)
+                )
+            )" <=> 
+            "(apply_filter_with_state
+                (clipRect ?layer ?params)
+                (merge_params_with_state
+                    ?merge_params
+                    ?state
+                )
+            )"
             if merge_params_is_only_src_over_and_no_bounds("?merge_params")
         ),
-    ]);
+        rewrite!("apply-concat44-directly";
+            "(apply_filter_with_state
+                ?layer
+                (merge_params_with_state 
+                    ?merge_params 
+                    (concat44 ?state ?params)
+                )
+            )" <=> 
+            "(apply_filter_with_state
+                (concat44 ?layer ?params)
+                (merge_params_with_state
+                    ?merge_params
+                    ?state
+                )
+            )"
+            if merge_params_is_only_src_over_and_no_bounds("?merge_params")
+        ),
+        rewrite!("apply-matrixOp-directly";
+            "(apply_filter_with_state
+                ?layer
+                (merge_params_with_state 
+                    ?merge_params 
+                    (matrixOp ?state ?params)
+                )
+            )" <=> 
+            "(apply_filter_with_state
+                (matrixOp ?layer ?params)
+                (merge_params_with_state
+                    ?merge_params
+                    ?state
+                )
+            )"
+            if merge_params_is_only_src_over_and_no_bounds("?merge_params")
+        ),
+    ].concat());
+
     rules.extend(vec![
         rewrite!("src-over";
             "(merge ?dst ?src (merge_params_with_state ?merge_params ?state_ops))" <=>
@@ -173,6 +210,18 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
             "(apply_alpha ?a (clipRect ?layer ?params))" <=> "(clipRect (apply_alpha ?a ?layer) ?params)"),
         rewrite!("alpha-matrixOp"; 
             "(apply_alpha ?a (matrixOp ?layer ?params))" <=> "(matrixOp (apply_alpha ?a ?layer) ?params)"),
+    ].concat());
+
+    // ApplyState Rules
+    rules.extend(vec![
+        rewrite!("apply-clipRect";
+                 "(apply_state ?surface (clipRect ?state ?params))" <=> "(apply_state (clipRect ?surface ?params) ?state)"),
+        rewrite!("apply-concat44";
+                 "(apply_state ?surface (concat44 ?state ?params))" <=> "(apply_state (concat44 ?surface ?params) ?state)"),
+        rewrite!("apply-matrixOp";
+                 "(apply_state ?surface (matrixOp ?state ?params))" <=> "(apply_state (matrixOp ?surface ?params) ?state)"),
+        rewrite!("kill-applyState";
+                 "(apply_state ?surface blankState)" <=> "?surface"),
     ].concat());
     rules
 }
@@ -412,7 +461,6 @@ impl Applier<SkiLang, ()> for FoldClipRect {
             SkiLang::ClipRectParams(value) => value,
             _ => panic!("This is not a ClipRectParams"),
         };
-
         let outer_params_expr = &egraph.id_to_expr(subst[self.outer_clip_rect_params]);
         let root = &outer_params_expr.as_ref().last().unwrap(); 
         let outer_params = match root {

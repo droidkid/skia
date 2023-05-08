@@ -467,7 +467,6 @@ void draw_019_testSaveLayerStateCaptureOrder(SkCanvas *canvas) {
 int main(int argc, char **argv) {
     CommandLineFlags::Parse(argc, argv);
     initializeEventTracingForTools();
-
     raster(draw_000_simpleDraw, "000_simpleDraw.skp");
     raster(draw_001_saveLayerRect,"001_saveLayerRect.skp");
     raster(draw_002_blankSaveLayer, "002_blankSaveLayer.skp");

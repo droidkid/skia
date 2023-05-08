@@ -212,6 +212,9 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
         SkiLang::ApplyAlpha(_ids) => {
             panic!("An Alpha survived extraction! THIS SHOULD NOT HAPPEN");
         }
+        SkiLang::ApplyState(_ids) => {
+            panic!("An Apply State survived extraction! THIS SHOULD NOT HAPPEN");
+        }
         SkiLang::BlankState => SkiPassSurface {
             instructions: vec![],
             modified_state: false,
