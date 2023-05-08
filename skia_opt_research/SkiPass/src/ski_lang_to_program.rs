@@ -32,7 +32,7 @@ fn build_program(expr: &RecExpr<SkiLang>, id: Id) -> SkiPassSurface {
                 modified_state: false,
             }
         }
-        SkiLang::MatrixOp(ids) => {
+        SkiLang::OtherStateOp(ids) => {
             let mut target_surface = build_program(&expr, ids[0]);
             let mut matrix_op_instructions = to_instructions(&expr, ids[1]);
 
@@ -243,7 +243,7 @@ fn to_instructions(expr: &RecExpr<SkiLang>, id: Id) -> Vec<SkiPassInstruction> {
             };
             vec![instruction]
         }
-        SkiLang::MatrixOpParams(matrix_op_params) => {
+        SkiLang::OtherStateOpParams(matrix_op_params) => {
             let instruction = SkiPassInstruction {
                 instruction: Some(Instruction::CopyRecord(SkiPassCopyRecord {
                     index: matrix_op_params.index,

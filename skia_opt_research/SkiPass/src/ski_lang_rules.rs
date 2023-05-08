@@ -14,7 +14,7 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
     // BlankSurface Rules
     rules.extend([
         rewrite!("blankSurface-clip"; "(clipRect blankSurface ?p)" => "blankSurface"),
-        rewrite!("blankSurface-mOp"; "(matrixOp blankSurface ?p)" => "blankSurface"),
+        rewrite!("blankSurface-mOp"; "(otherStateOp blankSurface ?p)" => "blankSurface"),
         rewrite!("blankSurface-concat44"; "(concat44 blankSurface ?p)" => "blankSurface"),
         rewrite!("blankSurface-concat-1"; "(concat blankSurface ?a)" => "?a"),
         rewrite!("blankSurface-concat-2"; "(concat ?a blankSurface)" => "?a"),
@@ -142,16 +142,16 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
             )"
             if merge_params_is_only_src_over_and_no_bounds("?merge_params")
         ),
-        rewrite!("apply-matrixOp-directly";
+        rewrite!("apply-otherStateOp-directly";
             "(apply_filter_with_state
                 ?layer
                 (merge_params_with_state 
                     ?merge_params 
-                    (matrixOp ?state ?params)
+                    (otherStateOp ?state ?params)
                 )
             )" <=> 
             "(apply_filter_with_state
-                (matrixOp ?layer ?params)
+                (otherStateOp ?layer ?params)
                 (merge_params_with_state
                     ?merge_params
                     ?state
@@ -198,8 +198,8 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
             "(srcOver (clipRect ?A ?params) (clipRect ?B ?params))" <=> "(clipRect (srcOver ?A ?B) ?params)"),
         rewrite!("extract-common-m44"; 
             "(srcOver (concat44 ?A ?params) (concat44 ?B ?params))" <=> "(concat44 (srcOver ?A ?B) ?params)"),
-        rewrite!("extract-common-matrixOp"; 
-            "(srcOver (matrixOp ?A ?params) (matrixOp ?B ?params))" <=> "(matrixOp (srcOver ?A ?B) ?params)"),
+        rewrite!("extract-common-otherStateOp"; 
+            "(srcOver (otherStateOp ?A ?params) (otherStateOp ?B ?params))" <=> "(otherStateOp (srcOver ?A ?B) ?params)"),
     ].concat());
 
     // Alpha-StateOp Commutativity Rules 
@@ -208,8 +208,8 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
             "(apply_alpha ?a (concat44 ?layer ?params))" <=> "(concat44 (apply_alpha ?a ?layer) ?params)"),
         rewrite!("alpha-clipRect"; 
             "(apply_alpha ?a (clipRect ?layer ?params))" <=> "(clipRect (apply_alpha ?a ?layer) ?params)"),
-        rewrite!("alpha-matrixOp"; 
-            "(apply_alpha ?a (matrixOp ?layer ?params))" <=> "(matrixOp (apply_alpha ?a ?layer) ?params)"),
+        rewrite!("alpha-otherStateOp"; 
+            "(apply_alpha ?a (otherStateOp ?layer ?params))" <=> "(otherStateOp (apply_alpha ?a ?layer) ?params)"),
     ].concat());
 
     // ApplyState Rules
@@ -218,8 +218,8 @@ pub fn make_rules() -> Vec<Rewrite<SkiLang, ()>> {
                  "(apply_state ?surface (clipRect ?state ?params))" <=> "(apply_state (clipRect ?surface ?params) ?state)"),
         rewrite!("apply-concat44";
                  "(apply_state ?surface (concat44 ?state ?params))" <=> "(apply_state (concat44 ?surface ?params) ?state)"),
-        rewrite!("apply-matrixOp";
-                 "(apply_state ?surface (matrixOp ?state ?params))" <=> "(apply_state (matrixOp ?surface ?params) ?state)"),
+        rewrite!("apply-otherStateOp";
+                 "(apply_state ?surface (otherStateOp ?state ?params))" <=> "(apply_state (otherStateOp ?surface ?params) ?state)"),
         rewrite!("kill-applyState";
                  "(apply_state ?surface blankState)" <=> "?surface"),
     ].concat());

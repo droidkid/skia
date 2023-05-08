@@ -18,7 +18,7 @@ define_language! {
         M44(SkiLangM44),
         Rect(SkiLangRect),
         ClipRectParams(SkiLangClipRectParams),
-        MatrixOpParams(SkiLangMatrixOpParams),
+        OtherStateOpParams(SkiLangOtherStateOpParams),
         ApplyAlphaParams(SkiLangApplyAlphaParams),
         Paint(SkiLangPaint),
         DrawCommand(SkiLangDrawCommand),
@@ -27,7 +27,7 @@ define_language! {
         "apply_filter_with_state" = SomeFilterAndState([Id; 2]),
         "concat" = Concat([Id; 2]),
         "merge" = Merge([Id; 3]),
-        "matrixOp" = MatrixOp([Id; 2]),
+        "otherStateOp" = OtherStateOp([Id; 2]),
         "concat44" = Concat44([Id; 2]),
         "clipRect" = ClipRect([Id; 2]),
         "apply_state" = ApplyState([Id; 2]),
@@ -75,8 +75,8 @@ impl SkiLangRect {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Display, FromStr)]
-#[display("[matrixOp::index:{index}]")]
-pub struct SkiLangMatrixOpParams {
+#[display("[otherStateOp::index:{index}]")]
+pub struct SkiLangOtherStateOpParams {
     pub index: i32
 }
 

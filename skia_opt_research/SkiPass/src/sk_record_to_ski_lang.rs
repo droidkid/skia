@@ -6,7 +6,7 @@ use crate::ski_lang::{
     SkiLangRect,
     SkiLangClipRectMode, 
     SkiLangClipRectParams,
-    SkiLangMatrixOpParams,
+    SkiLangOtherStateOpParams,
     SkiLangMergeParams,
     SkiLangDrawCommand,
     SkiLangM44
@@ -156,8 +156,8 @@ fn handle_draw_command(
         },
         Command::DrawCommand(draw_command) => match draw_command.name.as_str() {
             "ClipPath" | "ClipRRect" => {
-                let matrix_op_params = egraph.add(SkiLang::MatrixOpParams(
-                    SkiLangMatrixOpParams {index}
+                let matrix_op_params = egraph.add(SkiLang::OtherStateOpParams(
+                    SkiLangOtherStateOpParams {index}
                 ));
                 next_state_op = egraph.add(
                     SkiLang::Concat44([
