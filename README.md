@@ -95,7 +95,13 @@ The SkiPass code is responsible for
 
 ![image](skia_opt_research/docs/benchmark.png)
 
-[Benchmark Report](http://nightly.cs.washington.edu/reports/skia/1683325742/)
+### Benchmark Report
+
+Running the benchmark using `make local-nightly` generates a report in `./skia_opt_research/out`. 
+
+The report contains a image diff reports, memory usage, basic performance profiling and debug links.
+
+Here is a sample [Benchmark Report](http://nightly.cs.washington.edu/reports/skia/1683325742/)
 
 ### Measuring Memory
 Memory is measured by adding an integer counter to [SkMalloc](include/private/SkMalloc.h#L146). This is reset per benchmark SKP in [SkpAnalyzer](./skia_opt_research/skp_analyzer.h).
