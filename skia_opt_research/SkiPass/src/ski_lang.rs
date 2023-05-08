@@ -30,7 +30,7 @@ define_language! {
         "matrixOp" = MatrixOp([Id; 2]),
         "concat44" = Concat44([Id; 2]),
         "clipRect" = ClipRect([Id; 2]),
-        "apply_state" = ApplyState([Id; 2]), // alphaChannel, layer
+        "apply_state" = ApplyState([Id; 2]),
         "apply_alpha" = ApplyAlpha([Id; 2]), // alphaChannel, layer
         "srcOver" = SrcOver([Id; 2]),
     }
