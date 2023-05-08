@@ -1,5 +1,6 @@
 # SkiLang
 
+NOTE: This is not exact SkiLang.
 
 ## SkiLang Operators
 
