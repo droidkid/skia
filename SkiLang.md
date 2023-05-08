@@ -2,6 +2,8 @@
 
 NOTE: This is not exact SkiLang.
 
+Add a table for SkiLang Ops to Skia, and another table for VirtualOps
+
 ## SkiLang Operators
 
 ### Concat
